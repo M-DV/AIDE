@@ -62,7 +62,7 @@ will happen in this repository. Note that this builds on the yet to be officiall
 
 ## Demo
 
-A demo of AIDE v2 can be accessed **[here](http://aidedemo.westeurope.cloudapp.azure.com:8080/)**.
+A demo of AIDE can be accessed **[here](http://aidedemo.westeurope.cloudapp.azure.com:8080/)**.
 
 This demo allows exploring the annotation front-end with a number of example datasets, including:
 * **[Image labels](http://aidedemo.westeurope.cloudapp.azure.com:8080/snapshot_serengeti/interface)** on the [Snapshot Serengeti camera traps dataset](http://lila.science/datasets/snapshot-serengeti)
