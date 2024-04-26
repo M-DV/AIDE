@@ -1,11 +1,5 @@
 # News
 
-## April 26, 2024
-AIDE has moved to its new home:
-[https://github.com/bkellenb/AIDE](https://github.com/bkellenb/AIDE). All future code developments
-will happen in this repository.
-
-
 ## August 4, 2021
 AIDE v2.1 is out! This includes a new interactive installer for Debian/Ubuntu systems as well as a plethora of bug fixes.
 

@@ -45,9 +45,11 @@ AIDE is primarily developed by [Benjamin Kellenberger](https://bkellenb.github.i
 
 ## News
 
-### AIDE v2.1 is out
-
-AIDE v2.1 is out! This includes a new interactive installer for Debian/Ubuntu systems as well as a plethora of bug fixes.
+### April 26, 2024
+AIDE has moved to its new home:
+[https://github.com/bkellenb/AIDE](https://github.com/bkellenb/AIDE). All future code developments
+will happen in this repository. Note that this builds on the yet to be officially releaset version
+3.0 (see [here](doc/v3.md) for development status).
 
 
 [Older news](doc/news.md)
