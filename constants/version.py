@@ -7,12 +7,14 @@
     An optional suffix like "b" might be provided in
     case of multiple builds per day.
 
-    2020-23 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
 import datetime
 
-AIDE_VERSION = '3.0.231014'
+
+
+AIDE_VERSION = '3.0.240426'
 
 # minimum required version for FileServer, due to recent changes
 MIN_FILESERVER_VERSION = '3.0.230109c'
@@ -21,9 +23,10 @@ MIN_FILESERVER_VERSION = '3.0.230109c'
 MODEL_MARKETPLACE_VERSION = 1.0
 
 
-def get_version_components(version=AIDE_VERSION):
+
+def get_version_components(version: str=AIDE_VERSION) -> dict:
     '''
-        Returns dict of major, minor, nightly, suffix components of AIDE version string
+        Returns dict of major, minor, nightly, suffix components of AIDE version string.
     '''
     try:
         tokens = version.split('.')
@@ -44,7 +47,9 @@ def get_version_components(version=AIDE_VERSION):
         return None
 
 
-def compare_versions(version_a, version_b):
+
+def compare_versions(version_a: str,
+                     version_b: str) -> int:
     '''
         Receives two version str and tries to parse them.
         Returns:

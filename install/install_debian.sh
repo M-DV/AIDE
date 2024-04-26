@@ -2,7 +2,7 @@
 
 # Installation routine for AIDE on Debian/Ubuntu systems.
 #
-# 2021-22 Benjamin Kellenberger
+# 2021-24 Benjamin Kellenberger
 
 
 # -----------------------------------------------------------------------------
@@ -28,7 +28,7 @@ test_only=FALSE                     # skip installation and only do checks and t
 # -----------------------------------------------------------------------------
 
 # constants
-INSTALLER_VERSION=3.0.221230
+INSTALLER_VERSION=3.0.240426
 MIN_PG_VERSION=10
 PG_KEY=ACCC4CF8.asc
 DEFAULT_PORT_RABBITMQ=5672
@@ -256,6 +256,7 @@ while [[ $# -gt 0 ]]; do
     \e[1m8\e[0m Remote PostgreSQL server cannot be contacted. Make sure current machine and account have access permissions to database and server.
 
 \e[1mHISTORY\e[0m
+    Apr 26, 2024: Implemented auto-query option for PyTorch versions
     Dec 30, 2022: Code cleanups, better failsafety
     Oct 6, 2022: Implemented more failsafety checks, pip executable lookup, PyTorch pre-installation with CUDA/CPU check
     Aug 12, 2022: Implemented fallback for non-systemd setups (e.g., WSL); changed Postgres authentication from md5 to scram-sha-256; DB init bug fixes
@@ -955,10 +956,24 @@ else
     $python_exec -m pip uninstall -y torch torchvision torchaudio detectron2 yolov5 deepforest | tee -a $log;
     if [ "${#gpuInfo}" -gt 0 ]; then
         log "Installing PyTorch and Torchvision..."
-        $python_exec -m pip install torch torchvision --extra-index-url https://download.pytorch.org/whl/cu113 | tee -a $log;
+        pt_cmd="$($python_exec install/get_pytorch_version.py --format=pip --with-cuda=1)"
+        if [[ $pt_cmd == "pip install*" ]]; then
+            # autodetected PyTorch version
+            $python_exec -m $pt_cmd -y | tee -a $log;
+        else
+            # fallback
+            $python_exec -m pip install torch torchvision --extra-index-url https://download.pytorch.org/whl/cu113 | tee -a $log;
+        fi
     else
         log "WARNING: found no GPU; installing CPU versions of PyTorch and Torchvision..."
-        $python_exec -m pip install torch torchvision --extra-index-url https://download.pytorch.org/whl/cpu | tee -a $log;
+        pt_cmd="$($python_exec install/get_pytorch_version.py --format=pip --with-cuda=0)"
+        if [[ $pt_cmd == "pip install*" ]]; then
+            # autodetected PyTorch version
+            $python_exec -m $pt_cmd -y | tee -a $log;
+        else
+            # fallback
+            $python_exec -m pip install torch torchvision --extra-index-url https://download.pytorch.org/whl/cpu | tee -a $log;
+        fi
     fi
     log "Installing requirements..."
     $python_exec -m pip install -r $aide_root/requirements.txt | tee -a $log;
@@ -1281,30 +1296,7 @@ log "\e[1m[10/11] \e[36mTesting installation...\e[0m"
 
 # Python
 log "Python..." "FALSE" "TRUE"
-TEST_python=$($python_exec <<EOF
-LIBS= (
-    'bottle',
-    'gunicorn',
-    'psycopg2',
-    'tqdm',
-    'bcrypt',
-    'netifaces',
-    'PIL',
-    'numpy',
-    'requests',
-    'celery',
-    'cv2',
-    'torch',
-    'detectron2'
-)
-import importlib
-for lib in LIBS:
-    try:
-        importlib.import_module(lib)
-    except Exception:
-        print(lib)
-EOF
-)
+TEST_python=$($python_exec install/verify_installed_libs.py)
 if [ ${#TEST_python} -eq 0 ]; then
     log "\e[32m[ OK ]\e[0m"
 else

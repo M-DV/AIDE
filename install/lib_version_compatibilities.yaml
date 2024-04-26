@@ -1,0 +1,53 @@
+# Library and software package version compatibility list/matrices. Compiled based on personal and
+# third-party testing information, as well as specific documentation. PyTorch part compiled with
+# information from https://pytorch.org/get-started/previous-versions/ See also compatibility matrix:
+# https://github.com/pytorch/pytorch/blob/main/RELEASE.md#release-compatibility-matrix
+#
+# Structure:
+#   VERSIONS:
+#      PyTorch:
+#        <PyTorch>:
+#          py: [<Python min>, <Python max>]
+#          cu: [<CUDA 1>, <CUDA 2>, ...]
+#          tv: <TorchVision version>
+#      <other>:
+#        <other>:
+#          py: [<Python min>, <Python max>]
+#       
+# Note that this list is incomplete and only lists libraries and packages known to have caused
+# conflicts with different versions of Python and other dependencies.
+#
+# 2024 Benjamin Kellenberger
+
+VERSIONS:
+  PyTorch:
+    '1.12.1': 
+      py: ['3.7', '3.10']
+      cu: ['11.3', '11.6']
+      tv: '0.13.1'
+    
+    '1.13.1': 
+      py: ['3.7', '3.10']
+      cu: ['11.6']
+      tv: '0.14.1'
+    
+    '2.0.1': 
+      py: ['3.8', '3.11']
+      cu: ['11.7']
+      tv: '0.15.2'
+    
+    # 2024/04/25: not yet supported by Detectron2:
+    # '2.1.2': 
+    #   py: ['3.8', '3.11']
+    #   cu: ['11.8']
+    #   tv: '0.16.2'
+    
+    # '2.2.1': 
+    #   py: ['3.8', '3.11']
+    #   cu: ['11.8']
+    #   tv: '0.17.1'
+    
+    # '2.3': 
+    #   py: ['3.8', '3.11']
+    #   cu: ['11.8']
+    #   tv: null

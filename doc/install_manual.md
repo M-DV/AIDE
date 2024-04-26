@@ -9,6 +9,39 @@ All AIDE modules (bar the database) require the libraries as specified in the [r
 If you have a CUDA-capable GPU it is highly recommended to install PyTorch with GPU support (see the [official website](https://pytorch.org/get-started/locally/)).
 
 
+### Compatibility
+
+Below is a compatibility matrix of Python and PyTorch:
+
+| **Python** | **PyTorch**     | **verified** | **comments**                                                                                                                                                                           |
+|------------|-----------------|--------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 3.7, 3.8   | 1.12.1 to 2.0.1 | ✅            | recommended versions (NOTE: Python 3.8 and below cause problems with imagecodecs library under macOS with Apple Silicon: [see here](https://github.com/cgohlke/imagecodecs/issues/72)) |
+| 3.9        | 1.12.1 to 2.0.1 | ❓            | Python libraries install, but untested                                                                                                                                                 |
+| 3.10       |                 | ❌            | 2024/04/25: libraries did not install                                                                                                                                                  |
+|            | >= 2.1          | ❌            | 2024/04/25: incompatible with Detectron2                                                                                                                                               |
+
+
+This is the list of operating systems the installation has been tested on:
+
+| **OS family**     | **OS versions**      | **verified** | **comments**                  |
+|-------------------|----------------------|--------------|-------------------------------|
+| Ubuntu Linux      | 20.04 LTS, 22.04 LTS | ✅            |                               |
+| macOS             | 11.0 to 14.4.1       | ✅            | requires Homebrew (see below) and Python 3.9 (if on Apple Silicon) |
+| Microsoft Windows | 10                   | ✅            | requires WSL2 (see below)     |
+
+
+_Notes_ You can help complete these compatibility matrices! Since we cannot test every possible
+hard- and software combination, we would love to hear feedback regarding experiences and (in-)
+compatibilities. Please report the following:
+* Installation log (as produced by the installer)
+* Terminal/command line output (as much as is available; make sure to remove sensitive information)
+* Information about your operating system (on Linux: `uname -a`), as well as versions of Python
+  (`python -V`) and CUDA (`nvidia-smi`).
+
+Thank you very much!
+
+
+
 ## Step-by-step installation
 
 The following installation routine had been tested on Ubuntu >= 16.04 (20.04 recommended). AIDE will likely run on different OS as well, with instructions requiring corresponding adaptations.
@@ -37,8 +70,19 @@ It is strongly recommended to run AIDE in a self-contained Python environment, s
     sudo add-apt-repository -y ppa:ubuntugis/ppa && sudo apt-get update
     sudo apt-get install -y build-essential libpq-dev python-dev ffmpeg libsm6 libxext6 python3-opencv gdal-bin libgdal-dev
 
-    pip install -r requirements.txt
+    # install PyTorch first (required dependency for other packages)
+    pip install -y pyyaml
+    $(python install/get_pytorch_version.py --format=conda --with-cuda=1)
+
+    # install Detectron2
+    pip install git+https://github.com/facebookresearch/detectron2.git
+
+    # install all the remaining requirements
+    pip install -U -r requirements.txt
 ```
+
+Note: script `install/get_pytorch_version.py` attempts to auto-detect compatible PyTorch and Torchvision
+versions based on currently installed Python version (and CUDA, if available and specified). If this fails, you may try and install PyTorch and dependencies manually as per [official guidelines](https://pytorch.org/get-started/previous-versions/). Note that Detectron2 is currently incompatible with PyTorch > 2.0.0 (as per April 24, 2024).
 
 
 ### Create the settings.ini file

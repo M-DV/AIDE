@@ -90,20 +90,23 @@ cd ${HOME}/aerial_wildlife_detection
 export AIDE_CONFIG_PATH=config/settings.ini
 export AIDE_MODULES=LabelUI,AIController,AIWorker,FileServer
 export PYTHONPATH=.
-./AIDE.sh start 0 python3.8
+./AIDE.sh start 0 python3.9
 ```
 
 _NOTES:_
 * The macOS installer uses Homebrew instead of Conda and installs a dedicated version of Python
-  (3.8). You _can_ use Conda as well by providing an extra flag to the installation script:
+  (3.9). You _can_ use Conda as well by providing an extra flag to the installation script:
   `--python_exec=/path/to/python`. Don't forget to provide this path to the `AIDE.sh` script as
   well.
 * Launch Agents (_i.e._, starting AIDE services upon login) are under development and not yet
   supported.
 * The entire script has been tested on an Apple Silicon-based machine, but not yet under the x86
   architecture. It likely still contains lots of bugs, so treat it as an alpha.
-* macOS 11 or greater is strongly recommended.
+* macOS 11 or greater is strongly recommended (tested up to macOS 14.4.1).
 * Both the default `zsh` and `bash` should work.
+* April 25, 2024: Python 3.8 causes issues under macOS with Apple Silicon due to `imagecodecs`
+  dependency. The default Python version for the macOS installer has therefore been bumped to 3.9.
+  See [install_manual.md](install_manual.md) for more details.
 
 
 #### With Docker

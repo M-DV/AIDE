@@ -4,7 +4,7 @@
 # Works with both Bash and ZSH.
 # Requires Homebrew.
 #
-# 2022 Benjamin Kellenberger
+# 2022-24 Benjamin Kellenberger
 
 
 # -----------------------------------------------------------------------------
@@ -29,8 +29,8 @@ test_only=false                     # skip installation and only do checks and t
 # -----------------------------------------------------------------------------
 
 # constants
-INSTALLER_VERSION=3.0.221231
-PYTHON_VERSION=3.8
+INSTALLER_VERSION=3.0.240426
+PYTHON_VERSION=3.9
 MIN_PG_VERSION=10
 DEFAULT_PORT_RABBITMQ=5672
 DEFAULT_PORT_REDIS=6379
@@ -261,6 +261,7 @@ ${ESC}[1mEXIT STATUS${ESC}[0m
     ${ESC}[1m8${ESC}[0m Remote PostgreSQL server cannot be contacted. Make sure current machine and account have access permissions to database and server.
 
 ${ESC}[1mHISTORY${ESC}[0m
+    Apr 26, 2024: Implemented auto-query option for PyTorch versions
     Dec 31, 2022: Initial macOS installer release by Benjamin Kellenberger (benjamin.kellenberger@yale.edu), based off Debian installer
 
 $INSTALLER_VERSION                  https://github.com/microsoft/aerial_wildlife_detection              
@@ -1000,15 +1001,23 @@ else
     #TODO
     $python_exec -m pip uninstall -y torch torchvision torchaudio detectron2 yolov5 deepforest | tee -a $log;
     log "Installing PyTorch and Torchvision..."
-    $python_exec -m pip install torch torchvision | tee -a $log;
+    pt_cmd="$($python_exec install/get_pytorch_version.py --format=pip --with-cuda=0)"
+    if [[ $pt_cmd == "pip install*" ]]; then
+        # autodetected PyTorch version
+        $python_exec -m $pt_cmd -y | tee -a $log;
+    else
+        # fallback
+        $python_exec -m pip install torch torchvision | tee -a $log;
+    fi
     log "Installing requirements..."
     # macOS requires Cython
     $python_exec -m pip install Cython | tee -a $log;
     # DeepForest lists imagecodecs, which we need to install without compilation (hence the lite
     # flag)
-    $python_exec -m pip install --global-option="--lite" imagecodecs
-    # install remaining s
-    CC=clang CXX=clang++ $python_exec -m pip install -r $aide_root/requirements_cpu.txt | tee -a $log;
+    # UPDATE April 25, 2024: global option "lite" only works with older version of imagecodecs
+    $python_exec -m pip install --global-option="--lite" imagecodecs==2022.12.24 | tee -a $log;
+    # install remaining requirements
+    CC=clang CXX=clang++ $python_exec -m pip install -r $aide_root/requirements.txt | tee -a $log;
 fi
 
 export AIDE_CONFIG_PATH=$config_file_out;
@@ -1355,31 +1364,7 @@ log "${ESC}[1m[10/11] ${ESC}[36mTesting installation...${ESC}[0m";
 
 # Python
 log "Python..." "FALSE" "TRUE"
-TEST_python=$($python_exec <<EOF
-LIBS= (
-    'bottle',
-    'gunicorn',
-    'psycopg2',
-    'tqdm',
-    'bcrypt',
-    'netifaces',
-    'PIL',
-    'numpy',
-    'requests',
-    'celery',
-    'cv2',
-    'torch',
-    'detectron2',
-    'deepforest'
-)
-import importlib
-for lib in LIBS:
-    try:
-        importlib.import_module(lib)
-    except Exception:
-        print(lib)
-EOF
-)
+TEST_python=$($python_exec install/verify_installed_libs.py)
 if [ ${#TEST_python} -eq 0 ]; then
     log "${ESC}[32m[ OK ]${ESC}[0m"
 else

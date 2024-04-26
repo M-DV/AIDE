@@ -4,7 +4,7 @@
 # Requires pwd to be the root of the project and the correct Python
 # env to be loaded.
 #
-# 2019-22 Benjamin Kellenberger
+# 2019-24 Benjamin Kellenberger
 
 python_exec=$1
 if [ ${#python_exec} = 0 ]; then
@@ -27,8 +27,13 @@ done
 if [ $launchCeleryBeat ]; then
     # folder watching interval specified; enable Celery beat
 	tempDir="$($python_exec util/configDef.py --section=FileServer --parameter=tempfiles_dir --fallback=/tmp/aide)";
+    temp_db=$tempDir/celerybeat_aide.db
+    if [ -f $temp_db ]; then
+        # remove old database entry to avoid compatibility issues with older versions
+        rm $temp_db;
+    fi
     mkdir -p $tempDir;
-    $python_exec -m celery -A celery_worker worker -B -s $tempDir/celerybeat_aide.db --hostname aide@%h
+    $python_exec -m celery -A celery_worker worker -B -s $temp_db --hostname aide@%h
 else
 	$python_exec -m celery -A celery_worker worker --hostname aide@%h
 fi
