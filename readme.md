@@ -144,20 +144,21 @@ DOI: [10.1111/2041-210X.13489](https://doi.org/10.1111/2041-210X.13489).
 
 
 
-If you use AIDE, we would be happy to hear from you! Please send us an [E-mail](mailto:benjamin.kellenberger@yale.edu) with a little bit of info about your use case; besides getting to know the fellow usership of our software, this also enables us to provide somewhat more tailored support for you if needed. 
-Thank you very much.
-
-
 ## Contributing
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
+Contributions in any form to AIDE are most welcome! These include (but are not limited to):
+* Feedback about user experience, suggestions, _etc._
+* Trained/fine-tuned model instances from the Model Marketplace
+  ([here](https://aidedemo.westeurope.cloudapp.azure.com/) are some examples for you to use for
+  free!)
+* Custom model implementations (see [here](doc/custom_model.md) for details)
+* Reports on hard- and software compatibility (see [here](doc/install_manual.md#compatibility))
+* Bug reports (please open an [issue](https://github.com/bkellenb/AIDE/issues) for an encountered
+  bug) and bug fixes/suggestions
+* Any message, positive or negative, about your usage and experience of AIDE!
 
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+In general, if you use AIDE, we would be happy to hear from you! Please send us an
+[E-mail](mailto:b.kellenberger@ucl.ac.uk) with a little bit of info about your use case; besides
+getting to know the fellow usership of our software, this also enables us to provide somewhat more
+tailored support for you if needed. Thank you very much.
