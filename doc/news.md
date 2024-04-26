@@ -1,5 +1,11 @@
 # News
 
+## April 26, 2024
+AIDE has moved to its new home:
+[https://github.com/bkellenb/AIDE](https://github.com/bkellenb/AIDE). All future code developments
+will happen in this repository.
+
+
 ## August 4, 2021
 AIDE v2.1 is out! This includes a new interactive installer for Debian/Ubuntu systems as well as a plethora of bug fixes.
 
@@ -22,7 +28,7 @@ DOI: [10.1111/2041-210X.13489](https://doi.org/10.1111/2041-210X.13489).
 Please cite this manuscript whenever you use AIDE in your work. Thank you very much!
 
 ## August 17, 2020
-AIDE v2 now officially replaces the old version as the new master! If you have a v1 project running, you may want to migrate it according to the instructions [below](https://github.com/microsoft/aerial_wildlife_detection#migration-from-aide-v1). For the legacy v1 code, see [here](https://github.com/microsoft/aerial_wildlife_detection/tree/v1).
+AIDE v2 now officially replaces the old version as the new master! If you have a v1 project running, you may want to migrate it according to the instructions [below](https://github.com/bkellenb/AIDE#migration-from-aide-v1). For the legacy v1 code, see [here](https://github.com/bkellenb/AIDE/tree/v1).
 
 ## July 17, 2020
 AIDE now supports watching image folders for changes! Every project can be configured to automatically register newly added images and, optionally, remove all data for deleted images. See "Project Settings" > "General" and the new entry `watch_folder_interval` in the settings.ini file.
@@ -31,4 +37,4 @@ AIDE now supports watching image folders for changes! Every project can be confi
 The built-in RetinaNet now adapts to the project's label classes by adding or removing neurons whenever classes change! Check out the new, GUI-enhanced options in the project configuration page under "AI model" &gt; "Settings".
 
 ## June 10, 2020
-Thanks to the outstanding work of contributor [Jarek](https://github.com/szjarek), AIDE V2 finally supports one-line installation and setup through [Docker](https://www.docker.com)! See [below](https://github.com/microsoft/aerial_wildlife_detection#with-docker) for instructions.
+Thanks to the outstanding work of contributor [Jarek](https://github.com/szjarek), AIDE V2 finally supports one-line installation and setup through [Docker](https://www.docker.com)! See [below](https://github.com/bkellenb/AIDE#with-docker) for instructions.

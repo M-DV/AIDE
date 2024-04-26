@@ -2,7 +2,7 @@
     Creates and assembles the Bottle app with the individual AIDE modules. Can also be used as a dry
     run and to perform pre-flight checks (verbose start; database migration, etc.).
 
-    2021-23 Benjamin Kellenberger
+    2021-24 Benjamin Kellenberger
 '''
 
 import os
@@ -97,9 +97,9 @@ def assemble_server(verbose_start=True,
             schema:        {config.getProperty('Database', 'schema', str, '(not specified)')}
 
         points to an installation of the legacy AIDE v1.
-        If you wish to continue using AIDE v2, you have to upgrade the project accordingly.
+        If you wish to continue using AIDE v3, you have to upgrade the project accordingly.
         For instructions to do so, see here:
-            https://github.com/microsoft/aerial_wildlife_detection/blob/multiProject/doc/upgrade_from_v1.md
+            https://github.com/bkellenb/AIDE/blob/v3.0/doc/upgrade_from_v1.md
             ''')
             sys.exit(1)
 
@@ -129,7 +129,7 @@ def assemble_server(verbose_start=True,
         If you wish to continue using AIDE v2 for this project, you have to upgrade it
         to v2 accordingly.
         For instructions to do so, see here:
-            https://github.com/microsoft/aerial_wildlife_detection/blob/multiProject/doc/upgrade_from_v1.md
+            https://github.com/bkellenb/AIDE/blob/multiProject/doc/upgrade_from_v1.md
             ''')
             else:
                 LogDecorator.print_status('ok')

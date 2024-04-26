@@ -44,7 +44,7 @@ source .bashrc
 conda create -y -n aide python=3.8
 conda activate aide
 
-git clone https://github.com/microsoft/aerial_wildlife_detection.git --branch v3.0 && cd aerial_wildlife_detection
+git clone https://github.com/bkellenb/AIDE.git && cd AIDE
 ```
 5. Launch installer and follow the instructions:
 ```bash
@@ -78,7 +78,7 @@ _Note:_ these are preliminary instructions and still subject to extensive testin
 ```
 2. Clone the AIDE repository:
 ```bash
-git clone https://github.com/microsoft/aerial_wildlife_detection.git --branch v3.0 && cd aerial_wildlife_detection/
+git clone https://github.com/bkellenb/AIDE.git && cd AIDE
 ```
 3. Launch installer and follow the instructions:
 ```bash
@@ -134,7 +134,7 @@ source .bashrc
 ```
 3. Clone the AIDE repository:
 ```bash
-git clone https://github.com/microsoft/aerial_wildlife_detection.git --branch v3.0 && cd aerial_wildlife_detection/
+git clone https://github.com/bkellenb/AIDE.git && cd AIDE
 ```
 4. Launch installer and follow the instructions:
 ```bash
@@ -161,7 +161,7 @@ you can do so with Docker:
     sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
     sudo systemctl restart docker
 ```
-3. Clone the AIDE repository: `git clone https://github.com/microsoft/aerial_wildlife_detection.git --branch v3.0 && cd aerial_wildlife_detection/`
+3. Clone the AIDE repository: `git clone https://github.com/bkellenb/AIDE.git && cd AIDE`
 4. **Important:** modify the `docker/settings.ini` file and replace the default super user credentials (section `[Project]`) with new values. Make sure to review and update the other default settings as well, if needed.
 5. Install:
     ```bash
@@ -206,7 +206,7 @@ After that, see [here](launch_aide.md) for instructions on launching an instance
 ## Migration from previous versions of AIDE
 
 ### from AIDE v1
-If you have [AIDE v1](https://github.com/microsoft/aerial_wildlife_detection/tree/v1) already running and want to upgrade its contents to AIDE v3, see [here](upgrade_from_v1.md).
+If you have [AIDE v1](https://github.com/bkellenb/AIDE/tree/v1) already running and want to upgrade its contents to AIDE v3, see [here](upgrade_from_v1.md).
 
 ### from AIDE v2
 1. Create a back up of your data and PostgreSQL database prior to upgrading.

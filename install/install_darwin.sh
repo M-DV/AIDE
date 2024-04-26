@@ -264,7 +264,7 @@ ${ESC}[1mHISTORY${ESC}[0m
     Apr 26, 2024: Implemented auto-query option for PyTorch versions
     Dec 31, 2022: Initial macOS installer release by Benjamin Kellenberger (benjamin.kellenberger@yale.edu), based off Debian installer
 
-$INSTALLER_VERSION                  https://github.com/microsoft/aerial_wildlife_detection              
+$INSTALLER_VERSION                  https://github.com/bkellenb/AIDE              
 EOF
 )
       echo -e "$help_text"

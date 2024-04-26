@@ -263,7 +263,7 @@ while [[ $# -gt 0 ]]; do
     Apr 12, 2022: Various bug fixes on PostgreSQL installation and daemonization routines; made installer compatible with exotic account and machine names
     Aug 4, 2021: Initial installer release by Benjamin Kellenberger (benjamin.kellenberger@yale.edu)
 
-$INSTALLER_VERSION                  https://github.com/microsoft/aerial_wildlife_detection              
+$INSTALLER_VERSION                  https://github.com/bkellenb/AIDE              
 EOF
 )
       echo -e "$help_text"

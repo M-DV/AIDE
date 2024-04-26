@@ -273,7 +273,7 @@ These may look as follows (bounding box example shown):
 ### Registering your model
 
 In order to make your model visible through AIDE, it needs to be registered.
-To do so, add an entry to the [ai/__init__.py](https://github.com/microsoft/aerial_wildlife_detection/blob/master/ai/__init__.py) file:
+To do so, add an entry to the [ai/__init__.py](https://github.com/bkellenb/AIDE/blob/master/ai/__init__.py) file:
 ```python
 
 PREDICTION_MODELS = {
@@ -295,7 +295,7 @@ PREDICTION_MODELS = {
 ```
 
 Notes:
-* Key: your custom model's key (`ai.models.contrib.MyGreatModel` in the example) is the unique identifier of your model's architecture and should reflect the Python import path under which your model's main class (as described above) can be accessed. In the example, your model's main file has to reside under `aerial_wildlife_detection/ai/models/contrib/MyGreatModel`. You can also add a file `aerial_wildlife_detection/ai/models/contrib/__init__.py` and specify the import in there (`from xx.yy import MyGreatModel`).
+* Key: your custom model's key (`ai.models.contrib.MyGreatModel` in the example) is the unique identifier of your model's architecture and should reflect the Python import path under which your model's main class (as described above) can be accessed. In the example, your model's main file has to reside under `AIDE/ai/models/contrib/MyGreatModel`. You can also add a file `AIDE/ai/models/contrib/__init__.py` and specify the import in there (`from xx.yy import MyGreatModel`).
 * `description`: you can put HTML elements in here, such as links (as shown), images, and more. Be aware that AIDE itself does not serve static content like images from the model directory; this has to come from another server. Also, `<script>` tags will be removed.
 * `annotationType`: specify here what kind of annotations your model supports. This can either be a single string, or a list of strings if the model can cope with different types of inputs. Has to be one of {'labels', 'points', 'boundingBoxes', 'segmentationMasks'}.
 * `predictionType`: likewise, this is the kind of output the model generates and must be a string.
