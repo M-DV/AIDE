@@ -1,4 +1,5 @@
-# AIDE: Annotation Interface for Data-driven Ecology
+<img src="doc/figures/AIDE_banner.png" alt="AIDE banner" width="100%"/>
+
 
 **This is the new official repository for AIDE, superseding the [previous
 one](https://github.com/microsoft/aerial_wildlife_detection).**
@@ -7,7 +8,7 @@ one](https://github.com/microsoft/aerial_wildlife_detection).**
 ***
 
 
-<img src="doc/figures/AIDE_logo_standalone.png" alt="AIDE logo" width="400"/>
+
 
 
 
