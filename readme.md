@@ -143,6 +143,12 @@ DOI: [10.1111/2041-210X.13489](https://doi.org/10.1111/2041-210X.13489).
 ```
 
 
+## License
+
+This repository adopts the [MIT license](https://opensource.org/license/mit).
+
+All code written prior to April 26, 2024 is [copyright Microsoft](https://github.com/microsoft/aerial_wildlife_detection/blob/master/LICENSE).
+
 
 ## Contributing
 
