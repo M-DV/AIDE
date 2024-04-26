@@ -7,9 +7,7 @@ one](https://github.com/microsoft/aerial_wildlife_detection).**
 
 ***
 
-
-
-
+<img src="doc/figures/AIDE_teaser_2.png" alt="AIDE teaser" width="100%"/>
 
 
 AIDE is two things in one: <i>a tool for manually annotating images</i> and <i>a tool for training and running machine (deep) learning models</i>. Those two things are coupled in an <i>active learning loop</i>: the human annotates a few images, the system trains a model, that model is used to make predictions and to select more images for the human to annotate, etc.
