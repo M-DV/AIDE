@@ -1,10 +1,14 @@
+# Main entry point to run AIDE in Docker on CPU machines (without CUDA).
+#
+# 2020-24 Jaroslaw Szczegielniak, Benjamin Kellenberger
+
 docker volume ls | grep -q aide_images || docker volume create aide_images
 docker volume ls | grep -q aide_db_data || docker volume create aide_db_data
 
 docker run --name aide_cnt \
  --rm \
  -v `pwd`:/home/aide/app \
- -v aide_db_data:/var/lib/postgresql/10/main \
+ -v aide_db_data:/var/lib/postgresql/12/main \
  -v aide_images:/home/aide/images \
  -p 8080:8080 \
  -h 'aide_app_host' \

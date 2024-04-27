@@ -2,8 +2,15 @@
 #
 # Docker container initialization script.
 #
-# 2020-22 Jaroslaw Szczegielniak, Benjamin Kellenberger
+# 2020-24 Jaroslaw Szczegielniak, Benjamin Kellenberger
 #
+
+# check required libraries
+libCheck="$(python install/verify_installed_libs.py)"
+if [ ${#libCheck} -gt 0 ]; then
+    echo "The following libraries could not be imported: $libCheck"
+    exit 1
+fi
 
 sudo systemctl enable redis-server.service
 sudo service redis-server start 
@@ -11,7 +18,7 @@ sudo service redis-server start
 echo "============================="
 echo "Setup of database IS STARTING"
 echo "============================="
-pgVersion=10
+pgVersion=12
 dbName=$(python util/configDef.py --section=Database --parameter=name) 
 dbUser=$(python util/configDef.py --section=Database --parameter=user)
 dbPassword=$(python util/configDef.py --section=Database --parameter=password)
@@ -24,7 +31,7 @@ sudo -u postgres psql -p $dbPort -tc "SELECT 1 FROM pg_database WHERE datname = 
 sudo -u postgres psql -p $dbPort -c "GRANT CREATE, CONNECT ON DATABASE \"$dbName\" TO \"$dbUser\";"
 sudo -u postgres psql -p $dbPort -d $dbName -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
 sudo -u postgres psql -p $dbPort -d $dbName -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"$dbUser\";"
-
+sudo -u postgres psql -p $dbPort -d $dbName -c "CREATE EXTENSION IF NOT EXISTS postgis;"
 
 # Create DB schema
 python setup/setupDB.py
@@ -72,5 +79,5 @@ fi
 sysctl -p
 
 # file server: static files directory
-fsDir=$(python util/configDef.py --section=FileServer --parameter=staticfiles_dir) 
+fsDir=$(python util/configDef.py --section=FileServer --parameter=staticfiles_dir --fallback=/opt/aide/data) 
 mkdir -p $fsDir

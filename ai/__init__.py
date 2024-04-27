@@ -74,7 +74,7 @@
         }
 
 
-    2019-22 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 
@@ -91,7 +91,10 @@ PREDICTION_MODELS = {
                                              'annotationType': 'labels',
                                              'predictionType': 'labels',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.DenseNet161': {
                                              'name': 'DenseNet-161',
@@ -100,7 +103,10 @@ PREDICTION_MODELS = {
                                              'annotationType': 'labels',
                                              'predictionType': 'labels',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.MnasNet': {
                                              'name': 'MnasNet',
@@ -109,7 +115,10 @@ PREDICTION_MODELS = {
                                              'annotationType': 'labels',
                                              'predictionType': 'labels',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.MobileNetV2': {
                                              'name': 'MobileNetV2',
@@ -118,7 +127,10 @@ PREDICTION_MODELS = {
                                              'annotationType': 'labels',
                                              'predictionType': 'labels',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.ResNet18': {
                                              'name': 'ResNet-18',
@@ -127,7 +139,10 @@ PREDICTION_MODELS = {
                                              'annotationType': 'labels',
                                              'predictionType': 'labels',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.ResNet34': {
                                              'name': 'ResNet-34',
@@ -136,7 +151,10 @@ PREDICTION_MODELS = {
                                              'annotationType': 'labels',
                                              'predictionType': 'labels',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.ResNet50': {
                                              'name': 'ResNet-50',
@@ -145,7 +163,10 @@ PREDICTION_MODELS = {
                                              'annotationType': 'labels',
                                              'predictionType': 'labels',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.ResNet101': {
                                              'name': 'ResNet-101',
@@ -154,7 +175,10 @@ PREDICTION_MODELS = {
                                              'annotationType': 'labels',
                                              'predictionType': 'labels',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.ResNet152': {
                                              'name': 'ResNet-152',
@@ -163,7 +187,10 @@ PREDICTION_MODELS = {
                                              'annotationType': 'labels',
                                              'predictionType': 'labels',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.ResNeXt50': {
                                              'name': 'ResNeXt-50',
@@ -172,7 +199,10 @@ PREDICTION_MODELS = {
                                              'annotationType': 'labels',
                                              'predictionType': 'labels',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.ResNeXt101': {
                                              'name': 'ResNeXt-101',
@@ -181,7 +211,10 @@ PREDICTION_MODELS = {
                                              'annotationType': 'labels',
                                              'predictionType': 'labels',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.ShuffleNetV2': {
                                              'name': 'ShuffleNet V2',
@@ -190,7 +223,10 @@ PREDICTION_MODELS = {
                                              'annotationType': 'labels',
                                              'predictionType': 'labels',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.SqueezeNet': {
                                              'name': 'SqueezeNet',
@@ -199,7 +235,10 @@ PREDICTION_MODELS = {
                                              'annotationType': 'labels',
                                              'predictionType': 'labels',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.VGG16': {
                                              'name': 'VGG16',
@@ -208,7 +247,10 @@ PREDICTION_MODELS = {
                                              'annotationType': 'labels',
                                              'predictionType': 'labels',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.WideResNet50': {
                                              'name': 'Wide ResNet-50',
@@ -217,7 +259,10 @@ PREDICTION_MODELS = {
                                              'annotationType': 'labels',
                                              'predictionType': 'labels',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.WideResNet101': {
                                              'name': 'Wide ResNet-101',
@@ -226,7 +271,10 @@ PREDICTION_MODELS = {
                                              'annotationType': 'labels',
                                              'predictionType': 'labels',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
 
      'ai.models.detectron2.FasterRCNN': {
@@ -236,7 +284,10 @@ PREDICTION_MODELS = {
                                              'annotationType': ['boundingBoxes', 'polygons'],
                                              'predictionType': 'boundingBoxes',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': False
+                                             'canRemoveLabelclasses': False,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.RetinaNet': {
                                              'name': 'RetinaNet',
@@ -245,7 +296,10 @@ PREDICTION_MODELS = {
                                              'annotationType': ['boundingBoxes', 'polygons'],
                                              'predictionType': 'boundingBoxes',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.TridentNet': {
                                              'name': 'TridentNet',
@@ -254,7 +308,10 @@ PREDICTION_MODELS = {
                                              'annotationType': ['boundingBoxes', 'polygons'],
                                              'predictionType': 'boundingBoxes',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': False
+                                             'canRemoveLabelclasses': False,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.YOLOv5': {
                                              'name': 'YOLOv5 (beta)',
@@ -263,7 +320,11 @@ PREDICTION_MODELS = {
                                              'annotationType': ['boundingBoxes', 'polygons'],
                                              'predictionType': 'boundingBoxes',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': False
+                                             'canRemoveLabelclasses': False,
+                                             'requires': [
+                                                  'detectron2',
+                                                  'yolov5'
+                                             ]
                                         },
      'ai.models.detectron2.DeepForest': {
                                              'name': 'DeepForest (beta)',
@@ -272,7 +333,11 @@ PREDICTION_MODELS = {
                                              'annotationType': ['boundingBoxes', 'polygons'],
                                              'predictionType': 'boundingBoxes',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': False
+                                             'canRemoveLabelclasses': False,
+                                             'requires': [
+                                                  'detectron2',
+                                                  'deepforest'
+                                             ]
                                         },
      'ai.models.detectron2.DeepLabV3Plus': {
                                              'name': 'DeepLabV3+',
@@ -281,7 +346,10 @@ PREDICTION_MODELS = {
                                              'annotationType': 'segmentationMasks',
                                              'predictionType': 'segmentationMasks',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      'ai.models.detectron2.Unet': {
                                              'name': 'U-net (beta)',
@@ -290,7 +358,10 @@ PREDICTION_MODELS = {
                                              'annotationType': 'segmentationMasks',
                                              'predictionType': 'segmentationMasks',
                                              'canAddLabelclasses': True,
-                                             'canRemoveLabelclasses': True
+                                             'canRemoveLabelclasses': True,
+                                             'requires': [
+                                                  'detectron2'
+                                             ]
                                         },
      # 'ai.models.detectron2.MaskRCNN': {
      #                                         'name': 'Mask R-CNN (beta)',
@@ -299,7 +370,10 @@ PREDICTION_MODELS = {
      #                                         'annotationType': ['polygons'],
      #                                         'predictionType': 'polygons',
      #                                         'canAddLabelclasses': False,
-     #                                         'canRemoveLabelclasses': False
+     #                                         'canRemoveLabelclasses': False,
+     #                                         'requires': [
+     #                                              'detectron2'
+     #                                         ]
      #                                    },
 
      # # PyTorch: now disabled, since they cannot handle virtual views or multispectral data
@@ -310,7 +384,7 @@ PREDICTION_MODELS = {
      #                                         'annotationType': 'labels',
      #                                         'predictionType': 'labels',
      #                                         'canAddLabelclasses': True,
-     #                                         'canRemoveLabelclasses': True,
+     #                                         'canRemoveLabelclasses': True
      #                                         'hidden': True
      #                                     },
      # 'ai.models.pytorch.points.WSODPointModel': {

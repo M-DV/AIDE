@@ -2,16 +2,22 @@
     Detectron2-compliant wrapper for DeepForest models:
     https://github.com/weecology/DeepForest
 
-    2022 Benjamin Kellenberger
+    2022-24 Benjamin Kellenberger
 '''
 
 import torch
-import torch.nn as nn
-from torchvision.models.detection import retinanet_resnet50_fpn, RetinaNet_ResNet50_FPN_Weights
-from detectron2.modeling import build_backbone, BACKBONE_REGISTRY, META_ARCH_REGISTRY, Backbone, ShapeSpec
+from torch import nn
+from torchvision.models.detection import (retinanet_resnet50_fpn,
+                                          RetinaNet_ResNet50_FPN_Weights)
+from detectron2.modeling import (build_backbone,
+                                 BACKBONE_REGISTRY,
+                                 META_ARCH_REGISTRY,
+                                 Backbone,
+                                 ShapeSpec)
 from detectron2.structures import Instances, Boxes
+from deepforest.main import deepforest
 from deepforest import utilities
-from deepforest.model import load_backbone, create_anchor_generator, create_model
+# from deepforest.model import load_backbone, create_anchor_generator, create_model
 
 
 # @BACKBONE_REGISTRY.register()
@@ -36,28 +42,34 @@ from deepforest.model import load_backbone, create_anchor_generator, create_mode
 
 @META_ARCH_REGISTRY.register()
 class DeepForest(nn.Module):
-
+    '''
+        Detectron2-compliant wrapper for DeepForest (RetinaNet).
+    '''
     def __init__(self, cfg):
-        super(DeepForest, self).__init__()
+        super().__init__()
 
         # load pre-trained DeepForest model if available
         num_classes = cfg.MODEL.RETINANET.NUM_CLASSES
 
         self.release_state_dict = None
-        pretrainedName = cfg.MODEL.DEEPFOREST_PRETRAINED
-        if pretrainedName == 'deepforest':
+        pretrained_name = cfg.MODEL.DEEPFOREST_PRETRAINED
+        if pretrained_name == 'deepforest':
             _, self.release_state_dict = utilities.use_release(check_release=True)
             num_classes = 1
             self.names = ('tree',)
-        elif pretrainedName == 'birddetector':
+        elif pretrained_name == 'birddetector':
             _, self.release_state_dict = utilities.use_bird_release(check_release=True)
             num_classes = 1
             self.names = ('bird',)
-        
-        self.model = create_model(
-            num_classes=num_classes,
-            nms_thresh=cfg.MODEL.RETINANET.NMS_THRESH_TEST,
-            score_thresh=cfg.MODEL.RETINANET.SCORE_THRESH_TEST,
+
+        self.model = deepforest(
+            config_args={
+                'num_classes': num_classes,
+                'nms_thresh': cfg.MODEL.RETINANET.NMS_THRESH_TEST,
+                'retinanet': {
+                    'score_thresh': cfg.MODEL.RETINANET.SCORE_THRESH_TEST
+                }
+            }
         )
 
         if self.release_state_dict is not None:
@@ -67,14 +79,23 @@ class DeepForest(nn.Module):
         self.out_channels = self.model.backbone.out_channels
 
     @property
-    def device(self):
+    def device(self) -> torch.device:
+        '''
+            Returns the model's compute device (torch.device)
+        '''
         return self.model.head.classification_head.cls_logits.weight.device
-    
+
     @property
     def dtype(self):
+        '''
+            Returns the number type the model uses
+        '''
         return self.model.head.classification_head.cls_logits.weight.dtype
 
     def forward(self, inputs):
+        '''
+            Model forward pass.
+        '''
         images = [i['image'].float().to(self.device)/255 for i in inputs]
         targets = None
         if self.training:

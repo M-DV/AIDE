@@ -111,7 +111,28 @@ _NOTES:_
 
 #### With Docker
 
-Coming soon.
+If you wish to install AIDE in a self-contained environment instead of the host operating system,
+you can do so with Docker:
+
+1. Download and install [Docker](https://docs.docker.com/desktop/install/mac-install/). Once copied
+   from the disk image, open the Docker application and accept the license agreement.
+2. Clone the AIDE repository: `git clone https://github.com/bkellenb/AIDE.git && cd AIDE`
+3. **Important:** modify the `docker/settings.ini` file and replace the default super user
+   credentials (section `[Project]`) with new values. Make sure to review and update the other
+   default settings as well, if needed.
+4. Install:
+    ```bash
+        cd docker
+        docker compose build
+        cd ..
+    ```
+5. Launch:
+    * With Docker:
+    ```bash
+        cd docker
+        docker compose up
+    ```
+
 
 
 ### Ubuntu / Debian

@@ -7,7 +7,7 @@
 # * AIDE_CONFIG_PATH
 # * AIDE_MODULES
 # 
-# 2020-22 Benjamin Kellenberger
+# 2020-24 Benjamin Kellenberger
 
 python_exec=$3
 if [ ${#python_exec} = 0 ]; then
@@ -19,34 +19,26 @@ function start {
     IFS=',' read -ra ADDR <<< "$AIDE_MODULES"
 
     # Celery
-    # numCeleryModules=0;
+    # launchCeleryBeat=false
+    # IFS=',' read -ra ADDR <<< "$AIDE_MODULES"
     # for i in "${ADDR[@]}"; do
     #     module="$(echo "$i" | tr '[:upper:]' '[:lower:]')";
-    #     if [ "$module" == "labelui" || "$module" == "aiworker" ] || [ "$module" == "fileserver" ]; then
-    #         ((numCeleryModules++));
+    #     if [ "$module" == "fileserver" ]; then
+    #         folderWatchInterval=$($python_exec util/configDef.py --section=FileServer --parameter=watch_folder_interval --fallback=60);
+    #         if [ $folderWatchInterval -gt 0 ]; then
+    #             launchCeleryBeat=true;
+    #         fi
     #     fi
     # done
-    # if [ $numCeleryModules -gt 0 ]; then
-    launchCeleryBeat=false
-    IFS=',' read -ra ADDR <<< "$AIDE_MODULES"
-    for i in "${ADDR[@]}"; do
-        module="$(echo "$i" | tr '[:upper:]' '[:lower:]')";
-        if [ "$module" == "fileserver" ]; then
-            folderWatchInterval=$($python_exec util/configDef.py --section=FileServer --parameter=watch_folder_interval --fallback=60);
-            if [ $folderWatchInterval -gt 0 ]; then
-                launchCeleryBeat=true;
-            fi
-        fi
-    done
-    if [ $launchCeleryBeat ]; then
-        # folder watching interval specified; enable Celery beat
-        tempDir="$($python_exec util/configDef.py --section=FileServer --parameter=tempfiles_dir --fallback=/tmp/aide/celery)";
-        mkdir -p $tempDir;
-        $python_exec -m celery -A celery_worker worker -B -s $tempDir --hostname aide@%h &
-    else
-        $python_exec -m celery -A celery_worker worker --hostname aide@%h & 
-    fi
+    # if [ $launchCeleryBeat ]; then
+    #     # folder watching interval specified; enable Celery beat
+    #     tempDir="$($python_exec util/configDef.py --section=FileServer --parameter=tempfiles_dir --fallback=/tmp/aide/celery)";
+    #     mkdir -p $tempDir;
+    #     $python_exec -m celery -A celery_worker worker -B -s $tempDir --hostname aide@%h &
+    # else
+    #     $python_exec -m celery -A celery_worker worker --hostname aide@%h & 
     # fi
+    source AIDE_worker.sh $python_exec &
 
     # AIDE
     numHTTPmodules=0;

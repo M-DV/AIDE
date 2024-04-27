@@ -21,6 +21,7 @@ LIBS: tuple= (
     'requests',
     'celery',
     'cv2',
+    'rasterio',
     'torch',
     'detectron2'
 )
@@ -35,8 +36,8 @@ def verify_libraries() -> None:
     for lib in LIBS:
         try:
             importlib.import_module(lib)
-        except Exception:
-            print(lib)
+        except Exception as exc:
+            print(f'{lib}: {exc}')
 
 
 

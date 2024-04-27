@@ -33,7 +33,7 @@ However, for the database operation, this is not required. If you wish to skip t
     echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
     wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
     sudo apt-get update && sudo apt-get install -y postgresql-$version
-
+    sudo apt-get install -y postgis postgresql-${version}-postgis-scripts
 
     # update the postgres configuration with the correct port
     sudo sed -i "s/\s*port\s*=\s[0-9]*/port = $dbPort/g" /etc/postgresql/$version/main/postgresql.conf
@@ -75,6 +75,7 @@ This needs to be done from the installation root of AIDE, with the correct envir
     sudo -u postgres psql -p $dbPort -c "CREATE DATABASE $dbName WITH OWNER $dbUser CONNECTION LIMIT -1;"
     sudo -u postgres psql -d $dbName -p $dbPort -c "GRANT CREATE, CONNECT ON DATABASE $dbName TO $dbUser;"
     sudo -u postgres psql -d $dbName -p $dbPort -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
+    sudo -u postgres psql -d $dbName -p $dbPort -c "CREATE EXTENSION IF NOT EXISTS postgis;"
 
     # NOTE: needs to be run after init
     sudo -u postgres psql -d $dbName -p $dbPort -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO $dbUser;"

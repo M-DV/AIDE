@@ -1,9 +1,10 @@
 '''
     Middleware for AIController: handles requests and updates to and from the database.
 
-    2019-21 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
+from typing import Tuple, List
 from collections.abc import Iterable
 from datetime import datetime
 import uuid
@@ -57,116 +58,163 @@ class AIMiddleware():
             w.stop()
 
 
-    def _init_available_ai_models(self):
-        # for built-in models: check if Detectron2 and PyTorch are installed
-        hasPyTorch = get_library_available('torch')
-        hasDetectron = get_library_available('detectron2')
-
+    def _check_prediction_model_details(self,
+                                        model_key: str,
+                                        model: dict,
+                                        libs_available: dict) -> Tuple[dict, List[str]]:
+        
         #TODO: 1. using regex to remove scripts is not failsafe; 2. ugly code...
+        messages = []
+
+        # remove script tags and validate annotation and prediction types specified
+        if 'name' in model and isinstance(model['name'], str):
+            model['name'] = re.sub(self.scriptPattern, '(script removed)', model['name'])
+        else:
+            model['name'] = model_key
+        if 'description' in model and isinstance(model['description'], str):
+            model['description'] = re.sub(self.scriptPattern,
+                                            '(script removed)',
+                                            model['description'])
+        else:
+            model['description'] = '(no description available)'
+        if 'author' in model and isinstance(model['author'], str):
+            model['author'] = re.sub(self.scriptPattern,
+                                        '(script removed)',
+                                        model['author'])
+        else:
+            model['author'] = '(unknown)'
+
+        # check required libraries
+        for req in model.get('requires', []):
+            if req not in libs_available:
+                libs_available[req] = get_library_available(req)
+            if not libs_available[req]:
+                return None, [f'Required library "{req}" not installed.']
+
+        # check annotationType and predictionType
+        for id_str in ('annotation', 'prediction'):
+            identifier = f'{id_str}Type'
+            if model.get(identifier, None) is None or len(model.get(identifier, '')) == 0:
+                return f'Missing or invalid "{identifier}".'
+            if isinstance(model[identifier], str):
+                model[identifier] = [model[identifier]]
+            for idx, atype in enumerate(model[identifier]):
+                if atype not in ANNOTATION_TYPES:
+                    messages.append(f'{identifier} "{atype}" not understood.')
+                    del model['predictionType'][idx]
+            if len(model.get(identifier, '')) == 0:
+                return None, [f'Missing or invalid "{identifier}".']
+
+        # get default model options
+        try:
+            model_class = get_class_executable(model_key)
+            default_options = model_class.getDefaultOptions()
+            model['defaultOptions'] = default_options
+        except Exception:
+            # no default options available; append no key to signal that there's no options
+            pass
+
+        # all checks passed
+        return model, messages
+
+
+    def _check_ranker_model_details(self,
+                                    ranker_key: str,
+                                    ranker: dict) -> Tuple[dict, List[str]]:
+
+        #TODO: same problems as with prediction models
+        if 'name' in ranker and isinstance(ranker['name'], str):
+            ranker['name'] = re.sub(self.scriptPattern,
+                                    '(script removed)',
+                                    ranker['name'])
+        else:
+            ranker['name'] = ranker_key
+        if 'author' in ranker and isinstance(ranker['author'], str):
+            ranker['author'] = re.sub(self.scriptPattern,
+                                        '(script removed)',
+                                        ranker['author'])
+        else:
+            ranker['author'] = '(unknown)'
+        if 'description' in ranker and isinstance(ranker['description'], str):
+            ranker['description'] = re.sub(self.scriptPattern,
+                                            '(script removed)',
+                                            ranker['description'])
+        else:
+            ranker['description'] = '(no description available)'
+
+        # check predictionType
+        if ranker.get('predictionType', None) is None \
+                or len(ranker.get('predictionType', '')) == 0:
+            # no prediction type specified
+            return None, ['No or invalid predictionType specified.']
+
+        if isinstance(ranker['predictionType'], str):
+            ranker['predictionType'] = [ranker['predictionType']]
+        for idx, rtype in enumerate(ranker['predictionType']):
+            if rtype not in ANNOTATION_TYPES:
+                print(f'WARNING: prediction type "{rtype}" not understood and ignored.')
+                del ranker['predictionType'][idx]
+        if ranker['predictionType'] is None or len(ranker['predictionType']) == 0:
+            return None, ['No valid prediction type specified']
+
+        # default ranker options
+        try:
+            ranker_class = get_class_executable(ranker_key)
+            default_options = ranker_class.getDefaultOptions()
+            ranker['defaultOptions'] = default_options
+        except Exception:
+            # no default options available; append no key to signal that there's no options
+            pass
+
+        # all checks passed
+        return ranker, []
+
+
+    def _init_available_ai_models(self):
+        # cache for installed libraries
+        libs_available = {}
+
         models = {
             'prediction': PREDICTION_MODELS,
             'ranking': ALCRITERION_MODELS
         }
 
-        # remove script tags and validate annotation and prediction types specified
-        for modelKey in models['prediction']:
-            model = models['prediction'][modelKey]
-            if 'name' in model and isinstance(model['name'], str):
-                model['name'] = re.sub(self.scriptPattern, '(script removed)', model['name'])
-            else:
-                model['name'] = modelKey
-            if 'description' in model and isinstance(model['description'], str):
-                model['description'] = re.sub(self.scriptPattern, '(script removed)', model['description'])
-            else:
-                model['description'] = '(no description available)'
-            if 'author' in model and isinstance(model['author'], str):
-                model['author'] = re.sub(self.scriptPattern, '(script removed)', model['author'])
-            else:
-                model['author'] = '(unknown)'
-            
-            # check required libraries
-            if model['author'] == '(built-in)':
-                if '.pytorch.' in modelKey.lower() and not hasPyTorch:
-                    print(f'WARNING: model "{modelKey}" requires PyTorch library, which is not installed, and is therefore ignored.')
-                    del models['prediction'][modelKey]
-                    continue
-                elif '.detectron2.' in modelKey.lower() and not hasDetectron:
-                    print(f'WARNING: model "{modelKey}" requires Detectron2 library, which is not installed, and is therefore ignored.')
-                    del models['prediction'][modelKey]
-                    continue
+        # check prediction models
+        models_unavailable = []     # [(model, reason)]
+        for model_key, model in models['prediction'].items():
+            model, messages = self._check_prediction_model_details(model_key,
+                                                                   model,
+                                                                   libs_available)
 
-            if not 'annotationType' in model or not 'predictionType' in model:
-                # no annotation and/or no prediction type specified; remove model
-                print(f'WARNING: model "{modelKey}" has no annotationType and/or no predictionType specified and is therefore ignored.')
-                del models['prediction'][modelKey]
-                continue
-            if isinstance(model['annotationType'], str):
-                model['annotationType'] = [model['annotationType']]
-            for idx, type in enumerate(model['annotationType']):
-                if type not in ANNOTATION_TYPES:
-                    print(f'WARNING: annotation type "{type}" not understood and ignored.')
-                    del model['annotationType'][idx]
-            if isinstance(model['predictionType'], str):
-                model['predictionType'] = [model['predictionType']]
-            for idx, type in enumerate(model['predictionType']):
-                if type not in ANNOTATION_TYPES:
-                    print(f'WARNING: prediction type "{type}" not understood and ignored.')
-                    del model['predictionType'][idx]
-            if model['annotationType'] is None or not len(model['annotationType']):
-                print(f'WARNING: no valid annotation type specified for model "{modelKey}"; ignoring...')
-                del models['prediction'][modelKey]
-                continue
-            if model['predictionType'] is None or not len(model['predictionType']):
-                print(f'WARNING: no valid prediction type specified for model "{modelKey}"; ignoring...')
-                del models['prediction'][modelKey]
-                continue
-            # default model options
-            try:
-                modelClass = get_class_executable(modelKey)
-                defaultOptions = modelClass.getDefaultOptions()
-                model['defaultOptions'] = defaultOptions
-            except Exception:
-                # no default options available; append no key to signal that there's no options
-                pass
-            models['prediction'][modelKey] = model
-        for rankerKey in models['ranking']:
-            ranker = models['ranking'][rankerKey]
-            if 'name' in ranker and isinstance(ranker['name'], str):
-                ranker['name'] = re.sub(self.scriptPattern, '(script removed)', ranker['name'])
+            if model is None:
+                # pre-flight check failed
+                models_unavailable.append((model_key, '; '.join(messages)))
+
             else:
-                ranker['name'] = rankerKey
-            if 'author' in ranker and isinstance(ranker['author'], str):
-                ranker['author'] = re.sub(self.scriptPattern, '(script removed)', ranker['author'])
+                models['prediction'][model_key] = model
+
+        if len(models_unavailable) > 0:
+            print(f'WARNING: {len(models_unavailable)} model(s) are not available:')
+            for mod, msg in models_unavailable:
+                print(f'{mod}: {msg}')
+
+        # check ranking models
+        rankers_unavailable = []     # [(ranker, reason)]
+        for ranker_key, ranker in models['ranking'].items():
+            ranker, messages = self._check_ranker_model_details(ranker_key,
+                                                                ranker)
+
+            if ranker is None:
+                # pre-flight check failed
+                rankers_unavailable.append((ranker_key, '; '.join(messages)))
+
             else:
-                ranker['author'] = '(unknown)'
-            if 'description' in ranker and isinstance(ranker['description'], str):
-                ranker['description'] = re.sub(self.scriptPattern, '(script removed)', ranker['description'])
-            else:
-                ranker['description'] = '(no description available)'
-            if not 'predictionType' in ranker:
-                # no prediction type specified; remove ranker
-                print(f'WARNING: ranker "{rankerKey}" has no predictionType specified and is therefore ignored.')
-                del models['ranking'][rankerKey]
-                continue
-            if isinstance(ranker['predictionType'], str):
-                ranker['predictionType'] = [ranker['predictionType']]
-            for idx, type in enumerate(ranker['predictionType']):
-                if type not in ANNOTATION_TYPES:
-                    print(f'WARNING: prediction type "{type}" not understood and ignored.')
-                    del ranker['predictionType'][idx]
-            if ranker['predictionType'] is None or not len(ranker['predictionType']):
-                print(f'WARNING: no valid prediction type specified for ranker "{rankerKey}"; ignoring...')
-                del models['ranking'][rankerKey]
-                continue
-            # default ranker options
-            try:
-                rankerClass = get_class_executable(rankerKey)
-                defaultOptions = rankerClass.getDefaultOptions()
-                ranker['defaultOptions'] = defaultOptions
-            except Exception:
-                # no default options available; append no key to signal that there's no options
-                pass
-            models['ranking'][rankerKey] = ranker
+                models['ranking'][ranker_key] = ranker
+        if len(rankers_unavailable) > 0:
+            print(f'WARNING: {len(rankers_unavailable)} ranker(s) are not available:')
+            for mod, msg in rankers_unavailable:
+                print(f'{mod}: {msg}')
+
         self.aiModels = models
 
 

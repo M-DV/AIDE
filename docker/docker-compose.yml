@@ -1,4 +1,6 @@
-version: '3.7'
+# Docker Compose config file.
+#
+# 2020-24 Jaroslaw Szczegielniak, Benjamin Kellenberger
 volumes:
   aide_db_data:
     name: aide_db_data

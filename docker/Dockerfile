@@ -1,16 +1,16 @@
 #
 # AIDE main Dockerfile.
 #
-# 2020-22 Jaroslaw Szczegielniak, Benjamin Kellenberger
-FROM pytorch/pytorch:1.12.1-cuda11.3-cudnn8-devel
+# 2020-24 Jaroslaw Szczegielniak, Benjamin Kellenberger
+FROM python:3.9.19
 
 # Avoid warnings by switching to noninteractive
 ENV DEBIAN_FRONTEND=noninteractive
 
-# temporary fix for NVIDIA rotating public keys at the moment:
-# https://forums.developer.nvidia.com/t/invalid-public-key-for-cuda-apt-repository/212901/6
-RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/3bf863cc.pub
-RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1804/x86_64/7fa2af80.pub
+# # temporary fix for NVIDIA rotating public keys at the moment:
+# # https://forums.developer.nvidia.com/t/invalid-public-key-for-cuda-apt-repository/212901/6
+# RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/3bf863cc.pub
+# RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1804/x86_64/7fa2af80.pub
 
 # This Dockerfile adds a non-root user with sudo access. Use the "remoteUser"
 # property in devcontainer.json to use it. On Linux, the container user's GID/UIDs
@@ -21,19 +21,19 @@ ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 
 # Setup basic packages, environment and user
-RUN apt-get update && apt-get -y install software-properties-common
+RUN apt-get update && apt-get -y install software-properties-common python3-launchpadlib
 RUN add-apt-repository -y ppa:ubuntugis/ppa \
     && apt-get update \
     && apt-get -y install --no-install-recommends apt-utils dialog 2>&1 \
     #
     # Verify git, process tools, lsb-release (common in install instructions for CLIs) installed
-    && apt-get -y install git openssh-client iproute2 procps iproute2 lsb-release \
+    && apt-get -y install git openssh-client iproute2 procps iproute2 lsb-release libstdc++6 \
     #
     # TBC if all of this is required (from AIDE scripts)
-    && apt-get -y install libpq-dev python-dev wget systemd \
+    && apt-get -y install libpq-dev wget systemd \
     #
-    # Install pylint
-    && /opt/conda/bin/pip install pylint \
+    # # Install pylint
+    # && /opt/conda/bin/pip install pylint \
     #
     # Libraries for OpenCV
     && apt-get -y install ffmpeg libsm6 libxext6 python3-opencv \
@@ -58,18 +58,13 @@ RUN add-apt-repository -y ppa:ubuntugis/ppa \
 # specify the root folder where you wish to install AIDE
 WORKDIR /home/$USERNAME/app
 
-# create environment (requires conda or miniconda) - on the second thought, I don't need environment for docker image
-# RUN conda create -y -n aide python=3.7
-COPY docker/requirements.txt docker/requirements.txt
-# COPY docker/lib/librabbitmq-2.0.0-cp37-cp37m-linux_x86_64.whl lib/librabbitmq-2.0.0-cp37-cp37m-linux_x86_64.whl
+# install required libraries
+RUN python -m pip install torch torchvision
+COPY requirements.txt docker/requirements.txt
+RUN python -m pip install -r docker/requirements.txt
 
-RUN pip install -r docker/requirements.txt
-# RUN pip install lib/librabbitmq-2.0.0-cp37-cp37m-linux_x86_64.whl
-
-# Detectron2: we can now install it directly through the requirements.txt file
-##TODO: temporary fix until detectron2's requirements are resolved
-#RUN pip install -U git+https://github.com/facebookresearch/fvcore.git
-#RUN pip install git+https://github.com/facebookresearch/detectron2.git
+# 2024/04/27: need to upgrade OpenSSL to avoid bug about "X509_V_FLAG_NOTIFY_POLICY"
+RUN python -m pip install pyopenssl --upgrade
 
 # ============================ DB SERVER ONLY BEGINS ======================================
 # Setup PostgreSQL database
@@ -77,15 +72,17 @@ ENV LOC_REGION=Europe
 ENV LOC_TIMEZONE=London
 RUN ln -fs /usr/share/zoneinfo/$LOC_REGION/$LOC_TIMEZONE /etc/localtime \
     # specify postgres version you wish to use (must be >= 9.5)
-    && version=10 \
+    && version=12 \
     # install packages
     && echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list \
     && wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add - \
     && apt-get update && sudo apt-get install -y postgresql-$version \
+    && apt-get install -y postgis postgresql-${version}-postgis-scripts \
     # # update the postgres configuration with the correct port (NOTE: IT NEEDS TO MATCH THE settings.ini configuration !!!)
     # && sudo sed -i "s/\s*port\s*=\s[0-9]*/port = 17685/g" /etc/postgresql/$version/main/postgresql.conf \
     # modify authentication
     # NOTE: you might want to manually adapt these commands for increased security; the following makes postgres listen to all global connections
+    
     && sudo sed -i "s/\s*#\s*listen_addresses\s=\s'localhost'/listen_addresses = '\*'/g" /etc/postgresql/$version/main/postgresql.conf \
     && echo "host    all             all             0.0.0.0/0               md5" | sudo tee -a /etc/postgresql/$version/main/pg_hba.conf > /dev/null 
     #&& sudo systemctl enable postgresql
@@ -125,7 +122,7 @@ RUN sudo apt-get update && sudo apt-get -y install redis-server \
 COPY . .
 RUN chmod a+rx docker/container_init.sh && chmod a+rx AIDE.sh
 
-# Set to proper settings file
+# # Set to proper settings file
 ENV PYTHONPATH=/home/${USERNAME}/app
 ENV AIDE_CONFIG_PATH=/home/${USERNAME}/app/docker/settings.ini
 ENV AIDE_MODULES=LabelUI,AIController,AIWorker,FileServer
