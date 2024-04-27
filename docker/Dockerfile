@@ -2,7 +2,7 @@
 # AIDE main Dockerfile.
 #
 # 2020-24 Jaroslaw Szczegielniak, Benjamin Kellenberger
-FROM python:3.9.19
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 
 # Avoid warnings by switching to noninteractive
 ENV DEBIAN_FRONTEND=noninteractive
@@ -21,7 +21,7 @@ ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 
 # Setup basic packages, environment and user
-RUN apt-get update && apt-get -y install software-properties-common python3-launchpadlib
+RUN apt-get update && apt-get -y install software-properties-common python3 python-is-python3 python3-pip python3-launchpadlib
 RUN add-apt-repository -y ppa:ubuntugis/ppa \
     && apt-get update \
     && apt-get -y install --no-install-recommends apt-utils dialog 2>&1 \
@@ -59,6 +59,7 @@ RUN add-apt-repository -y ppa:ubuntugis/ppa \
 WORKDIR /home/$USERNAME/app
 
 # install required libraries
+RUN python -m pip install --upgrade pip
 RUN python -m pip install torch torchvision
 COPY requirements.txt docker/requirements.txt
 RUN python -m pip install -r docker/requirements.txt
