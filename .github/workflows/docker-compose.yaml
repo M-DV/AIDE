@@ -1,0 +1,18 @@
+# Docker compose GitHub action configuration.
+#
+# 2024 Benjamin Kellenberger
+
+name: AIDE Docker compose
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build the Docker image
+      uses: hoverkraft-tech/compose-action@v2.0.0
+      with:
+        compose-file: docker-compose.yml
+        cwd: "./docker"
