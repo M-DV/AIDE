@@ -37,7 +37,7 @@ torch
 torchvision
 
 # Detectron2
-git+https://github.com/facebookresearch/detectron2.git
+# git+https://github.com/facebookresearch/detectron2.git
 
 # YOLOv5
 yolov5>=6.1.3
