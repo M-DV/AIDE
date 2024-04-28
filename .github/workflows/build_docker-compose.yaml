@@ -10,6 +10,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+    # - name: Delete unnecessary tools folder
+    #   run: rm -rf /opt/hostedtoolcache
+    - name: Free Disk Space (Ubuntu)
+      uses: jlumbroso/free-disk-space@main
     - uses: actions/checkout@v4
     - name: Build the Docker image
       uses: hoverkraft-tech/compose-action@v2.0.0
