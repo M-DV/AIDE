@@ -26,14 +26,14 @@ jobs:
           architecture: 'x64'
       - name: Install dependencies
         run: |
-          pip install -U pip
-          pip install torch==${{matrix.torch}} torchvision==${{matrix.torchvision}} --index-url https://download.pytorch.org/whl/cpu
-          pip install git+https://github.com/facebookresearch/detectron2.git
-          pip install -U -r requirements.txt
+          python3 -m pip install -U pip
+          python3 -m pip install torch==${{matrix.torch}} torchvision==${{matrix.torchvision}} --index-url https://download.pytorch.org/whl/cpu
+          python3 -m pip install git+https://github.com/facebookresearch/detectron2.git
+          python3 -m pip install -U -r requirements.txt
       - name: Verify dependencies
         run: python install/verify_installed_libs.py --raise-on-error=1
       - name: Run unit tests
         run: |
-          pip install pytest pytest-cov
-          python -m pytest tests.py
+          python3 -m pip install pytest pytest-cov
+          python3 -m pytest tests.py
       
