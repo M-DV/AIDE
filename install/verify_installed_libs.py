@@ -4,6 +4,7 @@
     2024 Benjamin Kellenberger
 '''
 
+import argparse
 import importlib
 
 
@@ -28,7 +29,7 @@ LIBS: tuple= (
 
 
 
-def verify_libraries() -> None:
+def verify_libraries(raise_on_first_error: bool=False) -> None:
     '''
         Attempts to load list of required packages one by one. Prints all libraries to the command
         line that could not be imported properly.
@@ -36,10 +37,17 @@ def verify_libraries() -> None:
     for lib in LIBS:
         try:
             importlib.import_module(lib)
-        except Exception as exc:
+        except ModuleNotFoundError as exc:
+            if raise_on_first_error:
+                raise exc
             print(f'{lib}: {exc}')
 
 
 
 if __name__ == '__main__':
-    verify_libraries()
+    parser = argparse.ArgumentParser(description='Verify import of dependencies')
+    parser.add_argument('--raise-on-error', type=int,
+                        default=0,
+                        help='Set to 1 to raise on first import error (default: 0)')
+    args = parser.parse_args()
+    verify_libraries(bool(args.raise_on_error))
