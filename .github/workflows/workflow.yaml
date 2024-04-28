@@ -10,9 +10,13 @@ jobs:
   python_packages:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: true
       matrix:
         python-version: ["pypy3.8", "pypy3.9", "3.8", "3.9", "3.10"]
-    
+        torch: ["2.0.1"]
+        include:
+          - torch: "2.0.1"
+            torchvision: "0.15.2"
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -21,13 +25,6 @@ jobs:
           python-version: '3.x'
           architecture: 'x64'
       - name: Install dependencies
-        strategy:
-          fail-fast: true
-          matrix:
-            torch: ["2.0.1"]
-            include:
-              - torch: "2.0.1"
-                torchvision: "0.15.2"
         run: |
           python -m pip install -U pip
           python -m pip install torch==${{matrix.torch}} torchvision==${{matrix.torchvision}} --index-url https://download.pytorch.org/whl/cpu
