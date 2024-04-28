@@ -37,6 +37,8 @@ torch
 torchvision
 
 # Detectron2
+# (commented to prevent unit test failure:
+# https://github.com/facebookresearch/detectron2/pull/4234)
 # git+https://github.com/facebookresearch/detectron2.git
 
 # YOLOv5

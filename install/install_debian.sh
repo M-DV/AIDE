@@ -28,7 +28,7 @@ test_only=FALSE                     # skip installation and only do checks and t
 # -----------------------------------------------------------------------------
 
 # constants
-INSTALLER_VERSION=3.0.240426
+INSTALLER_VERSION=3.0.240428
 MIN_PG_VERSION=10
 PG_KEY=ACCC4CF8.asc
 DEFAULT_PORT_RABBITMQ=5672
@@ -976,6 +976,7 @@ else
         fi
     fi
     log "Installing requirements..."
+    $python_exec -m pip install git+https://github.com/facebookresearch/detectron2.git | tee -a $log;
     $python_exec -m pip install -r $aide_root/requirements.txt | tee -a $log;
 fi
 

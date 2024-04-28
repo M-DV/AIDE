@@ -29,7 +29,7 @@ test_only=false                     # skip installation and only do checks and t
 # -----------------------------------------------------------------------------
 
 # constants
-INSTALLER_VERSION=3.0.240426
+INSTALLER_VERSION=3.0.240428
 PYTHON_VERSION=3.9
 MIN_PG_VERSION=10
 DEFAULT_PORT_RABBITMQ=5672
@@ -1017,6 +1017,7 @@ else
     # UPDATE April 25, 2024: global option "lite" only works with older version of imagecodecs
     $python_exec -m pip install --global-option="--lite" imagecodecs==2022.12.24 | tee -a $log;
     # install remaining requirements
+    CC=clang CXX=clang++ $python_exec -m pip install git+https://github.com/facebookresearch/detectron2.git | tee -a $log;
     CC=clang CXX=clang++ $python_exec -m pip install -r $aide_root/requirements.txt | tee -a $log;
 fi
 
