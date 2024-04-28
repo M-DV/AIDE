@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@main
+      - name: Install OpenCV dependencies
+        run: sudo apt-get install -y ffmpeg libsm6 libxext6
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Set up Python
