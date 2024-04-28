@@ -2,7 +2,7 @@
 #
 # 2024 Benjamin Kellenberger
 
-name: AIDE Docker compose
+name: Docker build
 
 on: [push]
 
