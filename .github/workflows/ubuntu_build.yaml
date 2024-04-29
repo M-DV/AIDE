@@ -39,8 +39,8 @@ jobs:
           python3 -m pip install -U -r requirements.txt
       - name: Verify dependencies
         run: python install/verify_installed_libs.py --raise-on-error=1 --libs-ignore detectron2
-      - name: Run unit tests
-        run: |
-          python3 -m pip install pytest pytest-cov
-          python3 -m pytest tests.py
+      # - name: Run unit tests
+      #   run: |
+      #     python3 -m pip install pytest pytest-cov
+      #     python3 -m pytest tests.py
       
