@@ -72,7 +72,7 @@ environment, such as [Conda](https://conda.io/) (recommended and used below) or
 
     # install required libraries
     sudo add-apt-repository -y ppa:ubuntugis/ppa && sudo apt-get update
-    sudo apt-get install -y build-essential wget libpq-dev python-dev ffmpeg libsm6 libxext6 libglib2.0-0 python3-opencv python3-pip gdal-bin libgdal-dev
+    sudo apt-get install -y build-essential wget libpq-dev python3 ffmpeg libsm6 libxext6 libglib2.0-0 python3-opencv python3-pip gdal-bin libgdal-dev
 
     # install PyTorch first (required dependency for other packages)
     pip install -y pyyaml
