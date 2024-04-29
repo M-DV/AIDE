@@ -15,20 +15,13 @@ If you have a CUDA-capable GPU it is highly recommended to install PyTorch with 
 
 ### Compatibility
 
-Below is a compatibility matrix of Python and PyTorch:
+Below is a compatibility matrix of operating systems (OS), Python, and PyTorch:
 
-| **Python**  | **PyTorch**     | **verified** | **comments**                                                                                                                                                                                                                |
-|-------------|-----------------|--------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 3.7 to 3.10 | 1.12.1 to 2.3.0 | ✅            | Python 3.8 and below cause problems with imagecodecs library under macOS with Apple Silicon: [see here](https://github.com/cgohlke/imagecodecs/issues/72); Python 3.10 and above: Detectron2 requires GCC ver. 9 or higher. |
-
-
-This is the list of operating systems the installation has been tested on:
-
-| **OS family**     | **OS versions**      | **verified** | **comments**                  |
-|-------------------|----------------------|--------------|-------------------------------|
-| Ubuntu Linux      | 20.04 LTS, 22.04 LTS | ✅            |                               |
-| macOS             | 11.0 to 14.4.1       | ✅            | requires Homebrew and Python 3.9 or higher (if on Apple Silicon) |
-| Microsoft Windows | 10                   | ✅            | requires WSL2    |
+| **OS** | **Python** | **PyTorch** | **verified** | **comments** |
+|---|---|---|---|---|
+| Ubuntu 20.04 LTS to 22.04 LTS | 3.7 to 3.10 | 1.12.1 to 2.3.0 | ✅ | Python 3.10 and above: Detectron2 requires GCC ver. 9 or higher. |
+| macOS 11 to 14.4.1 | 3.9 to 3.10 | 2.0.0 to 2.3.0 | ✅ | Python 3.8 and below cause problems with imagecodecs library under macOS with Apple Silicon:  [see here](https://github.com/cgohlke/imagecodecs/issues/72) |
+| Microsoft Windows 10 | 3.7 to 3.10 | 1.12.1 to 2.3.0 |  | Requires WSL2 |
 
 
 _Note:_ You can help complete these compatibility matrices! Since we cannot test every possible
