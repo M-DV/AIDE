@@ -25,20 +25,24 @@ jobs:
         uses: jlumbroso/free-disk-space@main
       - name: Install OpenCV dependencies
         run: sudo apt-get update && sudo apt-get install -y ffmpeg libsm6 libxext6 libglib2.0-0
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3.0.4
+        with:
+          activate-environment: aide
+          python-version: ${{ matrix.python-version }}
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-          architecture: 'x64'
+      # - name: Set up Python
+      #   uses: actions/setup-python@v4
+      #   with:
+      #     python-version: ${{ matrix.python-version }}
+      #     architecture: 'x64'
       - name: Install dependencies
         run: |
-          python3 -m pip install -U pip
-          python3 -m pip install torch==${{matrix.torch}} torchvision==${{matrix.torchvision}} --index-url https://download.pytorch.org/whl/cpu
-          git clone https://github.com/facebookresearch/detectron2.git
-          python3 -m pip install -e detectron2
-          python3 -m pip install -U -r requirements.txt
+          python -m pip install -U pip
+          python -m pip install torch==${{matrix.torch}} torchvision==${{matrix.torchvision}} --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install git+https://github.com/facebookresearch/detectron2.git
+          python -m pip install -U -r requirements.txt
       - name: Verify dependencies
         run: python install/verify_installed_libs.py --raise-on-error=1
       # - name: Run unit tests
