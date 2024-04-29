@@ -41,7 +41,7 @@ source .bashrc
 ```
 4. Create Python environment and clone AIDE repository:
 ```bash
-conda create -y -n aide python=3.8
+conda create -y -n aide python=3.9
 conda activate aide
 
 git clone https://github.com/bkellenb/AIDE.git && cd AIDE
@@ -150,7 +150,7 @@ source .bashrc
 ```
 2. Create a new Python environment for AIDE:
 ```bash
-    conda create -y -n aide python=3.8
+    conda create -y -n aide python=3.9
     conda activate aide
 ```
 3. Clone the AIDE repository:

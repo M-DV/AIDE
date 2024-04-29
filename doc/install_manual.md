@@ -19,9 +19,9 @@ Below is a compatibility matrix of operating systems (OS), Python, and PyTorch:
 
 | **OS** | **Python** | **PyTorch** | **verified** | **comments** |
 |---|---|---|---|---|
-| Ubuntu 20.04 LTS to 22.04 LTS | 3.7 to 3.10 | 1.12.1 to 2.3.0 | ✅ | Python 3.10 and above: Detectron2 requires GCC ver. 9 or higher. |
-| macOS 11 to 14.4.1 | 3.9 to 3.10 | 2.0.0 to 2.3.0 | ✅ | Python 3.8 and below cause problems with imagecodecs library under macOS with Apple Silicon:  [see here](https://github.com/cgohlke/imagecodecs/issues/72) |
-| Microsoft Windows 10 | 3.7 to 3.10 | 1.12.1 to 2.3.0 |  | Requires WSL2 |
+| Ubuntu 20.04 LTS to 22.04 LTS | 3.7 to 3.11 | 1.12.1 to 2.3.0 | ✅ | Python 3.10 and above: Detectron2 requires GCC ver. 9 or higher. |
+| macOS 11 to 14.4.1 | 3.9 to 3.11 | 2.0.0 to 2.3.0 | ✅ | Python 3.8 and below cause problems with imagecodecs library under macOS with Apple Silicon:  [see here](https://github.com/cgohlke/imagecodecs/issues/72) |
+| Microsoft Windows 10 | 3.7 to 3.11 | 1.12.1 to 2.3.0 |  | Requires WSL2 |
 
 
 _Note:_ You can help complete these compatibility matrices! Since we cannot test every possible
@@ -38,8 +38,9 @@ Thank you very much!
 
 ## Step-by-step installation
 
-The following installation routine had been tested on Ubuntu >= 16.04 (20.04 recommended). AIDE will
-likely run on different OS as well, with instructions requiring corresponding adaptations.
+The following installation routine requires Debian-based GNU/Linux distributions. It has been tested
+on Ubuntu 20.04. AIDE will likely run on different OS as well, with instructions requiring
+corresponding adaptations.
 
 
 
@@ -55,7 +56,7 @@ environment, such as [Conda](https://conda.io/) (recommended and used below) or
     targetDir=/path/to/desired/source/folder
 
     # create environment (requires conda or miniconda)
-    conda create -y -n aide python=3.8
+    conda create -y -n aide python=3.9
     conda activate aide
 
     # download AIDE source code
@@ -81,8 +82,7 @@ environment, such as [Conda](https://conda.io/) (recommended and used below) or
 Note: script `install/get_pytorch_version.py` attempts to auto-detect compatible PyTorch and
 Torchvision versions based on currently installed Python version (and CUDA, if available and
 specified). If this fails, you may try and install PyTorch and dependencies manually as per
-[official guidelines](https://pytorch.org/get-started/previous-versions/). Note that Detectron2 is
-currently incompatible with PyTorch > 2.0.0 (as per April 24, 2024).
+[official guidelines](https://pytorch.org/get-started/previous-versions/).
 
 
 ### Create the settings.ini file

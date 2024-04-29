@@ -2,7 +2,7 @@
 # Do not use directly with e.g. pip, but install libraries in order:
 #   1. PyTorch, Torchvision
 #   2. Detectron2
-#   3. All remaining dependencies
+#   3. All remaining dependencies (this file)
 #
 # 2019-2024 Benjamin Kellenberger
 
@@ -32,12 +32,12 @@ scikit-learn>=1.0.1
 
 # for the AI backend
 opencv-python
---find-links https://download.pytorch.org/whl/torch_stable.html
-torch
-torchvision
+# --find-links https://download.pytorch.org/whl/torch_stable.html       # installed separately
+# torch
+# torchvision
 
 # Detectron2
-# (commented to prevent unit test failure:
+# (installed separately; also commented to prevent unit test failure:
 # https://github.com/facebookresearch/detectron2/pull/4234)
 # git+https://github.com/facebookresearch/detectron2.git
 

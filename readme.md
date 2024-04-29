@@ -1,11 +1,10 @@
 <img src="doc/figures/AIDE_banner.png" alt="AIDE banner" width="100%"/>
 
+[![Ubuntu build](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/ubuntu_build.yaml/badge.svg)](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/ubuntu_build.yaml) [![macOS build](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/macos_build.yaml/badge.svg)](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/macos_build.yaml) [![Docker build](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/build_docker-compose.yaml/badge.svg)](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/build_docker-compose.yaml)
 
 **This is the new official repository for AIDE, superseding the [previous
 one](https://github.com/microsoft/aerial_wildlife_detection).**
 
-
-***
 
 <img src="doc/figures/AIDE_teaser_2.png" alt="AIDE teaser" width="100%"/>
 
@@ -16,12 +15,6 @@ More generally, AIDE is a modular Web framework for labeling image datasets with
 
 AIDE is primarily developed by [Benjamin Kellenberger](https://bkellenb.github.io). The project emerged within the [Microsoft AI for Earth](https://www.microsoft.com/en-us/ai/ai-for-earth) program but is now implemented independently.
 
-
-***
-
-[![Ubuntu build](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/ubuntu_build.yaml/badge.svg)](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/ubuntu_build.yaml) [![Docker build](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/build_docker-compose.yaml/badge.svg)](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/build_docker-compose.yaml)
-
-***
 
 
 ## Contents
