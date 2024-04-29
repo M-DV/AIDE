@@ -36,9 +36,11 @@ jobs:
         run: |
           python3 -m pip install -U pip
           python3 -m pip install torch==${{matrix.torch}} torchvision==${{matrix.torchvision}} --index-url https://download.pytorch.org/whl/cpu
+          git clone https://github.com/facebookresearch/detectron2.git
+          python3 -m pip install -e detectron2
           python3 -m pip install -U -r requirements.txt
       - name: Verify dependencies
-        run: python install/verify_installed_libs.py --raise-on-error=1 --libs-ignore detectron2
+        run: python install/verify_installed_libs.py --raise-on-error=1
       # - name: Run unit tests
       #   run: |
       #     python3 -m pip install pytest pytest-cov

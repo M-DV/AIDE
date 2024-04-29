@@ -19,9 +19,7 @@ AIDE is primarily developed by [Benjamin Kellenberger](https://bkellenb.github.i
 
 ***
 
-[![Ubuntu build](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/ubuntu_build.yaml/badge.svg)](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/ubuntu_build.yaml)
-
-[![Docker build](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/build_docker-compose.yaml/badge.svg)](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/build_docker-compose.yaml)
+[![Ubuntu build](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/ubuntu_build.yaml/badge.svg)](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/ubuntu_build.yaml) [![Docker build](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/build_docker-compose.yaml/badge.svg)](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/build_docker-compose.yaml)
 
 ***
 
