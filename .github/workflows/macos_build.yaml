@@ -1,28 +1,22 @@
-# GitHub actions workflow configuration for Ubuntu build.
+# GitHub actions workflow configuration for macOS build.
 #
 # 2024 Benjamin Kellenberger
 
-name: Ubuntu build
+name: macOS build
 
 on: [push, pull_request]
 
 jobs:
   python_packages:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     strategy:
       fail-fast: true
       matrix:
         python-version: ["3.8", "3.9", "3.10"]
-        torch: ["2.0.1", "2.1.2", "2.2.2", "2.3.0"]
+        torch: ["2.0.1"]
         include:
           - torch: "2.0.1"
             torchvision: "0.15.2"
-          - torch: "2.1.2"
-            torchvision: "0.16.2"
-          - torch: "2.2.2"
-            torchvision: "0.17.2"
-          - torch: "2.3.0"
-            torchvision: "0.18.0"
     defaults:
       run:
         shell: bash -l {0}
@@ -30,7 +24,9 @@ jobs:
       - name: Free Disk Space
         uses: jlumbroso/free-disk-space@main
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential wget libpq-dev python-dev ffmpeg libsm6 libxext6 libglib2.0-0 python3-opencv python3-pip gdal-bin libgdal-dev
+        run: |
+          brew update && brew docter && brew tap homebrew/services
+          brew install wget openssl rust ffmpeg libsm libxext opencv gdal libaec c-blosc libdeflate openjpeg libmagic cython
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@v3.0.4
         with:
@@ -42,7 +38,7 @@ jobs:
         run: |
           python -m pip install -U pip
           python -m pip install torch==${{matrix.torch}} torchvision==${{matrix.torchvision}} --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install git+https://github.com/facebookresearch/detectron2.git
+          CC=clang CXX=clang++ python -m pip install git+https://github.com/facebookresearch/detectron2.git
           python -m pip install -U -r requirements.txt
       - name: Verify dependencies
         run: python install/verify_installed_libs.py --raise-on-error=1

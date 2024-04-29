@@ -17,12 +17,9 @@ If you have a CUDA-capable GPU it is highly recommended to install PyTorch with 
 
 Below is a compatibility matrix of Python and PyTorch:
 
-| **Python** | **PyTorch**     | **verified** | **comments**                                                                                                                                                                           |
-|------------|-----------------|--------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 3.7, 3.8   | 1.12.1 to 2.0.1 | ✅            | recommended versions (NOTE: Python 3.8 and below cause problems with imagecodecs library under macOS with Apple Silicon: [see here](https://github.com/cgohlke/imagecodecs/issues/72)) |
-| 3.9        | 1.12.1 to 2.0.1 | ❓            | Python libraries install, but untested                                                                                                                                                 |
-| 3.10       |                 | ❌            | 2024/04/25: libraries did not install                                                                                                                                                  |
-|            | >= 2.1          | ❌            | 2024/04/25: incompatible with Detectron2                                                                                                                                               |
+| **Python**  | **PyTorch**     | **verified** | **comments**                                                                                                                                                                                                                |
+|-------------|-----------------|--------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 3.7 to 3.10 | 1.12.1 to 2.3.0 | ✅            | Python 3.8 and below cause problems with imagecodecs library under macOS with Apple Silicon: [see here](https://github.com/cgohlke/imagecodecs/issues/72); Python 3.10 and above: Detectron2 requires GCC ver. 9 or higher. |
 
 
 This is the list of operating systems the installation has been tested on:
@@ -30,8 +27,8 @@ This is the list of operating systems the installation has been tested on:
 | **OS family**     | **OS versions**      | **verified** | **comments**                  |
 |-------------------|----------------------|--------------|-------------------------------|
 | Ubuntu Linux      | 20.04 LTS, 22.04 LTS | ✅            |                               |
-| macOS             | 11.0 to 14.4.1       | ✅            | requires Homebrew (see below) and Python 3.9 (if on Apple Silicon) |
-| Microsoft Windows | 10                   | ✅            | requires WSL2 (see below)     |
+| macOS             | 11.0 to 14.4.1       | ✅            | requires Homebrew and Python 3.9 or higher (if on Apple Silicon) |
+| Microsoft Windows | 10                   | ✅            | requires WSL2    |
 
 
 _Note:_ You can help complete these compatibility matrices! Since we cannot test every possible
@@ -75,7 +72,7 @@ environment, such as [Conda](https://conda.io/) (recommended and used below) or
 
     # install required libraries
     sudo add-apt-repository -y ppa:ubuntugis/ppa && sudo apt-get update
-    sudo apt-get install -y build-essential libpq-dev python-dev ffmpeg libsm6 libxext6 python3-opencv gdal-bin libgdal-dev
+    sudo apt-get install -y build-essential wget libpq-dev python-dev ffmpeg libsm6 libxext6 libglib2.0-0 python3-opencv python3-pip gdal-bin libgdal-dev
 
     # install PyTorch first (required dependency for other packages)
     pip install -y pyyaml

@@ -950,7 +950,7 @@ if $test_only ; then
 else
     sudo add-apt-repository -y ppa:ubuntugis/ppa | tee -a $log;
     sudo apt-get update | tee -a $log;
-    sudo apt-get install -y build-essential wget libpq-dev python-dev ffmpeg libsm6 libxext6 python3-opencv python3-pip gdal-bin libgdal-dev | tee -a $log;
+    sudo apt-get install -y build-essential wget libpq-dev python-dev ffmpeg libsm6 libxext6 libglib2.0-0 python3-opencv python3-pip gdal-bin libgdal-dev | tee -a $log;
     
     log "Removing potential previous libraries requiring compilation..."
     $python_exec -m pip uninstall -y torch torchvision torchaudio detectron2 yolov5 deepforest | tee -a $log;
