@@ -4,8 +4,7 @@
         "<major>.<minor>.<nightly build date><suffix>"
 
     where the build date is formatted as "YYMMDD".
-    An optional suffix like "b" might be provided in
-    case of multiple builds per day.
+    An optional suffix like "b" might be provided in case of multiple builds per day.
 
     2020-24 Benjamin Kellenberger
 '''
@@ -14,7 +13,7 @@ import datetime
 
 
 
-AIDE_VERSION = '3.0.240426'
+AIDE_VERSION = '3.0.240430'
 
 # minimum required version for FileServer, due to recent changes
 MIN_FILESERVER_VERSION = '3.0.230109c'

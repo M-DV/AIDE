@@ -4,7 +4,7 @@
     for downloading, or scanning directories for
     untracked images.
 
-    2020-23 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
 import os
@@ -51,8 +51,10 @@ class DataWorker:
         if not is_fileServer(self.config):
             raise Exception('Not a FileServer instance.')
 
-        self.filesDir = self.config.getProperty('FileServer', 'staticfiles_dir')
-        self.tempDir = self.config.getProperty('FileServer', 'tempfiles_dir', type=str,
+        self.filesDir = self.config.get_property('FileServer', 'staticfiles_dir')
+        self.tempDir = self.config.get_property('FileServer',
+                                                'tempfiles_dir',
+                                                dtype=str,
                                                 fallback=tempfile.gettempdir())
 
         self.uploadSessions = {}
@@ -92,8 +94,10 @@ class DataWorker:
 
                 # set up folders for a newly created project
                 if 'projectName' in message:
-                    destPath = os.path.join(self.config.getProperty('FileServer', 'staticfiles_dir'), message['projectName'])
-                    os.makedirs(destPath, exist_ok=True)
+                    dest_path = os.path.join(self.config.get_property('FileServer',
+                                                                     'staticfiles_dir'),
+                                             message['projectName'])
+                    os.makedirs(dest_path, exist_ok=True)
 
 
 
@@ -559,8 +563,8 @@ class DataWorker:
         # temp dir to save raw files to
         tempRoot = os.path.join(meta['sessionDir'], 'files')
 
-        destFolder = os.path.join(self.config.getProperty('FileServer', 'staticfiles_dir'),
-                                    project) + os.sep
+        destFolder = os.path.join(self.config.get_property('FileServer', 'staticfiles_dir'),
+                                  project) + os.sep
 
         # save all files to temp dir temporarily
         tempFiles = {}
@@ -628,16 +632,17 @@ class DataWorker:
                             if not os.path.exists(destPath):
                                 imgs_warn[key] = {
                                     'filename': nextFileName,
-                                    'message': 'An image with name "{}" already exists under given path on disk. Image has been renamed to "{}".'.format(
-                                        originalFileName, nextFileName
-                                    )
+                                    'message': f'An image with name "{originalFileName}" ' + \
+                                               'already exists under given path on disk. ' + \
+                                               f'Image has been renamed to "{nextFileName}".'
                                 }
 
                     elif meta['existingFiles'] == 'skipExisting':
                         # ignore new file
                         imgs_warn[key] = {
                             'filename': nextFileName,
-                            'message': f'Image "{nextFileName}" already exists on disk and has been skipped.'
+                            'message': f'Image "{nextFileName}" already exists on disk ' + \
+                                       'and has been skipped.'
                         }
                         continue
 
@@ -653,7 +658,8 @@ class DataWorker:
                             f'"{originalFileName}" does not appear to be a valid image file.') \
                             from exc
 
-                    # loading succeeded; move entries about potential header files from imgs_error to files_aux
+                    # loading succeeded; move entries about potential header files from imgs_error
+                    # to files_aux
                     isLoadable = True
                     forceConvert = False
                     if imgKey in imgs_error:
@@ -662,7 +668,8 @@ class DataWorker:
 
                     bandNum_current = size[0]
                     if bandNum_current not in bandNum:
-                        raise Exception(f'Image "{originalFileName}" has invalid number of bands (expected: {str(bandNum)}, actual: {str(bandNum_current)}).')
+                        raise Exception(f'Image "{originalFileName}" has invalid number of ' + \
+                            f'bands (expected: {str(bandNum)}, actual: {str(bandNum_current)}).')
                     if bandNum_current == 1 and not hasCustomBandConfig:
                         # project expects RGB data but image is grayscale; replicate for maximum compatibility
                         pixelArray = drivers.load_from_disk(tempFileName)
@@ -696,14 +703,16 @@ class DataWorker:
                                         split_props['stride'],
                                         split_props.get('tight', False),
                                         split_props.get('discard_homogeneous_percentage', None),
-                                        split_props.get('discard_homogeneous_quantization_value', 255),
+                                        split_props.get('discard_homogeneous_quantization_value',
+                                                        255),
                                         celery_update_interval=self.CELERY_UPDATE_INTERVAL)
-                            
+
                             if len(coords) == 1:
                                 # only a single view; don't register x, y
                                 imgs_valid[key] = {
                                     'filename': nextFileName,
-                                    'message': 'Image was too small to be split into tiles and hence registered as a whole',
+                                    'message': 'Image was too small to be split into tiles and ' + \
+                                                'hence registered as a whole',
                                     'status': 0,
                                     'width': coords[0][3],
                                     'height': coords[0][2]
@@ -1077,12 +1086,21 @@ class DataWorker:
                     assert parserID in parsers.PARSERS[meta['annotationType']], msg
 
                 # parse
-                parserClass = parsers.PARSERS[meta['annotationType']][parserID]
-                parser = parserClass(self.config, self.dbConnector, project, tempRoot, meta['user'], meta['annotationType'])
-                parseResult = parser.import_annotations(filesUploaded, meta['user'], meta['skipUnknownClasses'], meta['markAsGoldenQuestions'], **meta['parserKwargs'])
+                parser_class = parsers.PARSERS[meta['annotationType']][parserID]
+                parser = parser_class(self.config,
+                                      self.dbConnector,
+                                      project,
+                                      tempRoot,
+                                      meta['user'],
+                                      meta['annotationType'])
+                parseResult = parser.import_annotations(filesUploaded,
+                                                        meta['user'],
+                                                        meta['skipUnknownClasses'],
+                                                        meta['markAsGoldenQuestions'],
+                                                        **meta['parserKwargs'])
 
-                if len(parseResult['result']):
-                    # retrieve file names for images annotations were imported for and append messages
+                if len(parseResult['result']) > 0:
+                    # retrieve file names for images annotations were imported for & append messages
                     fileNames = self.dbConnector.execute(sql.SQL('''
                         SELECT id, filename, x, y, width, height FROM {}
                         WHERE id IN %s;
@@ -1152,7 +1170,7 @@ class DataWorker:
             bandNum = set((1, 3))
 
         # scan disk for files
-        projectFolder = os.path.join(self.config.getProperty('FileServer', 'staticfiles_dir'), project)
+        projectFolder = os.path.join(self.config.get_property('FileServer', 'staticfiles_dir'), project)
         if (not os.path.isdir(projectFolder)) and (not os.path.islink(projectFolder)):
             # no folder exists for the project (should not happen due to broadcast at project creation)
             return []
@@ -1295,8 +1313,8 @@ class DataWorker:
         if len(imgs_add) == 0:
             return 0, []
 
-        project_folder = os.path.join(self.config.getProperty('FileServer', 'staticfiles_dir'),
-                                            project)
+        project_folder = os.path.join(self.config.get_property('FileServer', 'staticfiles_dir'),
+                                      project)
 
         db_values = []
         if createVirtualViews:
@@ -1507,12 +1525,14 @@ class DataWorker:
             self.dbConnector.execute(deleteStr, deleteArgs, None)
 
             if deleteFromDisk:
-                projectFolder = os.path.join(self.config.getProperty('FileServer', 'staticfiles_dir'), project)
-                if os.path.isdir(projectFolder) or os.path.islink(projectFolder):
+                project_folder = os.path.join(self.config.get_property('FileServer',
+                                                                       'staticfiles_dir'),
+                                             project)
+                if os.path.isdir(project_folder) or os.path.islink(project_folder):
                     for i in imgs_del:
-                        filePath = os.path.join(projectFolder, i['filename'])
-                        if os.path.isfile(filePath):
-                            os.remove(filePath)
+                        file_path = os.path.join(project_folder, i['filename'])
+                        if os.path.isfile(file_path):
+                            os.remove(file_path)
 
             # convert UUID
             for idx, img_del in enumerate(imgs_del):
@@ -1534,21 +1554,22 @@ class DataWorker:
             id_img=sql.Identifier(project, 'image')
         ), None, 'all')
 
-        projectFolder = os.path.join(self.config.getProperty('FileServer', 'staticfiles_dir'), project)
+        projectFolder = os.path.join(self.config.get_property('FileServer', 'staticfiles_dir'),
+                                     project)
         if (not os.path.isdir(projectFolder)) and (not os.path.islink(projectFolder)):
             return []
         imgs_disk = list_directory(projectFolder, recursive=True)
         imgs_disk = set(imgs_disk)
-        
+
         # get orphaned images
         imgs_orphaned = []
         for i in imgs_DB:
             if i['filename'] not in imgs_disk:
                 imgs_orphaned.append(i['id'])
         # imgs_orphaned = list(set(imgs_DB).difference(imgs_disk))
-        if not len(imgs_orphaned):
+        if len(imgs_orphaned) == 0:
             return []
-        
+
         # remove
         self.dbConnector.execute(sql.SQL('''
             DELETE FROM {id_iu} WHERE image IN %s;
@@ -1665,7 +1686,8 @@ class DataWorker:
             if dataType == 'prediction':
                 authorList = [UUID(a) for a in authorList]
             queryArgs.append(tuple(authorList))
-            authorStr = 'WHERE {} IN %s'.format('username' if dataType == 'annotation' else 'cnnstate')
+            authorStr = 'WHERE {} IN %s'.format('username' if dataType == 'annotation'
+                                                else 'cnnstate')
         else:
             authorStr = ''
         
@@ -1674,13 +1696,16 @@ class DataWorker:
                 dateRange = [dateRange, now]
             else:
                 dateRange = dateRange[:2]
-            dateStr = '{} timecreated >= to_timestamp(%s) AND timecreated <= to_timestamp(%s)'.format('WHERE' if not len(authorStr) else ' AND')
+            dateStr = '''{} timecreated >= to_timestamp(%s)
+                        AND timecreated <= to_timestamp(%s)'''.format(
+                            'WHERE' if len(authorStr) == 0 else ' AND')
             queryArgs.extend(dateRange)
         else:
             dateStr = ''
 
         if ignoreImported and dataType == 'annotation':
-            ignoreImportedStr = '{} timerequired >= 0'.format('WHERE' if not any([len(authorStr), len(dateStr)]) else ' AND')
+            ignoreImportedStr = '{} timerequired >= 0'.format('WHERE'
+                                        if not any([len(authorStr), len(dateStr)]) else ' AND')
         else:
             ignoreImportedStr = ''
 
@@ -2085,7 +2110,8 @@ class DataWorker:
 
             messages = []
 
-            projectPath = os.path.join(self.config.getProperty('FileServer', 'staticfiles_dir'), project)
+            projectPath = os.path.join(self.config.get_property('FileServer', 'staticfiles_dir'),
+                                       project)
 
             if os.path.isdir(projectPath) or os.path.islink(projectPath):
                 def _onError(function, path, excinfo):
@@ -2094,7 +2120,10 @@ class DataWorker:
                     rdb.set_trace()
                     messages.append(str(excinfo))
                 try:
-                    shutil.rmtree(os.path.join(self.config.getProperty('FileServer', 'staticfiles_dir'), project), onerror=_onError)
+                    shutil.rmtree(os.path.join(self.config.get_property('FileServer',
+                                                                        'staticfiles_dir'),
+                                               project),
+                                  onerror=_onError)
                 except Exception as e:
                     messages.append(str(e))
 

@@ -1,5 +1,5 @@
 '''
-    2019-21 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import os
@@ -55,7 +55,7 @@ if __name__ == '__main__':
 
 
     # check if running on file server
-    imgBaseDir = os.path.join(config.getProperty('FileServer', 'staticfiles_dir'), args.project)
+    imgBaseDir = os.path.join(config.get_property('FileServer', 'staticfiles_dir'), args.project)
     if not os.path.isdir(imgBaseDir):
         raise Exception('"{}" is not a valid directory on this machine. Are you running the script from the file server?'.format(imgBaseDir))
 

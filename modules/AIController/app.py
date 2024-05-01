@@ -1,14 +1,15 @@
 '''
     Main Bottle and routings for the AIController instance.
 
-    2019-21 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import html
 from bottle import request, abort
 from modules.AIController.backend.middleware import AIMiddleware
 from modules.AIController.backend import celery_interface
-from util.helpers import LogDecorator, parse_boolean
+from util.logDecorator import LogDecorator
+from util.helpers import parse_boolean
 
 
 class AIController:

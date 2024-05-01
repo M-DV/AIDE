@@ -1,11 +1,10 @@
 '''
     Abstract base class for annotation parsers.
 
-    2022 Benjamin Kellenberger
+    2024 Benjamin Kellenberger
 '''
 
 import os
-import tempfile
 from psycopg2 import sql
 
 
@@ -22,9 +21,11 @@ class AbstractAnnotationParser:
         self.project = project
         self.user = user
         self.annotationType = annotationType
-        assert annotationType in self.ANNOTATION_TYPES, f'unsupported annotation type "{annotationType}"'
+        assert annotationType in self.ANNOTATION_TYPES, \
+                f'unsupported annotation type "{annotationType}"'
 
-        self.projectRoot = os.path.join(self.config.getProperty('FileServer', 'staticfiles_dir'), self.project)
+        self.projectRoot = os.path.join(self.config.get_property('FileServer', 'staticfiles_dir'),
+                                        self.project)
         self.tempDir = tempDir
         if not self.tempDir.endswith(os.sep):
             self.tempDir += os.sep
@@ -44,7 +45,7 @@ class AbstractAnnotationParser:
         ''').format(sql.Identifier(self.project, 'labelclass')),
         None, 'all')
         self.labelClasses = dict([[l['name'], l['id']] for l in lcIDs])
-    
+
 
     @classmethod
     def get_html_options(cls, method):

@@ -1,7 +1,7 @@
 '''
     Serves files, such as images, from a local directory.
 
-    2019-23 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import os
@@ -9,11 +9,14 @@ from io import BytesIO
 from bottle import static_file, request, abort, _file_iter_range, parse_range_header, HTTPResponse
 from util.cors import enable_cors
 from util import helpers
-from util.drivers import is_web_compatible, GDALImageDriver        #TODO
+from util.logDecorator import LogDecorator
+from util.drivers import is_web_compatible, GDALImageDriver
 
 
 class FileServer():
-
+    '''
+        File server module, responsible for project as well as static data (images, etc.).
+    '''
     DEFAULT_IMAGE_KWARGS = {
         'driver': 'GTiff',
         'compress': 'lzw'
@@ -25,29 +28,31 @@ class FileServer():
         self.app = app
 
         if verbose_start:
-            print('FileServer'.ljust(helpers.LogDecorator.get_ljust_offset()), end='')
+            print('FileServer'.ljust(LogDecorator.get_ljust_offset()), end='')
 
         if not helpers.is_fileServer(config):
             if verbose_start:
-                helpers.LogDecorator.print_status('fail')
+                LogDecorator.print_status('fail')
             raise Exception('Not a valid FileServer instance.')
 
         self.login_check = None
         try:
-            self.static_dir = self.config.getProperty('FileServer', 'staticfiles_dir')
-            self.static_address_suffix = self.config.getProperty('FileServer',
-                                        'staticfiles_uri_addendum', type=str, fallback='').strip()
+            self.static_dir = self.config.get_property('FileServer', 'staticfiles_dir')
+            self.static_address_suffix = self.config.get_property('FileServer',
+                                                                  'staticfiles_uri_addendum',
+                                                                  dtype=str,
+                                                                  fallback='').strip()
 
             assert GDALImageDriver.init_is_available()  #TODO
 
             self._initBottle()
         except Exception as exc:
             if verbose_start:
-                helpers.LogDecorator.print_status('fail')
+                LogDecorator.print_status('fail')
             raise Exception(f'Could not launch FileServer (message: "{str(exc)}").') from exc
 
         if verbose_start:
-            helpers.LogDecorator.print_status('ok')
+            LogDecorator.print_status('ok')
 
 
     def loginCheck(self, project=None, admin=False, superuser=False, canCreateProjects=False, extend_session=False):

@@ -8,7 +8,7 @@
     depending on the "AIDE_MODULES" environment
     variable.
 
-    2020-22 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
 import os
@@ -58,10 +58,10 @@ queues.extend([
 
 
 app = Celery('AIDE',
-            broker=config.getProperty('AIController', 'broker_URL'),        #TODO
-            backend=config.getProperty('AIController', 'result_backend'))   #TODO
+            broker=config.get_property('AIController', 'broker_URL'),        #TODO
+            backend=config.get_property('AIController', 'result_backend'))   #TODO
 app.conf.update(
-    result_backend=config.getProperty('AIController', 'result_backend'),    #TODO
+    result_backend=config.get_property('AIController', 'result_backend'),    #TODO
     task_ignore_result=False,
     result_persistent=True,
     accept_content = ['json'],
@@ -193,7 +193,10 @@ if 'fileserver' in aideModules:
     num_modules += 1
 
     # scanning project folders for new images: set up periodic task
-    scanInterval = config.getProperty('FileServer', 'watch_folder_interval', type=float, fallback=60)
+    scanInterval = config.get_property('FileServer',
+                                       'watch_folder_interval',
+                                       dtype=float,
+                                       fallback=60)
     if scanInterval > 0:
         @app.on_after_configure.connect
         def setup_periodic_tasks(sender, **kwargs):

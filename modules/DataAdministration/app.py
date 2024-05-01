@@ -5,7 +5,7 @@
     Needs to be run from instance responsible
     for serving files (i.e., FileServer module).
 
-    2020-22 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
 import os
@@ -37,7 +37,10 @@ class DataAdministrator:
         self.is_fileServer = helpers.is_fileServer(config)  # set up either direct methods or relaying
         self.middleware = DataAdministrationMiddleware(config, dbConnector, taskCoordinator)
 
-        self.tempDir = self.config.getProperty('FileServer', 'tempfiles_dir', type=str, fallback=tempfile.gettempdir())
+        self.tempDir = self.config.get_property('FileServer',
+                                                'tempfiles_dir',
+                                                dtype=str,
+                                                fallback=tempfile.gettempdir())
 
         self.login_check = None
         self._initBottle()
@@ -96,7 +99,10 @@ class DataAdministrator:
                     params[key] = request.params.dict[key][0]
 
             reqFun = getattr(requests, method.lower())
-            return reqFun(os.path.join(self.config.getProperty('Server', 'dataServer_uri'), project, fun),
+            return reqFun(os.path.join(self.config.get_property('Server',
+                                                                'dataServer_uri'),
+                                       project,
+                                       fun),
                         cookies=cookies, json=request.json, files=files,
                         params=params,
                         headers=headers)

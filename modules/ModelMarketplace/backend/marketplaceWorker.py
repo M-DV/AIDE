@@ -2,7 +2,7 @@
     This class deals with all tasks related to the Model Marketplace,
     including model sharing, im-/export, download preparation, etc.
 
-    2020-23 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
 import os
@@ -44,7 +44,10 @@ class ModelMarketplaceWorker:
         self.config = config
         self.dbConnector = dbConnector  #Database(config)
         self.labelUImiddleware = DBMiddleware(config, dbConnector)
-        self.tempDir = self.config.getProperty('LabelUI', 'tempfiles_dir', type=str, fallback=tempfile.gettempdir())   #TODO
+        self.tempDir = self.config.get_property('LabelUI',
+                                                'tempfiles_dir',
+                                                dtype=str,
+                                                fallback=tempfile.gettempdir())   #TODO
         self.tempDir = os.path.join(self.tempDir, 'aide/modelDownloads')
         os.makedirs(self.tempDir, exist_ok=True)
         self._init_available_ai_models()
@@ -58,9 +61,9 @@ class ModelMarketplaceWorker:
             (i.e., the addition of new label classes).
         '''
         self.availableModels = set()
-        for key in PREDICTION_MODELS:
-            if 'canAddLabelclasses' in PREDICTION_MODELS[key] and \
-                PREDICTION_MODELS[key]['canAddLabelclasses'] is True:
+        for key, val in PREDICTION_MODELS.items():
+            if 'canAddLabelclasses' in val and \
+                val['canAddLabelclasses'] is True:
                 self.availableModels.add(key)
 
 

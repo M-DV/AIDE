@@ -1,7 +1,7 @@
 '''
     WFS service renderer.
 
-    2023 Benjamin Kellenberger
+    2023-24 Benjamin Kellenberger
 '''
 
 from typing import Tuple
@@ -42,7 +42,7 @@ class WFSRenderer(AbstractRenderer):
     def __init__(self, config: Config, db_connector: Database) -> None:
         super().__init__(config, db_connector)
 
-        self.static_dir = self.config.getProperty('FileServer', 'staticfiles_dir')
+        self.static_dir = self.config.get_property('FileServer', 'staticfiles_dir')
         self.mime_pattern = re.compile(r'.*\/')
 
         self.gml_formatter = GMLFormatter()

@@ -102,7 +102,10 @@ Note the following:
 #### Constructor parameters
 * **config:** Provides the model with configuration parameters as specified in the [configuration *.ini file](configure_settings.md). To access a parameter, use the following syntax (example):
 ```python
-    param = config.getProperty('AIController', 'result_backend', type=str, fallback=None)
+    param = config.get_property('AIController',
+                                'result_backend',
+                                dtype=str,
+                                fallback=None)
 ```
 This example would return the `result_backend` entry under section `AIController`, or `None` if not present. Arguments `type` (default: `type=str`) and `fallback` are optional. If parameter not present and `fallback` not specified, the function raises an exception.
 

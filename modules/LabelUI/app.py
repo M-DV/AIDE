@@ -1,7 +1,7 @@
 '''
     Main Bottle and routings for the LabelUI web frontend.
 
-    2019-22 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import os
@@ -11,7 +11,8 @@ import bottle
 from bottle import request, redirect, abort, SimpleTemplate
 from constants.version import AIDE_VERSION
 from .backend.middleware import DBMiddleware
-from util.helpers import LogDecorator, parse_boolean
+from util.logDecorator import LogDecorator
+from util.helpers import parse_boolean
 
 
 

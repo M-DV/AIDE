@@ -2,7 +2,7 @@
     Middleware for administrative functionalities
     of AIDE.
 
-    2020-21 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
 import os
@@ -12,7 +12,8 @@ from psycopg2 import sql
 from celery import current_app
 from constants.version import AIDE_VERSION, MIN_FILESERVER_VERSION, compare_versions
 from util import celeryWorkerCommons
-from util.helpers import LogDecorator, is_localhost
+from util.logDecorator import LogDecorator
+from util.helpers import is_localhost
 
 
 class AdminMiddleware:
@@ -45,8 +46,14 @@ class AdminMiddleware:
             # not running on main host
             raise Exception('Not a main host; cannot query service details.')
 
-        aic_uri = self.config.getProperty('Server', 'aiController_uri', type=str, fallback=None)
-        fs_uri = self.config.getProperty('Server', 'dataServer_uri', type=str, fallback=None)
+        aic_uri = self.config.get_property('Server',
+                                           'aiController_uri',
+                                           dtype=str,
+                                           fallback=None)
+        fs_uri = self.config.get_property('Server',
+                                          'dataServer_uri',
+                                          dtype=str,
+                                          fallback=None)
 
         if not is_localhost(aic_uri):
             # AIController runs on a different machine; poll for version of AIDE

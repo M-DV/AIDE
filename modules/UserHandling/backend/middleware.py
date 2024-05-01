@@ -2,7 +2,7 @@
     Provides functionality for checking login details,
     session validity, and the like.
 
-    2019-23 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import os
@@ -12,11 +12,14 @@ import re
 from threading import Thread
 from psycopg2 import sql
 from datetime import timedelta
-from util.helpers import current_time, check_demo_mode
+from util.helpers import current_time
+from util.common import check_demo_mode
 import secrets
 import bcrypt
 from bottle import request, response, abort
+
 from .exceptions import *
+
 
 
 class UserMiddleware():
@@ -35,8 +38,10 @@ class UserMiddleware():
 
         self.usersLoggedIn = {}    # username -> {timestamp, sessionToken}
 
-        self.csrfSecret = self.config.getProperty('UserHandler', 'csrf_secret', type=str,
-                                                    fallback=self.CSRF_SECRET_FALLBACK)
+        self.csrfSecret = self.config.get_property('UserHandler',
+                                                   'csrf_secret',
+                                                   dtype=str,
+                                                   fallback=self.CSRF_SECRET_FALLBACK)
 
         self.account_name_test = re.compile('^[A-Za-z0-9_-]*')
         self.email_test = re.compile(
@@ -136,7 +141,10 @@ class UserMiddleware():
             # also tell DB about updated tokens
             self._extend_session_database(username, sessionToken)
 
-        time_login = self.config.getProperty('UserHandler', 'time_login', type=int, fallback=31536000)  # fallback: add one year
+        time_login = self.config.get_property('UserHandler',
+                                              'time_login',
+                                              dtype=int,
+                                              fallback=31536000)  # fallback: add one year
         expires = now + timedelta(0, time_login)
 
         return sessionToken, now, expires
@@ -176,7 +184,10 @@ class UserMiddleware():
 
     def _check_logged_in(self, username, sessionToken):
         now = self._current_time()
-        time_login = self.config.getProperty('UserHandler', 'time_login', type=int, fallback=-1)
+        time_login = self.config.get_property('UserHandler',
+                                              'time_login',
+                                              dtype=int,
+                                              fallback=-1)
         if not username in self.usersLoggedIn:
             # check database
             result = self._get_user_data(username)

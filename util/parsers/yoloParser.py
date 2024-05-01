@@ -2,7 +2,7 @@
     Label parser for annotations in YOLO format:
     https://pjreddie.com/darknet/yolo/
 
-    2022-23 Benjamin Kellenberger
+    2022-24 Benjamin Kellenberger
 '''
 
 import os
@@ -23,13 +23,14 @@ class YOLOparser(AbstractAnnotationParser):
     INFO = '<p>Supports annotations of labels, bounding boxes, and polygons in the YOLO format.'
     ANNOTATION_TYPES = ('boundingBoxes',)
 
-    FILE_SUB_PATTERN = '(\/|\\\\)*.*\/*(images|labels|annotations)(\/|\\\\)*'           # pattern that attempts to identify image file name from label file name
+    # pattern that attempts to identify image file name from label file name
+    FILE_SUB_PATTERN = r'(\/|\\\\)*.*\/*(images|labels|annotations)(\/|\\\\)*'
 
 
-    '''
-        skipEmptyImages = kwargs.get('skip_empty_images', False)    # if True, images with zero annotations will not be added to the "image_user" relation
-        parseYOLOv5MetaFiles = kwargs.get('parse_yolov5_meta_files', False)
-    '''
+    # skipEmptyImages = kwargs.get('skip_empty_images', False)    # if True, images with zero
+    # annotations will not be added to the "image_user" relation parseYOLOv5MetaFiles =
+    # kwargs.get('parse_yolov5_meta_files', False)
+
 
     @classmethod
     def get_html_options(cls, method):
@@ -40,8 +41,7 @@ class YOLOparser(AbstractAnnotationParser):
                 <label for="skip_empty_images">skip images without annotations</label>
             </div>
             '''
-        else:
-            return ''
+        return ''
 
 
     @classmethod
@@ -499,7 +499,7 @@ if __name__ == '__main__':
         # import images first: cheap way out by linking images into project
         if not fileDir.endswith(os.sep):
             fileDir += os.sep
-        projectDir = os.path.join(config.getProperty('FileServer', 'staticfiles_dir'), project)
+        projectDir = os.path.join(config.get_property('FileServer', 'staticfiles_dir'), project)
         for fname in tqdm(fileList):
             if not os.path.isfile(fname) or not fname.lower().endswith('.jpg'):
                 continue

@@ -2,7 +2,7 @@
     Pull annotations and predictions from the database and export them into a
     folder according to the YOLO standard.
 
-    2019-21 Benjamin Kellenberger, Matthew Skiffington
+    2019-24 Benjamin Kellenberger, Matthew Skiffington
 '''
 
 import os
@@ -12,11 +12,11 @@ from psycopg2 import sql
 from util.helpers import parse_boolean
 
 
-def _replace(string, oldTokens, newToken):
-    if isinstance(oldTokens, str):
-        oldTokens = [oldTokens]
-    for o in oldTokens:
-        string = string.replace(o, newToken)
+def _replace(string, old_tokens, new_token):
+    if isinstance(old_tokens, str):
+        old_tokens = [old_tokens]
+    for token in old_tokens:
+        string = string.replace(token, new_token)
     return string
 
 
@@ -66,7 +66,7 @@ if __name__ == '__main__':
     dbConn = Database(config)
     if not dbConn.canConnect():
         raise Exception('Error connecting to database.')
-    dbSchema = config.getProperty('Database', 'schema')
+    dbSchema = config.get_property('Database', 'schema')
 
     # check if correct type of annotations
     annotationType = dbConn.execute('SELECT annotationtype FROM aide_admin.project WHERE shortname = %s;',

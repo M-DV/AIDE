@@ -1,12 +1,13 @@
 '''
-    2019-21 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import inspect
 import json
 from modules.AIWorker.backend.worker import functional
 from modules.AIWorker.backend import fileserver
-from util.helpers import LogDecorator, get_class_executable
+from util.logDecorator import LogDecorator
+from util.helpers import get_class_executable
 
 
 class AIWorker():
@@ -157,7 +158,10 @@ class AIWorker():
 
         # inference chunk size
         inferenceChunkSize = result[0]['inference_chunk_size']
-        chunkSizeLimit = self.config.getProperty('AIWorker', 'inference_batch_size_limit', type=int, fallback=-1)
+        chunkSizeLimit = self.config.get_property('AIWorker',
+                                                  'inference_batch_size_limit',
+                                                  dtype=int,
+                                                  fallback=-1)
         if inferenceChunkSize is None:
             inferenceChunkSize = chunkSizeLimit
         elif chunkSizeLimit > 0:

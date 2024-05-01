@@ -1,25 +1,22 @@
 '''
     Utilities to load data (images, etc.) of various formats.
 
-    2021-23 Benjamin Kellenberger
+    2021-24 Benjamin Kellenberger
 '''
 
 import re
 import urllib
+import os
+from functools import cmp_to_key
+from io import BytesIO
+import magic
 
 from util.drivers.imageDrivers import (
     PILImageDriver,
     GDALImageDriver,
     DICOMImageDriver
 )
-
-from util.helpers import LogDecorator
-
-import os
-from functools import cmp_to_key
-from io import BytesIO
-
-import magic
+from util.logDecorator import LogDecorator
 
 
 DRIVERS = {
@@ -28,11 +25,9 @@ DRIVERS = {
 }
 
 
-'''
-    A - valid file extensions and MIME types for files that are fully supported
-    by AIDE, both in the Web frontend as well as the backend through the image
-    drivers.
-'''
+
+# A - valid file extensions and MIME types for files that are fully supported by AIDE, both in the
+# Web frontend as well as the backend through the image drivers.
 SUPPORTED_DATA_EXTENSIONS = (
     '.jpg',
     '.jpeg',
@@ -70,23 +65,25 @@ DATA_MIME_TYPES_CONVERSION = {
 }
 
 
-'''
-    B - valid file extensions and MIME types that are supported by the drivers,
-    but not necessarily by AIDE's Web frontend. For such files, AIDE offers the
-    option to convert them to a format that is versatile enough and fully
-    supported (e.g., TIFF for images).
-'''
+
+# B - valid file extensions and MIME types that are supported by the drivers, but not necessarily by
+# AIDE's Web frontend. For such files, AIDE offers the option to convert them to a format that is
+# versatile enough and fully supported (e.g., TIFF for images).
 VALID_IMAGE_EXTENSIONS = set()
 VALID_IMAGE_MIME_TYPES = set()
 
-# fallback image drivers - those that are to be tried in order if data extensions
-# or MIME types are not conclusive
+# fallback image drivers - those that are to be tried in order if data extensions or MIME types are
+# not conclusive
 FALLBACK_DRIVERS = (
     GDALImageDriver, DICOMImageDriver
 )
 
-def init_drivers(verbose=False):
-    if len(VALID_IMAGE_EXTENSIONS):
+def init_drivers(verbose: bool=False) -> None:
+    '''
+        General function that attempts to initialize drivers. Creates an inventory for drivers that
+        are available.
+    '''
+    if len(VALID_IMAGE_EXTENSIONS) > 0:
         return
     if verbose:
         print('Initializing data drivers...')
@@ -96,12 +93,12 @@ def init_drivers(verbose=False):
         try:
             if not driver.init_is_available():
                 raise Exception('unknown error')
-            
+
             for ext in driver.get_supported_extensions():
                 if ext not in DRIVERS['extension']:
                     DRIVERS['extension'][ext] = set()
                 DRIVERS['extension'][ext].add(driver)
-            
+
             for mimetype in driver.get_supported_mime_types():
                 if mimetype not in DRIVERS['mime_type']:
                     DRIVERS['mime_type'][mimetype] = set()
@@ -112,7 +109,7 @@ def init_drivers(verbose=False):
             if verbose:
                 LogDecorator.print_status('fail')
                 print(f'        .> {str(e)}')
-    
+
     # sort drivers according to priority
     def _sort_priority(a, b):
         if a.PRIORITY < b.PRIORITY:
@@ -132,8 +129,12 @@ def init_drivers(verbose=False):
         VALID_IMAGE_MIME_TYPES.add(mimetype)
 
 
-def get_drivers_by_mime_type(mimeType, omit_fallback=False):
-    if not len(DRIVERS['mime_type']):
+def get_drivers_by_mime_type(mimeType: str,
+                             omit_fallback: bool=False):
+    '''
+        Receives a MIME type string and returns the corresponding driver.
+    '''
+    if len(DRIVERS['mime_type']) == 0:
         init_drivers(False)
     try:
         return DRIVERS['mime_type'][mimeType]
@@ -142,8 +143,12 @@ def get_drivers_by_mime_type(mimeType, omit_fallback=False):
 
 
 
-def get_drivers_by_extension(ext, omit_fallback=False):
-    if not len(DRIVERS['extension']):
+def get_drivers_by_extension(ext: str,
+                             omit_fallback: bool=False):
+    '''
+        Receives a file extension string and returns the corresponding driver.
+    '''
+    if len(DRIVERS['extension']) == 0:
         init_drivers(False)
     try:
         return DRIVERS['extension'][ext.lower()]
@@ -154,51 +159,51 @@ def get_drivers_by_extension(ext, omit_fallback=False):
 
 def bytea_to_bytesio(bytea):
     '''
-        Returns a BytesIO wrapper around a given byte array (or the object
-        itself if it already is a BytesIO instance).
+        Returns a BytesIO wrapper around a given byte array (or the object itself if it already is a
+        BytesIO instance).
     '''
     if isinstance(bytea, BytesIO):
         bytea.seek(0)
         return bytea
-    else:
-        bytesIO = BytesIO(bytea)
-        bytesIO.seek(0)
-        return bytesIO
+    bytes_io = BytesIO(bytea)
+    bytes_io.seek(0)
+    return bytes_io
 
 
 def bytesio_to_bytea(bytesio):
     '''
-        Returns a bytes array from a given BytesIO object (or the object itself
-        if it already is a bytes array).
+        Returns a bytes array from a given BytesIO object (or the object itself if it already is a
+        bytes array).
     '''
     if isinstance(bytesio, BytesIO):
         bytesio.seek(0)
         return bytesio.read()
-    else:
-        return bytesio
+    return bytesio
 
 
-def strip_window(fileURL):
+def strip_window(fileURL: str):
     '''
-        Receives a URL-like image path, with possible window appended
-        ("?window=...") and strips that from the file name. Returns the bare
-        file URL and separate window (if present, else None).
+        Receives a URL-like image path, with possible window appended ("?window=...") and strips
+        that from the file name. Returns the bare file URL and separate window (if present, else
+        None).
     '''
-    urlComponents = urllib.parse.urlparse(fileURL)
-    fileURL_stripped = fileURL.replace('?'+urlComponents.query, '')
-    window = re.findall('window=[0-9]+,[0-9]+,[0-9]+,[0-9]+', urlComponents.query, re.IGNORECASE)
-    if len(window):
+    url_components = urllib.parse.urlparse(fileURL)
+    file_url_stripped = fileURL.replace('?'+url_components.query, '')
+    window = re.findall('window=[0-9]+,[0-9]+,[0-9]+,[0-9]+',
+                        url_components.query,
+                        re.IGNORECASE)
+    if len(window) > 0:
         window = window[0].lower().replace('window=', '')
         window = [int(w) for w in window.split(',')]
     else:
         window = None
-    return fileURL_stripped, window
+    return file_url_stripped, window
 
 
 def get_driver(object):
     '''
-        Tries to guess the driver from the object (either a str for the file
-        name or a bytes or BytesIO object containing image data) and returns it.
+        Tries to guess the driver from the object (either a str for the file name or a bytes or
+        BytesIO object containing image data) and returns it.
     '''
     if isinstance(object, str):
         # load from disk
@@ -209,9 +214,9 @@ def get_driver(object):
             if driver.is_loadable(object):
                 return driver
     else:
-        # load from bytes
-        mimeType = magic.from_buffer(bytesio_to_bytea(object), mime=True).lower()      #TODO: workaround if libmagic fails?
-        drivers = get_drivers_by_mime_type(mimeType)
+        # load from bytes (TODO: workaround if libmagic fails?)
+        mime_type = magic.from_buffer(bytesio_to_bytea(object), mime=True).lower()
+        drivers = get_drivers_by_mime_type(mime_type)
         for driver in drivers:
             if driver.is_loadable(object):
                 return driver
@@ -257,20 +262,22 @@ def load_from_bytes(bytea, return_mime_type=False, return_driver=False, window=N
         library. Then, parses the byte array using an appropriate driver, if
         available.
     '''
-    mimeType = magic.from_buffer(bytesio_to_bytea(bytea), mime=True).lower()      #TODO: workaround if libmagic fails?
-    drivers = get_drivers_by_mime_type(mimeType)
+    #TODO: workaround if libmagic fails?
+    mime_type = magic.from_buffer(bytesio_to_bytea(bytea), mime=True).lower()
+    drivers = get_drivers_by_mime_type(mime_type)
     for driver in drivers:
         try:
             result = [driver.load_from_bytes(bytea, kwargs={'window':window})]
             if return_mime_type:
-                result.append(mimeType)
+                result.append(mime_type)
             if return_driver:
                 result.append(driver)
             return tuple(result) if len(result) > 1 else result[0]
         except Exception:
             pass
     # no driver was able to load the file
-    raise Exception(f'None of the available drivers could load bytes (guessed MIME type: "{mimeType}").')
+    raise Exception('None of the available drivers could load bytes ' + \
+                    f'(guessed MIME type: "{mime_type}").')
 
 
 

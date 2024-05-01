@@ -3,7 +3,7 @@
     handling project setup, data import requests, etc.
     Also handles creation of new projects.
 
-    2019-23 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import os
@@ -398,7 +398,9 @@ class ProjectConfigurator:
             return self.new_project_template.render(
                 version=AIDE_VERSION,
                 username=username,
-                data_server_uri=self.config.getProperty('Server', 'dataServer_uri', fallback='/')
+                data_server_uri=self.config.get_property('Server',
+                                                         'dataServer_uri',
+                                                         fallback='/')
             )
 
 

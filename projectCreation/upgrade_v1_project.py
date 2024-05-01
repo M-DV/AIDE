@@ -35,20 +35,22 @@
           WARE ON A PROJECT THAT HAS BEEN MIGRATED.
 
     
-    2019-21 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import os
 
 # verify environment variables
 if not 'AIDE_CONFIG_PATH' in os.environ:
-        raise Exception('ERROR: System environment variable "AIDE_CONFIG_PATH" must be set and must point to the configuration .ini file of the v2 installation.')
+        raise Exception('ERROR: System environment variable "AIDE_CONFIG_PATH" must be set and ' + \
+                        'must point to the configuration .ini file of the v2 installation.')
 if not 'AIDE_MODULES' in os.environ:
     os.environ['AIDE_MODULES'] = 'FileServer'     # for compatibility with Celery worker import
 
 # verify execution directory
 if not os.path.isdir(os.path.join(os.getcwd(), 'modules')):
-    raise Exception('ERROR: Upgrade script needs to be launched from the root directory of the AIDE v2 installation.')
+    raise Exception('ERROR: Upgrade script needs to be launched from the root directory ' + \
+                    'of the AIDE v2 installation.')
 
 import sys
 import argparse
@@ -64,9 +66,11 @@ from util import helpers
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Upgrade and register an AIDE v1 project to an existing v2 installation.')
+    parser = argparse.ArgumentParser(
+        description='Upgrade and register an AIDE v1 project to an existing v2 installation.')
     parser.add_argument('--settings_filepath', type=str,
-                    help='Path of the configuration .ini file for the v1 project to be upgraded to v2.')
+                        help='Path of the configuration .ini file for the v1 project ' + \
+                             'to be upgraded to v2.')
     args = parser.parse_args()
 
     from util.configDef import Config
@@ -79,11 +83,11 @@ if __name__ == '__main__':
         raise Exception('Error connecting to database.')
 
     # v1 config file
-    v1Config = Config(args.settings_filepath)
+    v1_config = Config(args.settings_filepath)
 
     # db schema of v1 project
-    dbSchema = v1Config.getProperty('Database', 'schema')
-    projectName = v1Config.getProperty('Project', 'projectName')
+    dbSchema = v1_config.get_property('Database', 'schema')
+    projectName = v1_config.get_property('Project', 'projectName')
 
     # verify we're running a database on v2 standards
     isV2 = dbConn.execute('''
@@ -94,8 +98,9 @@ if __name__ == '__main__':
     ''', None, 'all')
     if isV2 is None or not len(isV2):
         # upgrade to v2
-        dbName = config.getProperty('Database', 'name')
-        print(f'WARNING: Target database "{dbName}" has not (yet) been upgraded to the AIDE v2 schema; we will attempt to do this now...')
+        dbName = config.get_property('Database', 'name')
+        print(f'WARNING: Target database "{dbName}" has not (yet) been upgraded to the ' + \
+              'AIDE v2 schema; we will attempt to do this now...')
         setupDB()
 
     # verify that project is unique
@@ -106,20 +111,25 @@ if __name__ == '__main__':
     if uniqueQuery is not None and len(uniqueQuery):
         for u in uniqueQuery:
             if u['shortname'] == dbSchema:
-                print(f'Project with short name "{dbSchema}" seems to have already been migrated to AIDE v2. Aborting...')
+                print(f'Project with short name "{dbSchema}" seems to have already been ' + \
+                      'migrated to AIDE v2. Aborting...')
                 sys.exit(0)
             if u['name'] == projectName:
                 projectName_old = projectName
                 projectName = f'{projectName_old} ({dbSchema})'
-                print(f'WARNING: project name "{projectName_old}" already exists in database. Renaming to "{projectName}"...')
+                print(f'WARNING: project name "{projectName_old}" already exists in database. ' + \
+                      f'Renaming to "{projectName}"...')
 
     # migrate user names before applying changes to database
 
     # add admin user (if not already present)
-    adminName = v1Config.getProperty('Project', 'adminName', type=str, fallback=None)
+    adminName = v1_config.get_property('Project',
+                                      'adminName',
+                                      dtype=str,
+                                      fallback=None)
     if adminName is not None:
-        adminEmail = v1Config.getProperty('Project', 'adminEmail')
-        adminPass = v1Config.getProperty('Project', 'adminPassword')
+        adminEmail = v1_config.get_property('Project', 'adminEmail')
+        adminPass = v1_config.get_property('Project', 'adminPassword')
         uHandler = UserHandling.backend.middleware.UserMiddleware(config, dbConn)
         adminPass = uHandler._create_hash(adminPass.encode('utf8'))
         dbConn.execute('''
@@ -142,7 +152,8 @@ if __name__ == '__main__':
                     WHERE  table_schema = %s
                     AND    table_name = 'user'
                 ) THEN
-                    INSERT INTO aide_admin.user (name, email, hash, isSuperUser, canCreateProjects, session_token, last_login)
+                    INSERT INTO aide_admin.user (name, email, hash, isSuperUser, canCreateProjects,
+                        session_token, last_login)
                     SELECT name, email, hash, FALSE, FALSE, session_token, last_login
                     FROM {id_user}
                     ON CONFLICT (name) DO NOTHING;
@@ -160,8 +171,8 @@ if __name__ == '__main__':
     # The multi-project AIDE setup requires images to be in a subfolder named after
     # the project shorthand. Here we tell the user about moving the files, or else
     # propose a temporary fix (softlink).
-    softlinkName = config.getProperty('FileServer', 'staticfiles_dir')
-    v1StaticFilesDir = v1Config.getProperty('FileServer', 'staticfiles_dir')
+    softlinkName = config.get_property('FileServer', 'staticfiles_dir')
+    v1StaticFilesDir = v1_config.get_property('FileServer', 'staticfiles_dir')
     if not os.path.isdir(softlinkName):
         # not running on file server; show message
         print('You do not appear to be running AIDE on a "FileServer" instance.')
@@ -169,7 +180,7 @@ if __name__ == '__main__':
         print('project\'s files must be put in a sub-folder named after the project\'s')
         print(f'shorthand (i.e.: {softlinkName}/{dbSchema}/...).')
         print('Make sure to move the files to the new path on the FileServer instance.')
-    
+
     else:
         softlinkName = os.path.join(softlinkName, dbSchema)
         if os.path.islink(softlinkName):
@@ -181,7 +192,7 @@ if __name__ == '__main__':
             print(f'shorthand (i.e.: {softlinkName}/<images>).')
             print('Ideally, you would want to move the images to that folder, but as a')
             print('temporary fix, you can also use a softlink:')
-            print('{} -> {}'.format(softlinkName, v1StaticFilesDir))
+            print(f'{softlinkName} -> {v1StaticFilesDir}')
             print('Would you like to create this softlink now?')
             confirmation = None
             while confirmation is None:
@@ -191,9 +202,10 @@ if __name__ == '__main__':
                         confirmation = True
                     elif 'n' in confirmation.lower():
                         confirmation = False
-                        print('You selected not to create a softlink. AIDE will not find the image files')
-                        print(f'before they have been moved to the new folder ("{softlinkName}").')
-                        print(f'Please create this folder and move the contents of "{v1StaticFilesDir}" to it manually.')
+                        print('You selected not to create a softlink. AIDE will not find the ' + \
+                              'image files before they have been moved to the new folder ' + \
+                              f'("{softlinkName}"). Please create this folder and move the ' + \
+                              f'contents of "{v1StaticFilesDir}" to it manually.')
                     else: raise Exception('Invalid value')
                 except Exception:
                     confirmation = None
@@ -208,12 +220,20 @@ if __name__ == '__main__':
     # styles: try to get provided ones and fallback to defaults, if needed
     try:
         # check if custom default styles are provided
-        defaultStyles = json.load(open('config/default_ui_settings.json', 'r'))
+        with open('config/default_ui_settings.json',
+                  'r',
+                  encoding='utf-8') as f_ui:
+            defaultStyles = json.load(f_ui)
     except Exception:
         # resort to built-in styles
-        defaultStyles = json.load(open('modules/ProjectAdministration/static/json/default_ui_settings.json', 'r'))
+        with open('modules/ProjectAdministration/static/json/default_ui_settings.json',
+                  'r',
+                  encoding='utf-8') as f_styles:
+            defaultStyles = json.load(f_styles)
     try:
-        with open(v1Config.getProperty('LabelUI', 'styles_file'), 'r') as f:
+        with open(v1_config.get_property('LabelUI', 'styles_file'),
+                  'r',
+                  encoding='utf-8') as f:
             styles = json.load(f)
             styles = styles['styles']
 
@@ -223,57 +243,111 @@ if __name__ == '__main__':
         # fallback to defaults
         styles = defaultStyles
     try:
-        with open(v1Config.getProperty('Project', 'welcome_message_file', type=str, fallback='modules/LabelUI/static/templates/welcome_message.html'), 'r') as f:
+        welcome_message_file = v1_config.get_property('Project',
+                                'welcome_message_file',
+                                dtype=str,
+                                fallback='modules/LabelUI/static/templates/welcome_message.html')
+        with open(welcome_message_file,
+                  'r',
+                  encoding='utf-8') as f:
             welcomeMessage = f.readlines()
     except Exception:
         welcomeMessage = ''
     uiSettings = {
-        'enableEmptyClass': v1Config.getProperty('Project', 'enableEmptyClass', fallback='no'),
-        'showPredictions': v1Config.getProperty('LabelUI', 'showPredictions', fallback='yes'),
-        'showPredictions_minConf': v1Config.getProperty('LabelUI', 'showPredictions_minConf', type=float, fallback=0.5),
-        'carryOverPredictions': v1Config.getProperty('LabelUI', 'carryOverPredictions', fallback='no'),
-        'carryOverRule': v1Config.getProperty('LabelUI', 'carryOverRule', fallback='maxConfidence'),
-        'carryOverPredictions_minConf': v1Config.getProperty('LabelUI', 'carryOverPredictions_minConf', type=float, fallback=0.75),
-        'defaultBoxSize_w': v1Config.getProperty('LabelUI', 'defaultBoxSize_w', type=int, fallback=10),
-        'defaultBoxSize_h': v1Config.getProperty('LabelUI', 'defaultBoxSize_h', type=int, fallback=10),
-        'minBoxSize_w': v1Config.getProperty('Project', 'box_minWidth', type=int, fallback=1),
-        'minBoxSize_h': v1Config.getProperty('Project', 'box_minHeight', type=int, fallback=1),
-        'numImagesPerBatch': v1Config.getProperty('LabelUI', 'numImagesPerBatch', type=int, fallback=1),
-        'minImageWidth': v1Config.getProperty('LabelUI', 'minImageWidth', type=int, fallback=300),
-        'numImageColumns_max': v1Config.getProperty('LabelUI', 'numImageColumns_max', type=int, fallback=1),
-        'defaultImage_w': v1Config.getProperty('LabelUI', 'defaultImage_w', type=int, fallback=800),
-        'defaultImage_h': v1Config.getProperty('LabelUI', 'defaultImage_h', type=int, fallback=600),
+        'enableEmptyClass': v1_config.get_property('Project',
+                                                   'enableEmptyClass',
+                                                   fallback='no'),
+        'showPredictions': v1_config.get_property('LabelUI',
+                                                  'showPredictions',
+                                                  fallback='yes'),
+        'showPredictions_minConf': v1_config.get_property('LabelUI',
+                                                          'showPredictions_minConf',
+                                                          dtype=float,
+                                                          fallback=0.5),
+        'carryOverPredictions': v1_config.get_property('LabelUI',
+                                                       'carryOverPredictions',
+                                                       fallback='no'),
+        'carryOverRule': v1_config.get_property('LabelUI',
+                                                'carryOverRule',
+                                                fallback='maxConfidence'),
+        'carryOverPredictions_minConf': v1_config.get_property('LabelUI',
+                                                               'carryOverPredictions_minConf',
+                                                               dtype=float,
+                                                               fallback=0.75),
+        'defaultBoxSize_w': v1_config.get_property('LabelUI',
+                                                   'defaultBoxSize_w',
+                                                   dtype=int,
+                                                   fallback=10),
+        'defaultBoxSize_h': v1_config.get_property('LabelUI',
+                                                   'defaultBoxSize_h',
+                                                   dtype=int,
+                                                   fallback=10),
+        'minBoxSize_w': v1_config.get_property('Project',
+                                               'box_minWidth',
+                                               dtype=int,
+                                               fallback=1),
+        'minBoxSize_h': v1_config.get_property('Project',
+                                               'box_minHeight',
+                                               dtype=int,
+                                               fallback=1),
+        'numImagesPerBatch': v1_config.get_property('LabelUI',
+                                                    'numImagesPerBatch',
+                                                    dtype=int,
+                                                    fallback=1),
+        'minImageWidth': v1_config.get_property('LabelUI',
+                                                'minImageWidth',
+                                                dtype=int,
+                                                fallback=300),
+        'numImageColumns_max': v1_config.get_property('LabelUI',
+                                                      'numImageColumns_max',
+                                                      dtype=int,
+                                                      fallback=1),
+        'defaultImage_w': v1_config.get_property('LabelUI',
+                                                 'defaultImage_w',
+                                                 dtype=int,
+                                                 fallback=800),
+        'defaultImage_h': v1_config.get_property('LabelUI',
+                                                 'defaultImage_h',
+                                                 dtype=int,
+                                                 fallback=600),
         'styles': styles,
         'welcomeMessage': welcomeMessage
     }
 
     # models
-    modelPath = v1Config.getProperty('AIController', 'model_lib_path', fallback=None)
+    modelPath = v1_config.get_property('AIController', 'model_lib_path', fallback=None)
     if modelPath is not None and len(modelPath):
-        dbConn.execute('UPDATE {schema}.cnnstate SET model_library = %s WHERE model_library IS NULL;'.format(schema=dbSchema),
+        dbConn.execute(sql.SQL('''
+            UPDATE {} SET model_library = %s
+            WHERE model_library IS NULL;''').format(sql.Identifier(dbSchema, 'cnnstate')),
         (modelPath,), None)
     else:
         modelPath = None
-    alCriterionPath = v1Config.getProperty('AIController', 'al_criterion_lib_path', fallback=None)
-    if alCriterionPath is None or not len(alCriterionPath): alCriterionPath = None
+    alCriterionPath = v1_config.get_property('AIController', 'al_criterion_lib_path', fallback=None)
+    if alCriterionPath is None or len(alCriterionPath) == 0:
+        alCriterionPath = None
 
-    modelSettingsPath = v1Config.getProperty('AIController', 'model_options_path', fallback=None)
+    modelSettingsPath = v1_config.get_property('AIController', 'model_options_path', fallback=None)
     if modelSettingsPath is not None and len(modelSettingsPath):
         try:
-            with open(modelSettingsPath, 'r') as f:
+            with open(modelSettingsPath, 'r', encoding='utf-8') as f:
                 modelSettings = json.load(f).dumps()
         except Exception:
-            print('WARNING: could not parse settings defined in model settings path ("{}")'.format(modelSettingsPath))
+            print('WARNING: could not parse settings defined in model settings path ' + \
+                  f'("{modelSettingsPath}")')
             modelSettings = None
     else:
         modelSettings = None
-    alCriterionSettingsPath = v1Config.getProperty('AIController', 'al_criterion_options_path', fallback=None)
+    alCriterionSettingsPath = v1_config.get_property('AIController',
+                                                    'al_criterion_options_path',
+                                                    fallback=None)
     if alCriterionSettingsPath is not None and len(alCriterionSettingsPath):
         try:
-            with open(alCriterionSettingsPath, 'r') as f:
+            with open(alCriterionSettingsPath, 'r', encoding='utf-8') as f:
                 alCriterionSettings = json.load(f).dumps()
         except Exception:
-            print('WARNING: could not parse settings defined in AL criterion settings path ("{}")'.format(alCriterionSettingsPath))
+            print('WARNING: could not parse settings defined in AL criterion settings path ' + \
+                  f'("{alCriterionSettingsPath}")')
             alCriterionSettings = None
     else:
         alCriterionSettings = None
@@ -332,18 +406,18 @@ if __name__ == '__main__':
         (
             dbSchema,
             projectName,
-            v1Config.getProperty('Project', 'projectDescription'),
-            v1Config.getProperty('Project', 'adminName'),
+            v1_config.get_property('Project', 'projectDescription'),
+            v1_config.get_property('Project', 'adminName'),
             secretToken,
             True,
-            v1Config.getProperty('Project', 'demoMode'),
-            v1Config.getProperty('Project', 'annotationType'),
-            v1Config.getProperty('Project', 'predictionType'),
+            v1_config.get_property('Project', 'demoMode'),
+            v1_config.get_property('Project', 'annotationType'),
+            v1_config.get_property('Project', 'predictionType'),
             json.dumps(uiSettings),
-            v1Config.getProperty('AIController', 'numImages_autoTrain'),
-            v1Config.getProperty('AIController', 'minNumAnnoPerImage'),
-            v1Config.getProperty('AIController', 'maxNumImages_train'),
-            v1Config.getProperty('AIController', 'maxNumImages_inference'),
+            v1_config.get_property('AIController', 'numImages_autoTrain'),
+            v1_config.get_property('AIController', 'minNumAnnoPerImage'),
+            v1_config.get_property('AIController', 'maxNumImages_train'),
+            v1_config.get_property('AIController', 'maxNumImages_inference'),
             (modelPath is not None),
             modelPath, modelSettings,
             alCriterionPath, alCriterionSettings
@@ -370,4 +444,5 @@ if __name__ == '__main__':
     ''').format(id_user=sql.Identifier(dbSchema, 'user')),
     (dbSchema, dbSchema))
 
-    print(f'Project "{projectName}" has been converted to AIDE v2 standards. Please do not use a v1 installation on this project anymore.')
+    print(f'Project "{projectName}" has been converted to AIDE v2 standards. ' + \
+          'Please do not use a v1 installation on this project anymore.')

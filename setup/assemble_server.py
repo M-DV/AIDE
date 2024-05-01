@@ -13,7 +13,7 @@ import bottle
 from bottle import Bottle
 
 from util import helpers
-from util.helpers import LogDecorator
+from util.logDecorator import LogDecorator
 from util.configDef import Config
 from util import drivers
 from setup.setupDB import add_update_superuser
@@ -92,9 +92,9 @@ def assemble_server(verbose_start=True,
             LogDecorator.print_status('fail')
             print(f'''
         The current installation of AIDE:
-            database host: {config.getProperty('Database', 'host')}
-            database name: {config.getProperty('Database', 'name')}
-            schema:        {config.getProperty('Database', 'schema', str, '(not specified)')}
+            database host: {config.get_property('Database', 'host')}
+            database name: {config.get_property('Database', 'name')}
+            schema:        {config.get_property('Database', 'schema', str, '(not specified)')}
 
         points to an installation of the legacy AIDE v1.
         If you wish to continue using AIDE v3, you have to upgrade the project accordingly.
@@ -108,7 +108,7 @@ def assemble_server(verbose_start=True,
 
         # check if projects have been migrated
         print('Checking projects...'.ljust(status_offset), end='')
-        db_schema = config.getProperty('Database', 'schema', str, None)
+        db_schema = config.get_property('Database', 'schema', str, None)
         if db_schema is not None:
             is_migrated = db_connector.execute('''
                     SELECT COUNT(*) AS cnt
@@ -122,8 +122,8 @@ def assemble_server(verbose_start=True,
         ("{os.environ['AIDE_CONFIG_PATH']}")
         points to a project that has not yet been migrated to AIDE v2.
         Details:
-            database host: {config.getProperty('Database', 'host')}
-            database name: {config.getProperty('Database', 'name')}
+            database host: {config.get_property('Database', 'host')}
+            database name: {config.get_property('Database', 'name')}
             schema:        {db_schema}
 
         If you wish to continue using AIDE v2 for this project, you have to upgrade it
@@ -288,8 +288,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     try:
-        aide_app = assemble_server(args.verbose, args.check_v1, args.migrate_db, args.force_migrate,
-                                                                            not bool(args.launch))
+        aide_app = assemble_server(args.verbose,
+                                   args.check_v1,
+                                   args.migrate_db,
+                                   args.force_migrate,
+                                   not bool(args.launch))
     except Exception as global_exc:
         print(global_exc)
         sys.exit(1)
@@ -298,8 +301,8 @@ if __name__ == '__main__':
         if args.verbose:
             print('Launching server...')
         server_config = Config(False)
-        host = server_config.getProperty('Server', 'host')
-        port = server_config.getProperty('Server', 'port')
+        host = server_config.get_property('Server', 'host')
+        port = server_config.get_property('Server', 'port')
         aide_app.run(host=host, port=port)
     else:
         sys.exit(0)

@@ -6,7 +6,7 @@
     defined in the configuration file, a 'train' task is submitted to the Cele-
     ry worker(s) and this thread is terminated.
 
-    2019-21 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import json
@@ -290,10 +290,16 @@ class Watchdog(Thread):
                             self.middleware.start_train_and_inference(project=self.project,
                                 minTimestamp='lastState',
                                 maxNumImages_train=self.properties['maxnumimages_train'],
-                                maxNumWorkers_train=self.config.getProperty('AIController', 'maxNumWorkers_train', type=int, fallback=1),           #TODO: replace by project-specific argument
+                                maxNumWorkers_train=self.config.get_property('AIController',
+                                                                             'maxNumWorkers_train',
+                                                                             dtype=int,
+                                                                             fallback=1),   #TODO: replace by project-specific argument
                                 forceUnlabeled_inference=True,
                                 maxNumImages_inference=self.properties['maxnumimages_inference'],
-                                maxNumWorkers_inference=self.config.getProperty('AIController', 'maxNumWorkers_inference', type=int, fallback=-1))  #TODO: replace by project-specific argument
+                                maxNumWorkers_inference=self.config.get_property('AIController',
+                                        'maxNumWorkers_inference',
+                                        type=int,
+                                        fallback=-1))  #TODO: replace by project-specific argument
                             
                     except Exception:
                         # error in case auto-launched task is already ongoing; ignore

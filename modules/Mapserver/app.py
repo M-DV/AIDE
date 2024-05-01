@@ -1,7 +1,7 @@
 '''
     Web Map server functionality.
 
-    2023 Benjamin Kellenberger
+    2023-24 Benjamin Kellenberger
 '''
 
 import os
@@ -94,7 +94,7 @@ class Mapserver:
         req_fun = getattr(requests, method.lower())
         if project is None:
             project = ''
-        return req_fun(os.path.join(self.config.getProperty('Server', 'dataServer_uri'),
+        return req_fun(os.path.join(self.config.get_property('Server', 'dataServer_uri'),
                         project, request_name),
                     cookies=cookies, json=request.json,
                     params=params,

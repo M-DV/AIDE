@@ -1,29 +1,33 @@
 '''
     Definition of the layer between the UI frontend and the database.
 
-    2019-22 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import os
+from typing import Iterable
 from uuid import UUID
 from datetime import datetime
+import json
 import pytz
 import dateutil.parser
-import json
 from PIL import Image
 from psycopg2 import sql
+from util import helpers, common
 from .sql_string_builder import SQLStringBuilder
 from .annotation_sql_tokens import QueryStrings_annotation, AnnotationParser
-from util import helpers
 
 
 class DBMiddleware():
-
+    '''
+        Label UI middleware, performing communication between frontend and the database.
+    '''
     def __init__(self, config, dbConnector):
         self.config = config
         self.dbConnector = dbConnector
 
-        self.project_immutables = {}       # project settings that cannot be changed (project shorthand -> {settings})
+        # project settings that cannot be changed (project shorthand -> {settings})
+        self.project_immutables = {}
 
         self._fetchProjectSettings()
         self.sqlBuilder = SQLStringBuilder()
@@ -32,82 +36,95 @@ class DBMiddleware():
 
     def _fetchProjectSettings(self):
         # AI controller URI
-        aiControllerURI = self.config.getProperty('Server', 'aiController_uri')
+        aiControllerURI = self.config.get_property('Server', 'aiController_uri')
         if aiControllerURI is None or aiControllerURI.strip() == '':
             # no AI backend configured
             aiControllerURI = None
 
         # global, project-independent settings
         self.globalSettings = {
-            'indexURI': self.config.getProperty('Server', 'index_uri', type=str, fallback='/'),
-            'dataServerURI': self.config.getProperty('Server', 'dataServer_uri'),
+            'indexURI': self.config.get_property('Server',
+                                                 'index_uri',
+                                                 dtype=str,
+                                                 fallback='/'),
+            'dataServerURI': self.config.get_property('Server', 'dataServer_uri'),
             'aiControllerURI': aiControllerURI
         }
 
         # default styles
         try:
             # check if custom default styles are provided
-            self.defaultStyles = json.load(open('config/default_ui_settings.json', 'r'))
+            with open('config/default_ui_settings.json', 'r', encoding='utf-8') as f_styles:
+                self.defaultStyles = json.load(f_styles)
         except Exception:
             # resort to built-in styles
-            self.defaultStyles = json.load(open('modules/ProjectAdministration/static/json/default_ui_settings.json', 'r'))
+            with open('modules/ProjectAdministration/static/json/default_ui_settings.json',
+                      'r',
+                      encoding='utf-8') as f_default:
+                self.defaultStyles = json.load(f_default)
 
 
-    def _assemble_annotations(self, project, queryData, hideGoldenQuestionInfo):
+    def _assemble_annotations(self,
+                              project: str,
+                              queryData: list,
+                              hideGoldenQuestionInfo: bool) -> dict:
         response = {}
-        for b in queryData:
-            imgID = str(b['image'])
-            if not imgID in response:
-                response[imgID] = {
-                    'fileName': b['filename'],
-                    'w_x': b.get('w_x', None),
-                    'w_y': b.get('w_y', None),
-                    'w_width': b.get('w_width', None),
-                    'w_height': b.get('w_height', None),
+        for row in queryData:
+            img_id = str(row['image'])
+            if img_id not in response:
+                response[img_id] = {
+                    'fileName': row['filename'],
+                    'w_x': row.get('w_x', None),
+                    'w_y': row.get('w_y', None),
+                    'w_width': row.get('w_width', None),
+                    'w_height': row.get('w_height', None),
                     'predictions': {},
                     'annotations': {},
                     'last_checked': None
                 }
-            viewcount = b['viewcount']
+            viewcount = row['viewcount']
             if viewcount is not None:
-                response[imgID]['viewcount'] = viewcount
-            last_checked = b['last_checked']
+                response[img_id]['viewcount'] = viewcount
+            last_checked = row['last_checked']
             if last_checked is not None:
-                if response[imgID]['last_checked'] is None:
-                    response[imgID]['last_checked'] = last_checked
+                if response[img_id]['last_checked'] is None:
+                    response[img_id]['last_checked'] = last_checked
                 else:
-                    response[imgID]['last_checked'] = max(response[imgID]['last_checked'], last_checked)
+                    response[img_id]['last_checked'] = max(response[img_id]['last_checked'],
+                                                           last_checked)
 
             if not hideGoldenQuestionInfo:
-                response[imgID]['isGoldenQuestion'] = b['isgoldenquestion']
+                response[img_id]['isGoldenQuestion'] = row['isgoldenquestion']
 
-            response[imgID]['isBookmarked'] = b['isbookmarked']
+            response[img_id]['isBookmarked'] = row['isbookmarked']
 
             # parse annotations and predictions
-            entryID = str(b['id'])
-            if b['ctype'] is not None:
+            entry_id = str(row['id'])
+            if row['ctype'] is not None:
                 colnames = self.sqlBuilder.getColnames(
                     self.project_immutables[project]['annotationType'],
                     self.project_immutables[project]['predictionType'],
-                    b['ctype'])
+                    row['ctype'])
                 entry = {}
                 for c in colnames:
-                    value = b[c]
+                    value = row[c]
                     if isinstance(value, datetime):
                         value = value.timestamp()
                     elif isinstance(value, UUID):
                         value = str(value)
                     entry[c] = value
-                
-                if b['ctype'] == 'annotation':
-                    response[imgID]['annotations'][entryID] = entry
-                elif b['ctype'] == 'prediction':
-                    response[imgID]['predictions'][entryID] = entry
+
+                if row['ctype'] == 'annotation':
+                    response[img_id]['annotations'][entry_id] = entry
+                elif row['ctype'] == 'prediction':
+                    response[img_id]['predictions'][entry_id] = entry
 
         return response
 
 
-    def _set_images_requested(self, project, imageIDs):
+    def _set_images_requested(self,
+                              project: str,
+                              imageIDs: Iterable) -> None:
         '''
             Sets column "last_requested" of relation "image"
             to the current date. This is done during image
@@ -119,16 +136,17 @@ class DBMiddleware():
         vals = []
         for key in imageIDs:
             vals.append(key)
-        if len(vals):
-            queryStr = sql.SQL('''
+        if len(vals) > 0:
+            query_str = sql.SQL('''
                 UPDATE {id_img}
                 SET last_requested = %s
                 WHERE id IN %s;
             ''').format(id_img=sql.Identifier(project, 'image'))
-            self.dbConnector.execute(queryStr, (now, tuple(vals),), None)
+            self.dbConnector.execute(query_str, (now, tuple(vals),), None)
 
 
-    def _get_sample_metadata(self, metaType):
+    def _get_sample_metadata(self,
+                             metaType: str) -> dict:
         '''
             Returns a dummy annotation or prediction for the sample
             image in the "exampleData" folder, depending on the "metaType"
@@ -142,7 +160,7 @@ class DBMiddleware():
                 'priority': 1.0,
                 'viewcount': None
             }
-        elif metaType == 'points' or metaType == 'boundingBoxes':
+        if metaType in ('points', 'boundingBoxes'):
             return {
                 'id': '00000000-0000-0000-0000-000000000000',
                 'label': '00000000-0000-0000-0000-000000000000',
@@ -154,9 +172,12 @@ class DBMiddleware():
                 'priority': 1.0,
                 'viewcount': None
             }
-        elif metaType == 'polygons':
-            return json.load(open('modules/LabelUI/static/exampleData/sample_polygon.json', 'r'))
-        elif metaType == 'segmentationMasks':
+        if metaType == 'polygons':
+            with open('modules/LabelUI/static/exampleData/sample_polygon.json',
+                      'r',
+                      encoding='utf-8') as f_polygon:
+                return json.load(f_polygon)
+        if metaType == 'segmentationMasks':
             # read segmentation mask from disk
             segmask = Image.open('modules/LabelUI/static/exampleData/sample_segmentationMask.tif')
             segmask, width, height = helpers.imageToBase64(segmask)
@@ -169,62 +190,93 @@ class DBMiddleware():
                 'priority': 1.0,
                 'viewcount': None
             }
-        else:
-            return {}
+        return {}
 
-    def get_project_immutables(self, project):
+
+    def get_project_immutables(self,
+                               project: str) -> dict:
+        '''
+            Returns project properties that are immutable (currently: the project's annotation and
+            prediction types). Caches values for reduced database access in future.
+
+            Args:
+                - "project": str, project shortname
+
+            Returns:
+                dict, the project's immutable properties
+        '''
+        if self.project_immutables.get(project, {}) is None:
+            return None
         if project not in self.project_immutables:
-            queryStr = 'SELECT annotationType, predictionType FROM aide_admin.project WHERE shortname = %s;'
-            result = self.dbConnector.execute(queryStr, (project,), 1)
-            if result and len(result):
-                self.project_immutables[project] = {
-                    'annotationType': result[0]['annotationtype'],
-                    'predictionType': result[0]['predictiontype']
-                }
-            else:
+            anno_type, pred_type = common.get_project_immutables(project, self.dbConnector)
+            if anno_type is None or pred_type is None:
+                self.project_immutables[project] = None
                 return None
+            self.project_immutables[project] = {
+                'annotationType': anno_type,
+                'predictionType': pred_type
+            }
         return self.project_immutables[project]
 
-    
-    def get_dynamic_project_settings(self, project):
-        queryStr = 'SELECT ui_settings FROM aide_admin.project WHERE shortname = %s;'
-        result = self.dbConnector.execute(queryStr, (project,), 1)
+
+    def get_project_ui_settings(self,
+                                project: str) -> dict:
+        '''
+            Returns the project's user interface settings).
+
+            Args:
+                - "project": str, project shortname
+
+            Returns:
+                dict, the project's UI settings
+        '''
+        query_str = 'SELECT ui_settings FROM aide_admin.project WHERE shortname = %s;'
+        result = self.dbConnector.execute(query_str, (project,), 1)
         result = json.loads(result[0]['ui_settings'])
 
-        # complete styles with defaults where necessary (may be required for project that got upgraded from v1)
+        # complete styles with defaults where necessary
+        # (may be required for project that got upgraded from v1)
         result = helpers.check_args(result, self.defaultStyles)
 
         return result
 
 
-    def getProjectSettings(self, project):
+    def getProjectSettings(self,
+                           project: str) -> dict:
         '''
             Queries the database for general project-specific metadata, such as:
             - Classes: names, indices, default colors
             - Annotation type: one of {class labels, positions, bboxes}
         '''
         # publicly available info from DB
-        projSettings = self.getProjectInfo(project)
+        proj_settings = self.getProjectInfo(project)
 
         # label classes
-        projSettings['classes'] = self.getClassDefinitions(project)
+        proj_settings['classes'] = self.getClassDefinitions(project)
 
         # static and dynamic project settings and properties from configuration file
-        projSettings = { **projSettings, **self.get_project_immutables(project), **self.get_dynamic_project_settings(project), **self.globalSettings }
+        proj_settings = {**proj_settings,
+                         **self.get_project_immutables(project),
+                         **self.get_project_ui_settings(project),
+                         **self.globalSettings}
 
         # append project shorthand to AIController URI 
-        if 'aiControllerURI' in projSettings and projSettings['aiControllerURI'] is not None and len(projSettings['aiControllerURI']):
-            projSettings['aiControllerURI'] = os.path.join(projSettings['aiControllerURI'], project) + '/'
+        if 'aiControllerURI' in proj_settings and \
+            proj_settings['aiControllerURI'] is not None and \
+                len(proj_settings['aiControllerURI']) > 0:
+            proj_settings['aiControllerURI'] = os.path.join(proj_settings['aiControllerURI'],
+                                                            project) + '/'
 
-        return projSettings
+        return proj_settings
 
 
-    def getProjectInfo(self, project):
+    def getProjectInfo(self,
+                       project: str) -> dict:
         '''
             Returns safe, shareable information about the project
             (i.e., users don't need to be part of the project to see these data).
         '''
-        queryStr = '''
+        query_str = '''
             SELECT shortname, name, description, demoMode,
             interface_enabled, archived, ai_model_enabled,
             ai_model_library, ai_alcriterion_library,
@@ -232,14 +284,14 @@ class DBMiddleware():
             FROM aide_admin.project
             WHERE shortname = %s
         '''
-        result = self.dbConnector.execute(queryStr, (project,), 1)[0]
+        result = self.dbConnector.execute(query_str, (project,), 1)[0]
 
         # provide flag if AI model is available
-        aiModelAvailable = all([
+        ai_models_available = all([
             result['ai_model_library'] is not None and len(result['ai_model_library']),
             result['ai_alcriterion_library'] is not None and len(result['ai_alcriterion_library'])
         ])
-        aiModelAutotrainingEnabled = (aiModelAvailable and result['ai_model_enabled'])
+        ai_model_autotraining_enabled = (ai_models_available and result['ai_model_enabled'])
 
         return {
             'projectShortname': result['shortname'],
@@ -247,43 +299,42 @@ class DBMiddleware():
             'projectDescription': result['description'],
             'demoMode': result['demomode'],
             'interface_enabled': result['interface_enabled'] and not result['archived'],
-            'ai_model_available': aiModelAvailable,
-            'ai_model_autotraining_enabled': aiModelAutotrainingEnabled,
+            'ai_model_available': ai_models_available,
+            'ai_model_autotraining_enabled': ai_model_autotraining_enabled,
             'segmentation_ignore_unlabeled': result['segmentation_ignore_unlabeled']
         }
 
 
-    def getClassDefinitions(self, project, showHidden=False):
+    def getClassDefinitions(self,
+                            project: str,
+                            showHidden: bool=False) -> dict:
         '''
             Returns a dictionary with entries for all classes in the project.
         '''
 
         # query data
-        if showHidden:
-            hiddenSpec = ''
-        else:
-            hiddenSpec = 'WHERE hidden IS false'
-        queryStr = sql.SQL('''
-            SELECT 'group' AS type, id, NULL as idx, name, color, parent, NULL AS keystroke, NULL AS hidden FROM {}
+        query_str = sql.SQL('''
+            SELECT 'group' AS type, id, NULL as idx, name, color, parent, NULL AS keystroke,
+                    NULL AS hidden FROM {}
             UNION ALL
             SELECT 'class' AS type, id, idx, name, color, labelclassgroup, keystroke, hidden FROM {}
             {};
             ''').format(
                 sql.Identifier(project, 'labelclassgroup'),
                 sql.Identifier(project, 'labelclass'),
-                sql.SQL(hiddenSpec)
+                sql.SQL('' if showHidden else 'WHERE hidden IS false')
             )
 
-        classData = self.dbConnector.execute(queryStr, None, 'all')
+        class_data = self.dbConnector.execute(query_str, None, 'all')
 
         # assemble entries first
-        allEntries = {}
-        numClasses = 0
-        if classData is not None:
-            for cl in classData:
-                id = str(cl['id'])
+        all_entries = {}
+        num_classes = 0
+        if class_data is not None:
+            for cl in class_data:
+                class_id = str(cl['id'])
                 entry = {
-                    'id': id,
+                    'id': class_id,
                     'name': cl['name'],
                     'color': cl['color'],
                     'parent': str(cl['parent']) if cl['parent'] is not None else None,
@@ -294,46 +345,43 @@ class DBMiddleware():
                 else:
                     entry['index'] = cl['idx']
                     entry['keystroke'] = cl['keystroke']
-                    numClasses += 1
-                allEntries[id] = entry
-        
+                    num_classes += 1
+                all_entries[class_id] = entry
 
         # transform into tree
-        def _find_parent(tree, parentID):
-            if parentID is None:
+        def _find_parent(tree, tree_parent_id):
+            if tree_parent_id is None:
                 return None
-            elif 'id' in tree and tree['id'] == parentID:
+            if tree.get('id', None) == tree_parent_id:
                 return tree
-            elif 'entries' in tree:
-                for ek in tree['entries'].keys():
-                    rv = _find_parent(tree['entries'][ek], parentID)
-                    if rv is not None:
-                        return rv
+            for ek in tree.get('entries', {}).keys():
+                rv = _find_parent(tree['entries'][ek], tree_parent_id)
+                if rv is not None:
+                    return rv
                 return None
-            else:
-                return None
+            return None
 
 
-        allEntries = {
-            'entries': allEntries
+        all_entries = {
+            'entries': all_entries
         }
-        for key in list(allEntries['entries'].keys()):
-            entry = allEntries['entries'][key]
-            parentID = entry['parent']
+        for key in list(all_entries['entries'].keys()):
+            entry = all_entries['entries'][key]
+            parent_id = entry['parent']
             del entry['parent']
 
-            if parentID is None:
+            if parent_id is None:
                 # entry or group with no parent: append to root directly
-                allEntries['entries'][key] = entry
-            
+                all_entries['entries'][key] = entry
+
             else:
                 # move item
-                parent = _find_parent(allEntries, parentID)
+                parent = _find_parent(all_entries, parent_id)
                 parent['entries'][key] = entry
-                del allEntries['entries'][key]
+                del all_entries['entries'][key]
 
-        allEntries['numClasses'] = numClasses
-        return allEntries
+        all_entries['numClasses'] = num_classes
+        return all_entries
 
 
     def getBatch_fixed(self, project, username, data, hideGoldenQuestionInfo=True):
@@ -346,7 +394,7 @@ class DBMiddleware():
 
         # query
         projImmutables = self.get_project_immutables(project)
-        demoMode = helpers.check_demo_mode(project, self.dbConnector)
+        demoMode = common.check_demo_mode(project, self.dbConnector)
         queryStr = self.sqlBuilder.getFixedImagesQueryString(project, projImmutables['annotationType'], projImmutables['predictionType'], demoMode)
 
         # verify provided UUIDs
@@ -398,7 +446,7 @@ class DBMiddleware():
         '''
         # query
         projImmutables = self.get_project_immutables(project)
-        demoMode = helpers.check_demo_mode(project, self.dbConnector)
+        demoMode = common.check_demo_mode(project, self.dbConnector)
         queryStr = self.sqlBuilder.getNextBatchQueryString(project, projImmutables['annotationType'], projImmutables['predictionType'], order, subset, demoMode)
 
         # limit (TODO: make 128 a hyperparameter)
@@ -546,7 +594,7 @@ class DBMiddleware():
         '''
             Sends user-provided annotations to the database.
         '''
-        if helpers.check_demo_mode(project, self.dbConnector):
+        if common.check_demo_mode(project, self.dbConnector):
             return 1
 
         projImmutables = self.get_project_immutables(project)
@@ -727,14 +775,14 @@ class DBMiddleware():
             Receives an iterable of tuples (uuid, bool) and updates the
             property "isGoldenQuestion" of the images accordingly.
         '''
-        if helpers.checkDemoMode(project, self.dbConnector):
+        if common.check_demo_mode(project, self.dbConnector):
             return {
                 'status': 2,
                 'message': 'Not allowed in demo mode.'
             }
-            
+
         projImmutables = self.get_project_immutables(project)
-        
+
         queryStr = sql.SQL('''
             UPDATE {id_img} AS img SET isGoldenQuestion = c.isGoldenQuestion
             FROM (VALUES %s)

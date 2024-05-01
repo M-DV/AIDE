@@ -2,7 +2,7 @@
     Label parser for annotations in MS-COCO format:
     https://cocodataset.org/#format-data
 
-    2022-23 Benjamin Kellenberger
+    2022-24 Benjamin Kellenberger
 '''
 
 import os
@@ -27,7 +27,7 @@ class COCOparser(AbstractAnnotationParser):
     INFO = '<p>Supports annotations of labels, bounding boxes, and polygons in the <a href="https://cocodataset.org/" target="_blank">MS-COCO</a> format.'
     ANNOTATION_TYPES = ('labels', 'boundingBoxes', 'polygons')
 
-    FILE_SUB_PATTERN = '(\/|\\\\)*.*\/*(images|labels|annotations)(\/|\\\\)*'           # pattern that attempts to identify image file name from label file name
+    FILE_SUB_PATTERN = r'(\/|\\\\)*.*\/*(images|labels|annotations)(\/|\\\\)*'           # pattern that attempts to identify image file name from label file name
 
     @classmethod
     def get_html_options(cls, method):
@@ -51,14 +51,12 @@ class COCOparser(AbstractAnnotationParser):
                 <label for="mark_iscrowd_as_unsure">mark 'iscrowd' annotations as unsure</label>
             </div>
             '''
-
-        else:
-            return '''
+        return '''
             <div>
                 <input type="checkbox" id="mark_unsure_as_iscrowd" />
                 <label for="mark_unsure_as_iscrowd">mark unsure annotations as 'iscrowd'</label>
             </div>
-            '''
+        '''
 
 
     @classmethod
@@ -424,7 +422,8 @@ class COCOparser(AbstractAnnotationParser):
 
         # prepare COCO-formatted output
         try:
-            url = self.config.getProperty('Server', 'host') + ':' + self.config.getProperty('Server', 'port') + f'/{self.project}'
+            url = self.config.get_property('Server', 'host') + ':' + \
+                    self.config.get_property('Server', 'port') + f'/{self.project}'
         except Exception:
             url = '(unknown)'
         out = {
@@ -589,7 +588,7 @@ if __name__ == '__main__':
         # import images first: cheap way out by linking images into project
         if not fileDir.endswith(os.sep):
             fileDir += os.sep
-        projectDir = os.path.join(config.getProperty('FileServer', 'staticfiles_dir'), project)
+        projectDir = os.path.join(config.get_property('FileServer', 'staticfiles_dir'), project)
         for fname in tqdm(fileList):
             if not os.path.isfile(fname) or not fname.lower().endswith('.jpg'):
                 continue

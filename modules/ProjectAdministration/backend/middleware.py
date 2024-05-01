@@ -2,7 +2,7 @@
     Middleware layer between the project configuration front-end
     and the database.
 
-    2019-23 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import os
@@ -18,7 +18,7 @@ from bottle import request
 
 from modules.DataAdministration.backend import celery_interface as fileServer_interface
 from modules.TaskCoordinator.backend.middleware import TaskCoordinatorMiddleware
-from util import helpers
+from util import helpers, common
 from .db_fields import Fields_annotation, Fields_prediction
 
 class ProjectConfigMiddleware:
@@ -180,8 +180,8 @@ class ProjectConfigMiddleware:
         parameters = list(parameters)
 
         # check if FileServer needs to be contacted
-        serverURI = self.config.getProperty('Server', 'dataServer_uri')
-        serverDir = self.config.getProperty('FileServer', 'staticfiles_dir')
+        serverURI = self.config.get_property('Server', 'dataServer_uri')
+        serverDir = self.config.get_property('FileServer', 'staticfiles_dir')
         if 'server_dir' in parameters and not helpers.is_localhost(serverURI):
             # FileServer is remote instance; get info via URL query
             try:
@@ -202,28 +202,38 @@ class ProjectConfigMiddleware:
             elif param.lower() == 'server_dir':
                 response[param] = os.path.join(serverDir, project)
             elif param.lower() == 'watch_folder_interval':
-                interval = self.config.getProperty('FileServer', 'watch_folder_interval', type=float, fallback=60)
+                interval = self.config.get_property('FileServer',
+                                                    'watch_folder_interval',
+                                                    dtype=float,
+                                                    fallback=60)
                 response[param] = interval
             elif param.lower() == 'inference_batch_size_limit':
-                inferenceBsLimit = self.config.getProperty('AIWorker', 'inference_batch_size_limit', type=int, fallback=-1)
+                inferenceBsLimit = self.config.get_property('AIWorker',
+                                                            'inference_batch_size_limit',
+                                                            dtype=int,
+                                                            fallback=-1)
                 response[param] = inferenceBsLimit
             elif param.lower() == 'max_num_concurrent_tasks':
-                maxNumConcurrentTasksLimit = self.config.getProperty('AIWorker', 'max_num_concurrent_tasks', type=int, fallback=2)
+                maxNumConcurrentTasksLimit = self.config.get_property('AIWorker',
+                                                                      'max_num_concurrent_tasks',
+                                                                      dtype=int,
+                                                                      fallback=2)
                 response[param] = maxNumConcurrentTasksLimit
 
         return response
 
-    
-    def getProjectImmutables(self, project):
-        queryStr = 'SELECT annotationType, predictionType, demoMode FROM aide_admin.project WHERE shortname = %s;'
-        result = self.dbConnector.execute(queryStr, (project,), 1)
-        if result and len(result):
-            return {
-                'annotationType': result[0]['annotationtype'],
-                'predictionType': result[0]['predictiontype']
-            }
-        else:
+
+    def getProjectImmutables(self, project: str) -> dict:
+        '''
+            Compatibility wrapper for main app.
+        '''
+        anno_type, pred_type = common.get_project_immutables(project, self.dbConnector)
+        if anno_type is None or pred_type is None:
             return None
+        return {
+            'annotationType': anno_type,
+            'predictionType': pred_type
+        }
 
 
     def getProjectInfo(self, project, parameters=None, is_admin=False):
@@ -462,7 +472,7 @@ class ProjectConfigMiddleware:
         # create project schema
         self.dbConnector.execute(queryStr.format(
                 id_schema=sql.Identifier(shortname),
-                id_auth=sql.Identifier(self.config.getProperty('Database', 'user')),
+                id_auth=sql.Identifier(self.config.get_property('Database', 'user')),
                 id_image=sql.Identifier(shortname, 'image'),
                 id_iu=sql.Identifier(shortname, 'image_user'),
                 id_bookmark=sql.Identifier(shortname, 'bookmark'),

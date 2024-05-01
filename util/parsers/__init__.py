@@ -1,7 +1,7 @@
 '''
     Parsers for annotation im-/export.
 
-    2022 Benjamin Kellenberger
+    2022-24 Benjamin Kellenberger
 '''
 
 from .cocoParser import COCOparser
@@ -9,9 +9,9 @@ from .yoloParser import YOLOparser
 from .segmentationParser import SegmentationFileParser
 
 __all__ = (
-    COCOparser,
-    YOLOparser,
-    SegmentationFileParser
+    'COCOparser',
+    'YOLOparser',
+    'SegmentationFileParser'
 )
 
 

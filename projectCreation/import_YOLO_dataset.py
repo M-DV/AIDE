@@ -45,7 +45,7 @@
         - timeRequired: -1
     Also adds class definitions.
 
-    2019-21 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import os
@@ -105,7 +105,7 @@ if __name__ == '__main__':
 
 
     # check if running on file server
-    imgBaseDir = config.getProperty('FileServer', 'staticfiles_dir')
+    imgBaseDir = config.get_property('FileServer', 'staticfiles_dir')
     if not os.path.isdir(imgBaseDir):
         raise Exception('"{}" is not a valid directory on this machine. Are you running the script from the file server?'.format(imgBaseDir))
 

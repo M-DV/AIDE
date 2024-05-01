@@ -1,7 +1,7 @@
 '''
     Main Bottle and routings for the UserHandling module.
 
-    2019-23 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import os
@@ -20,12 +20,15 @@ class UserHandler():
         self.static_dir = 'modules/UserHandling/static'
         self.middleware = UserMiddleware(config, db_connector)
 
-        self.index_uri = self.config.getProperty('Server', 'index_uri', type=str, fallback='/')
+        self.index_uri = self.config.get_property('Server',
+                                                  'index_uri',
+                                                  dtype=str,
+                                                  fallback='/')
 
-        create_account_token = self.config.getProperty('UserHandler',
-                                                       'create_account_token',
-                                                       type=str,
-                                                       fallback='')
+        create_account_token = self.config.get_property('UserHandler',
+                                                        'create_account_token',
+                                                        dtype=str,
+                                                        fallback='')
         self.create_account_public = int(len(create_account_token.strip()) == 0)
         self._init_bottle()
 
@@ -75,7 +78,7 @@ class UserHandler():
 
                 # check if session token already provided; renew login if correct
                 session_token = self.middleware.decryptSessionToken(username, request)
-                #request.get_cookie('session_token', secret=self.config.getProperty('Project',
+                #request.get_cookie('session_token', secret=self.config.get_property('Project',
                 #'secret_token'))
                 if session_token is not None:
                     session_token = html.escape(session_token)
@@ -85,7 +88,7 @@ class UserHandler():
                 response.set_cookie('username', username, path='/')     #, expires=expires, same_site='strict')
                 self.middleware.encryptSessionToken(username, response)
                 # response.set_cookie('session_token', session_token, httponly=True, path='/',
-                # secret=self.config.getProperty('Project', 'secret_token'))    #, expires=expires,
+                # secret=self.config.get_property('Project', 'secret_token'))    #, expires=expires,
                 # same_site='strict')
 
                 return {
@@ -107,14 +110,14 @@ class UserHandler():
 
                 session_token = self.middleware.decryptSessionToken(username, request)
                 # sessionToken = html.escape(request.get_cookie('session_token',
-                # secret=self.config.getProperty('Project', 'secret_token')))
+                # secret=self.config.get_property('Project', 'secret_token')))
 
                 _, _, expires = self.middleware.getLoginData(username, session_token)
 
                 response.set_cookie('username', username, path='/')   #, expires=expires, same_site='strict')
                 self.middleware.encryptSessionToken(username, response)
                 # response.set_cookie('session_token', session_token, httponly=True, path='/',
-                # secret=self.config.getProperty('Project', 'secret_token'))    #, expires=expires,
+                # secret=self.config.get_property('Project', 'secret_token'))    #, expires=expires,
                 # same_site='strict')
                 return {
                     'expires': expires.strftime('%H:%M:%S')
@@ -138,7 +141,7 @@ class UserHandler():
                             httponly=True, path='/', expires=0)
                 # self.middleware.encryptSessionToken(username, response)
                 # response.set_cookie('session_token', session_token, httponly=True, path='/',
-                # secret=self.config.getProperty('Project', 'secret_token'))    #, expires=expires,
+                # secret=self.config.get_property('Project', 'secret_token'))    #, expires=expires,
                 # same_site='strict')
 
                 # send redirect
@@ -202,7 +205,7 @@ class UserHandler():
                 response.set_cookie('username', username, path='/')   #, expires=expires, same_site='strict')
                 self.middleware.encryptSessionToken(username, response)
                 # response.set_cookie('session_token', sessionToken, httponly=True, path='/',
-                # secret=self.config.getProperty('Project', 'secret_token'))    #, expires=expires,
+                # secret=self.config.get_property('Project', 'secret_token'))    #, expires=expires,
                 # same_site='strict')
                 return {
                     'expires': expires.strftime('%H:%M:%S')
@@ -218,8 +221,8 @@ class UserHandler():
             # check if token is required; if it is and wrong token provided, show login screen
             # instead
             try:
-                target_token = html.escape(
-                                    self.config.getProperty('UserHandler', 'create_account_token'))
+                target_token = html.escape(self.config.get_property('UserHandler',
+                                                                    'create_account_token'))
             except Exception:
                 # no secret token defined
                 target_token = None

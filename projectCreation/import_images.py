@@ -9,7 +9,7 @@
        server (i.e., convert camera RAW images first).
     2. Call the script from the AIDE code base on the FileServer instance.
 
-    2019-22 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import os
@@ -65,7 +65,7 @@ if __name__ == '__main__':
 
 
     # check if running on file server
-    imgBaseDir = os.path.join(config.getProperty('FileServer', 'staticfiles_dir'), args.project)
+    imgBaseDir = os.path.join(config.get_property('FileServer', 'staticfiles_dir'), args.project)
     if not os.path.isdir(imgBaseDir):
         raise Exception(f'"{imgBaseDir}" is not a valid directory on this machine. Are you running the script from the file server?')
 

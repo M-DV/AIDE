@@ -6,7 +6,7 @@
     An instance of this FileServer class may be provided to the AIModel instead,
     and serves as a gateway to the project's actual file server.
 
-    2019-22 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import os
@@ -29,10 +29,10 @@ class FileServer:
         # base URI
         if self.isLocal:
             # URI is a direct file path
-            self.baseURI = self.config.getProperty('FileServer', 'staticfiles_dir')
+            self.baseURI = self.config.get_property('FileServer', 'staticfiles_dir')
         
         else:
-            self.baseURI = self.config.getProperty('Server', 'dataServer_uri')
+            self.baseURI = self.config.get_property('Server', 'dataServer_uri')
             
 
     
@@ -44,7 +44,7 @@ class FileServer:
             the configuration's 'dataServer_uri' item specifies a local address, which we
             check for here.
         '''
-        baseURI = self.config.getProperty('Server', 'dataServer_uri')
+        baseURI = self.config.get_property('Server', 'dataServer_uri')
         return is_localhost(baseURI)
 
     

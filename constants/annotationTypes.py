@@ -2,7 +2,7 @@
     All the annotation (and prediction) types currently supported
     by AIDE.
 
-    2020-21 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
 ANNOTATION_TYPES = set([

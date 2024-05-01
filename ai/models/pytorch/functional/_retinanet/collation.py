@@ -6,13 +6,14 @@
     Returns:
         padded images, stacked cls_targets, stacked loc_targets.
 
-    2019-20 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
     Adapted from https://github.com/kuangliu/pytorch-retinanet/blob/master/datagen.py
 '''
 
 import torch
+from util import common
 from .encoder import DataEncoder
-from util import helpers
+
 
 
 class Collator():
@@ -31,7 +32,7 @@ class Collator():
         for idx in range(len(batch)):
             if batch[idx][0] is None:
                 # corrupt image
-                helpers.setImageCorrupt(self.dbConnector, self.project, batch[idx][4], True)
+                common.set_image_corrupt(self.dbConnector, self.project, batch[idx][4], True)
             
             else:
                 imgs.append(batch[idx][0])

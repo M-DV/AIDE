@@ -1,7 +1,7 @@
 '''
     Database connection functionality.
 
-    2019-23 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 from typing import Iterable
@@ -9,12 +9,14 @@ from contextlib import contextmanager
 import psycopg2
 from psycopg2.pool import ThreadedConnectionPool
 from psycopg2.extras import RealDictCursor, execute_values
-from util.helpers import LogDecorator
+from util.logDecorator import LogDecorator
 psycopg2.extras.register_uuid()
 
 
 class Database():
-
+    '''
+        Main AIDE database entry point for all modules and scripts.
+    '''
     def __init__(self, config, verbose_start=False):
         self.config = config
 
@@ -23,15 +25,15 @@ class Database():
 
         # get DB parameters
         try:
-            self.database = config.getProperty('Database', 'name').lower()
-            self.host = config.getProperty('Database', 'host')
-            self.port = config.getProperty('Database', 'port')
-            self.user = config.getProperty('Database', 'user', fallback=None)
-            self.password = config.getProperty('Database', 'password', fallback=None)
+            self.database = config.get_property('Database', 'name').lower()
+            self.host = config.get_property('Database', 'host')
+            self.port = config.get_property('Database', 'port')
+            self.user = config.get_property('Database', 'user', fallback=None)
+            self.password = config.get_property('Database', 'password', fallback=None)
 
             if self.user is None or self.password is None:
                 # load from credentials file instead
-                credentials = config.getProperty('Database', 'credentials')
+                credentials = config.get_property('Database', 'credentials')
                 with open(credentials, 'r', encoding='utf-8') as cred:
                     lines = cred.readlines()
                     for line in lines:
@@ -69,8 +71,10 @@ class Database():
     def _create_connection_pool(self):
         self.connection_pool = ThreadedConnectionPool(
             0,
-            max(2, self.config.getProperty('Database', 'max_num_connections', type=int,
-                    fallback=20)),  # 2 connections are needed as minimum for retrying of execution
+            max(2, self.config.get_property('Database',
+                                            'max_num_connections',
+                                            dtype=int,
+                                            fallback=20)),
             host=self.host,
             database=self.database,
             port=self.port,

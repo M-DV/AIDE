@@ -2,7 +2,7 @@
     The Reception module handles project overviews
     and the like.
 
-    2019-21 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import os
@@ -57,7 +57,10 @@ class Reception:
                 an account, else False.
             '''
             try:
-                token = self.config.getProperty('UserHandler', 'create_account_token', type=str, fallback=None)
+                token = self.config.get_property('UserHandler',
+                                                 'create_account_token',
+                                                 dtype=str,
+                                                 fallback=None)
                 return {'response': token is None or token == ''}
             except Exception:
                 return {'response': False}
