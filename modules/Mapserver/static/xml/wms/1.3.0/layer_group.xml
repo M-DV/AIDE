@@ -3,14 +3,14 @@
     <Name>{name}</Name>
     <Abstract>{abstract}</Abstract>
     <CRS>CRS:84</CRS>
-    <CRS>EPSG:{srid}</CRS>
+    <CRS>urn:ogc:def:crs:EPSG::{srid}</CRS>
     <EX_GeographicBoundingBox>
-        <westBoundLongitude>{bbox_west}</westBoundLongitude>
-        <eastBoundLongitude>{bbox_east}</eastBoundLongitude>
-        <southBoundLatitude>{bbox_south}</southBoundLatitude>
-        <northBoundLatitude>{bbox_north}</northBoundLatitude>
+        <westBoundLongitude>{bbox_west_wgs84}</westBoundLongitude>
+        <eastBoundLongitude>{bbox_east_wgs84}</eastBoundLongitude>
+        <southBoundLatitude>{bbox_south_wgs84}</southBoundLatitude>
+        <northBoundLatitude>{bbox_north_wgs84}</northBoundLatitude>
     </EX_GeographicBoundingBox>
-    <BoundingBox CRS="EPSG:{srid}" minx="{bbox_south}" miny="{bbox_west}" maxx="{bbox_north}" maxy="{bbox_east}" />
-    <BoundingBox CRS="CRS:84" minx="{bbox_west}" miny="{bbox_south}" maxx="{bbox_east}" maxy="{bbox_north}" />
+    <BoundingBox CRS="urn:ogc:def:crs:EPSG::{srid}" minx="{bbox_south}" miny="{bbox_west}" maxx="{bbox_north}" maxy="{bbox_east}" />
+    <BoundingBox CRS="CRS:84" minx="{bbox_west_wgs84}" miny="{bbox_south_wgs84}" maxx="{bbox_east_wgs84}" maxy="{bbox_north_wgs84}" />
     {layers}
 </Layer>

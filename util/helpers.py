@@ -356,11 +356,14 @@ def list_directory(base_dir: str,
         avoided. Removes the base_dir part (with trailing separator) from the files returned.
     '''
     if not images_only and len(drivers.VALID_IMAGE_EXTENSIONS) == 0:
-        drivers.init_drivers(False)      # should not be required
+        drivers.init_drivers(False)         # should not be required
     files_disk = set()
     if not base_dir.endswith(os.sep):
         base_dir += os.sep
     def _scan_recursively(imgs, base_dir, file_dir, recursive):
+        if not os.path.isdir(file_dir):     # also understands symbolic links
+            imgs.add(file_dir)
+            return imgs
         files = os.listdir(file_dir)
         for file in files:
             path = os.path.join(file_dir, file)

@@ -68,28 +68,34 @@ class WFSRenderer(AbstractRenderer):
         version = self.parse_version(request_params, True)
         if version is None:
             return self.render_error_template(10000,
-                                                self.DEFAULT_SERVICE_VERSION,
-                                                'Missing service version'), \
+                                              self.DEFAULT_SERVICE_VERSION,
+                                              'Missing service version'), \
                     self.DEFAULT_RESPONSE_HEADERS
 
         projects_xml = ''
         for project, project_meta in projects.items():
             #TODO: add to project metadata
             # srid, extent = project_meta['srid'], project_meta['extent']
-            srid = geospatial.get_project_srid(self.db_connector, project)
-            extent = geospatial.get_project_extent(self.db_connector, project)
+            srid, extent = self._get_project_spatial_metadata(project)
 
             #TODO: pre-filter
             if srid is None or extent is None:
                 # no geodata in project
                 continue
 
+            # convert to WGS84 for Mapserver
+            extent_wgs84 = self._convert_extent(extent, srid, 4326)
+
             base_args = {
                 'srid': srid,
                 'bbox_west': extent[0],
                 'bbox_south': extent[1],
                 'bbox_east': extent[2],
-                'bbox_north': extent[3]
+                'bbox_north': extent[3],
+                'bbox_west_wgs84': extent_wgs84[0],
+                'bbox_south_wgs84': extent_wgs84[1],
+                'bbox_east_wgs84': extent_wgs84[2],
+                'bbox_north_wgs84': extent_wgs84[3],
             }
 
             project_layers = ''
@@ -308,7 +314,7 @@ class WFSRenderer(AbstractRenderer):
 
         gml_features = ''
         for type_name in type_names:
-            project, layer_name, entity = self._decode_layer_name(type_name)
+            project, layer_name, _ = self._decode_layer_name(type_name)
             if project not in projects:
                 # feature of invalid/inaccessible project requested
                 continue
@@ -328,6 +334,11 @@ class WFSRenderer(AbstractRenderer):
                         bbox[1], bbox[0],
                         bbox[3], bbox[2]
                     )
+
+                bbox = self._convert_extent(bbox,
+                                            request_params.get('CRS', srid),
+                                            srid)
+
                 query_args = [*bbox, srid]
                 bbox_sql = '''
                     WHERE ST_Intersects(
@@ -339,7 +350,7 @@ class WFSRenderer(AbstractRenderer):
                     )
                 '''
                 bbox_gml = f'''<wfs:boundedBy>
-                    <gml:Box srsName="EPSG:{srid}">
+                    <gml:Box srsName="urn:ogc:def:crs:EPSG::{srid}">
                         <gml:coordinates>{",".join([str(val) for val in bbox])}</gml:coordinates>
                     </gml:Box>
                 </wfs:boundedBy>

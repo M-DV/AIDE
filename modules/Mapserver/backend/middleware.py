@@ -1,10 +1,10 @@
 '''
     Web Map Service (Mapserver) middleware.
 
-    2023 Benjamin Kellenberger
+    2023-24 Benjamin Kellenberger
 '''
 
-from typing import Tuple, Iterable
+from typing import Tuple, Iterable, Union
 import time
 import json
 from psycopg2 import sql
@@ -15,6 +15,8 @@ from util.configDef import Config
 from util import helpers, geospatial
 
 from . import service_renderers
+
+
 
 class MapserverMiddleware:
     '''
@@ -47,7 +49,9 @@ class MapserverMiddleware:
             self.services[renderer_class.SERVICE_NAME] = renderer_class(self.config,
                                                                         self.db_connector)
 
-    def get_user_access(self, username: str=None, projects: Iterable=None) -> dict:
+    def get_user_access(self,
+                        username: str=None,
+                        projects: Union[Iterable[str],str]=None) -> dict:
         '''
             Returns privileges for one or more given "projects" and "username" about access,
             including:
@@ -198,7 +202,9 @@ class MapserverMiddleware:
         return self.project_meta.get(project, None)
 
 
-    def _get_access_control(self, project: str, username: str=None) -> dict:
+    def _get_access_control(self,
+                            project: str,
+                            username: str=None) -> dict:
         '''
             Returns True if a given user has access to a project, else False.
         '''
@@ -228,15 +234,18 @@ class MapserverMiddleware:
         }
 
 
-    def service(self, service: str,
-                        request: str,
-                        request_params: dict,
-                        projects: Iterable,
-                        username: str,
-                        base_url: str) -> Tuple[object, dict]:
+    def service(self,
+                service: str,
+                request: str,
+                request_params: dict,
+                projects: Union[Iterable[str],str],
+                username: str,
+                base_url: str) -> Tuple[object, dict]:
         '''
             Mapserver service implementation.
         '''
+        # pylint: disable=no-member
+
         service = service.lower()
         if service not in self.services:
             raise Exception(f'Unsupported service "{service}"')
@@ -262,12 +271,13 @@ class MapserverMiddleware:
                                         request_params)
 
 
-    def __call__(self, service: str,
-                        request: str,
-                        request_params: dict,
-                        projects: Iterable,
-                        username: str,
-                        base_url: str) -> Tuple[object, dict]:
+    def __call__(self,
+                 service: str,
+                 request: str,
+                 request_params: dict,
+                 projects: Union[Iterable[str],str],
+                 username: str,
+                 base_url: str) -> Tuple[object, dict]:
         '''
             Alias for Mapserver service implementation.
         '''

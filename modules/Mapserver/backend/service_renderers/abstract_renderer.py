@@ -1,7 +1,7 @@
 '''
     Abstract service renderer.
 
-    2023 Benjamin Kellenberger
+    2023-24 Benjamin Kellenberger
 '''
 
 import os
@@ -11,6 +11,8 @@ from collections import defaultdict
 
 from modules.Database.app import Database
 from util.configDef import Config
+from util import geospatial
+
 
 
 class AbstractRenderer:
@@ -71,6 +73,35 @@ class AbstractRenderer:
 
         self.service_requests = {}
         self._load_service_requests()
+
+        self.project_meta_cache = {}
+
+
+    def _get_project_spatial_metadata(self, project: str) -> Tuple[object]:
+        if project not in self.project_meta_cache:
+            srid = geospatial.get_project_srid(self.db_connector, project)
+            extent = geospatial.get_project_extent(self.db_connector, project)
+            self.project_meta_cache[project] = (srid, extent)
+        return self.project_meta_cache[project]
+
+
+    @staticmethod
+    def _convert_extent(extent: Tuple[float],
+                        source_crs: object,
+                        target_crs: object) -> Tuple[float]:
+        '''
+            Convenience function to convert project extents (west, south, east, north) from source
+            to target CRS (typically, from the project's CRS to WGS84).
+        '''
+        if geospatial.crs_match(source_crs, target_crs):
+            # no conversion required
+            return extent
+
+        extent_x, extent_y = geospatial.convert(extent[0::2],
+                                                extent[1::2],
+                                                source_crs,
+                                                target_crs)
+        return (extent_x[0], extent_y[0], extent_x[1], extent_y[1])
 
 
     def _load_service_templates(self) -> None:

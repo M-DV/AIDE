@@ -6,8 +6,12 @@
     <OutputFormats>
     <Format>application/xml; subtype="gml/3.2.1"</Format>
     </OutputFormats>
-    <ows:WGS84BoundingBox>
+    <ows:BoundingBox crs="urn:ogc:def:crs:EPSG::{srid}" dimensions="2">
         <ows:LowerCorner>{bbox_west} {bbox_south}</ows:LowerCorner>
         <ows:UpperCorner>{bbox_east} {bbox_north}</ows:UpperCorner>
+    </ows:BoundingBox>
+    <ows:WGS84BoundingBox>
+        <ows:LowerCorner>{bbox_west_wgs84} {bbox_south_wgs84}</ows:LowerCorner>
+        <ows:UpperCorner>{bbox_east_wgs84} {bbox_north_wgs84}</ows:UpperCorner>
     </ows:WGS84BoundingBox>
 </FeatureType>

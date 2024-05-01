@@ -61,6 +61,8 @@ app = Celery('AIDE',
             broker=config.get_property('AIController', 'broker_URL'),        #TODO
             backend=config.get_property('AIController', 'result_backend'))   #TODO
 app.conf.update(
+    broker_connection_retry=False,          # deprecated with Celery 6 and above
+    broker_connection_retry_on_startup=True,
     result_backend=config.get_property('AIController', 'result_backend'),    #TODO
     task_ignore_result=False,
     result_persistent=True,

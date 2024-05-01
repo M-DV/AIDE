@@ -46,7 +46,8 @@ To launch AIDE (or parts of it, depending on the environment variables set) on t
     ./AIDE.sh start
 ```
 
-This launches the Gunicorn HTTP web server, and/or a Celery message broker consumer, depending on the `AIDE_MODULES` environment variable set:
+This launches the Gunicorn HTTP web server, and/or a Celery message broker consumer, depending on
+the `AIDE_MODULES` environment variable set:
 
 | Module | HTTP web server | Celery |
 |--------------|-----------------|--------|
@@ -56,14 +57,27 @@ This launches the Gunicorn HTTP web server, and/or a Celery message broker consu
 | FileServer | ✓ | ✓ |
 
 
-To stop AIDE, simply press Ctrl+C in the running shell. From another shell, you may instead also execute the following command from the root of AIDE, with the correct environment variables set (see above):
+**NOTE:** If your AIWorker does not respond and/or crashes under macOS High Sierra and above, try
+running AIDE as follows:
+```bash
+OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES ./AIDE.sh start
 ```
+See comments
+[here](https://stackoverflow.com/questions/50168647/multiprocessing-causes-python-to-crash-and-gives-an-error-may-have-been-in-progr).
+Also note that it is strongly discouraged to set this flag globally (_i.e._, do not add this export
+to your shell profile).
+
+
+To stop AIDE, simply press Ctrl+C in the running shell. From another shell, you may instead also
+execute the following command from the root of AIDE, with the correct environment variables set (see
+above):
+```bash
     ./AIDE.sh stop
 ```
 
 Note that this stops any Gunicorn process, even if not related to AIDE.
 If, for some reason, this fails, the processes can be forcefully stopped manually:
-```
+```bash
     pkill -f celery;
     pkill -f gunicorn;
 ```

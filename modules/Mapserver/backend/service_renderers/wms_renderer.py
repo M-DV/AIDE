@@ -8,7 +8,6 @@ import re
 
 from modules.Database.app import Database
 from util.configDef import Config
-from util import geospatial
 
 from .abstract_renderer import AbstractRenderer
 from .._functional import map_operations
@@ -46,28 +45,34 @@ class WMSRenderer(AbstractRenderer):
         version = self.parse_version(request_params, True)
         if version is None:
             return self.render_error_template(10000,
-                                                self.DEFAULT_SERVICE_VERSION,
-                                                'Missing service version'), \
+                                              self.DEFAULT_SERVICE_VERSION,
+                                              'Missing service version'), \
                     self.DEFAULT_RESPONSE_HEADERS
 
         projects_xml = ''
         for project, project_meta in projects.items():
             #TODO: add to project metadata
             # srid, extent = project_meta['srid'], project_meta['extent']
-            srid = geospatial.get_project_srid(self.db_connector, project)
-            extent = geospatial.get_project_extent(self.db_connector, project)
+            srid, extent = self._get_project_spatial_metadata(project)
 
             #TODO: pre-filter
             if srid is None or extent is None:
                 # no geodata in project
                 continue
 
+            # convert to WGS84 for Mapserver
+            extent_wgs84 = self._convert_extent(extent, srid, 4326)
+
             base_args = {
                 'srid': srid,
                 'bbox_west': extent[0],
                 'bbox_south': extent[1],
                 'bbox_east': extent[2],
-                'bbox_north': extent[3]
+                'bbox_north': extent[3],
+                'bbox_west_wgs84': extent_wgs84[0],
+                'bbox_south_wgs84': extent_wgs84[1],
+                'bbox_east_wgs84': extent_wgs84[2],
+                'bbox_north_wgs84': extent_wgs84[3],
             }
 
             project_layers = ''
@@ -161,6 +166,11 @@ class WMSRenderer(AbstractRenderer):
                     bbox[1], bbox[0],
                     bbox[3], bbox[2]
                 )
+
+        bbox = self._convert_extent(bbox,
+                                    request_params.get('CRS', srid),
+                                    srid)
+
         width, height = request_params.get('WIDTH', None), request_params.get('HEIGHT', None)
         if all(item is not None for item in (bbox, width, height)):
             resolution = (

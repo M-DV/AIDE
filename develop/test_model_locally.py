@@ -176,20 +176,20 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AIDE local model tester')
     parser.add_argument('--project', type=str, required=True,
                         help='Project shortname to draw sample data from.')
-    parser.add_argument('--train', type=int, required=True,
+    parser.add_argument('--train', type=int, required=False,
                         default=0,
                         help='Set to 1 to run training cycle (default: 0).')
-    parser.add_argument('--inference', type=int, required=True,
+    parser.add_argument('--inference', type=int, required=False,
                         default=1,
                         help='Set to 0 to disable running inference cycle (default: 1).')
     parser.add_argument('--update-model', type=int, default=1,
                         help='''Set to 1 (default) to perform a model update step prior to training
                                 or inference. This is required to e.g. adapt the model to new label
                                 classes in the project.''')
-    parser.add_argument('--model_library', type=str, required=False,
+    parser.add_argument('--model-library', type=str, required=False,
                         help='''Optional AI model library override.
                                 Provide a dot-separated Pythonimport path here.''')
-    parser.add_argument('--model_settings', type=str, required=False,
+    parser.add_argument('--model-settings', type=str, required=False,
                         help='''Optional AI model settings override (absolute or relative path to
                                 settings file, or else "none" to not use any predefined
                                 settings).''')

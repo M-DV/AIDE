@@ -14,11 +14,15 @@ from modules.Mapserver.backend.middleware import MapserverMiddleware
 
 from constants.version import AIDE_VERSION
 from util.cors import enable_cors
-from util import helpers, geospatial
+from util import helpers, logDecorator
 
 
+
+# pylint: disable=too-few-public-methods
 class Mapserver:
-
+    '''
+        Map server Web frontend entry point.
+    '''
     def __init__(self, config, app, db_connector, user_handler, verbose_start=False):
         self.config = config
         self.app = app
@@ -29,21 +33,25 @@ class Mapserver:
         self.is_file_server = helpers.is_fileServer(config)
 
         if verbose_start:
-            print('Mapserver'.ljust(helpers.LogDecorator.get_ljust_offset()), end='')
+            print('Mapserver'.ljust(logDecorator.LogDecorator.get_ljust_offset()), end='')
 
         self.postgis_version = self.middleware.postgis_version
         try:
             self._init_bottle()
         except Exception as exc:
             if verbose_start:
-                helpers.LogDecorator.print_status('fail')
+                logDecorator.LogDecorator.print_status('fail')
             raise Exception(f'Could not launch Mapserver (message: "{str(exc)}").') from exc
         if self.postgis_version is None:
-            helpers.LogDecorator.print_status('warn')
+            logDecorator.LogDecorator.print_status('warn')
             print('PostGIS not configured in database. Mapserver has been disabled.')
 
     def login_check(self, project=None, admin=False, superuser=False,
             can_create_projects=False, extend_session=False, return_all=False):
+        '''
+            Login check function wrapper. Map server access is governed by the same login mechanism
+            as the rest of AIDE.
+        '''
         return self.user_handler.checkAuthenticated(project, admin, superuser, can_create_projects,
                 extend_session, return_all)
 
@@ -81,12 +89,16 @@ class Mapserver:
         return bbox, crs, flip_coordinates
 
 
-    def _relay_request(self, request_name: str,
-                                project: str=None,
-                                method: str='get', headers: dict={}):
+    def _relay_request(self,
+                       request_name: str,
+                       project: str=None,
+                       method: str='get',
+                       headers: dict=None):
         '''
             TODO: untested. Also, make dedicated helper function.
         '''
+        # pylint: disable=no-member
+
         # forward request to FileServer
         cookies = dict(request.cookies.items())
         params = dict(request.params.items())
@@ -98,7 +110,7 @@ class Mapserver:
                         project, request_name),
                     cookies=cookies, json=request.json,
                     params=params,
-                    headers=headers,
+                    headers=headers if isinstance(headers, dict) else {},
                     auth=request.auth)
 
 
@@ -112,6 +124,8 @@ class Mapserver:
                 WKT, etc.) and performs a lookup with PostGIS to retrieve (and return) details about
                 the best match(es).
             '''
+            # pylint: disable=no-member
+
             if not self.login_check(can_create_projects=True):
                 abort(401, 'forbidden')
             if self.postgis_version is None:
@@ -152,6 +166,8 @@ class Mapserver:
         @self.app.get('/<project>/mapserver')
         @self.app.post('/<project>/mapserver')
         def mapserver(project=None):
+            # pylint: disable=no-member
+
             # check authentication
             username, password = None, None
 

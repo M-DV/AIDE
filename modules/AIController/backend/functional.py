@@ -184,7 +184,7 @@ class AIControllerWorker:
             query_vals = (maxNumImages,)
 
             # load the IDs of the images that are being subjected to inference
-            sql_str = self.sql_builder.getInferenceQueryString(project,
+            sql_str = self.sql_builder.get_inference_query_string(project,
                                                                forceUnlabeled,
                                                                goldenQuestionsOnly,
                                                                maxNumImages)

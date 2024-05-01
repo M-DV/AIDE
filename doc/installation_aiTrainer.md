@@ -1,12 +1,23 @@
 # AI backend setup
 
-AIDE uses [Celery](http://www.celeryproject.org) to distribute jobs (train, inference, etc.) to the individual _AIWorker_(s), which in turn requires a message broker to keep track of the jobs, status messages, and the like.
-You can use any [supported message broker](http://docs.celeryproject.org/en/latest/getting-started/brokers/index.html) with AIDE, but be wary that the result backend **must** support persistent, shareable messages (i.e., everything except the [RPC](https://docs.celeryproject.org/en/latest/internals/reference/celery.backends.rpc.html) backend is supported). The default, recommended configuration is:
-* Using [RabbitMQ](http://docs.celeryproject.org/en/latest/getting-started/brokers/rabbitmq.html) as the message broker, and
-* using [Redis](https://docs.celeryproject.org/en/latest/getting-started/brokers/redis.html#results) as a result backend.
+AIDE uses [Celery](http://www.celeryproject.org) to distribute jobs (train, inference, etc.) to the
+individual _AIWorker_(s), which in turn requires a message broker to keep track of the jobs, status
+messages, and the like. You can use any [supported message
+broker](http://docs.celeryproject.org/en/latest/getting-started/brokers/index.html) with AIDE, but
+be wary that the result backend **must** support persistent, shareable messages (i.e., everything
+except the
+[RPC](https://docs.celeryproject.org/en/latest/internals/reference/celery.backends.rpc.html) backend
+is supported). The default, recommended configuration is:
+* Using [RabbitMQ](http://docs.celeryproject.org/en/latest/getting-started/brokers/rabbitmq.html) as
+  the message broker, and
+* using [Redis](https://docs.celeryproject.org/en/latest/getting-started/brokers/redis.html#results)
+  as a result backend.
 
 
-The steps below install servers for both RabbitMQ and Redis on the machine running the _AIController_ instance. This usually causes no bottlenecks, as AIDE spawns a minuscule number of jobs. However, if you wish you can of course employ another dedicated machine or two for RabbitMQ and Redis accordingly. Just replace the hostnames wherever needed.
+The steps below install servers for both RabbitMQ and Redis on the machine running the
+_AIController_ instance. This usually causes no bottlenecks, as AIDE spawns a minuscule number of
+jobs. However, if you wish you can of course employ another dedicated machine or two for RabbitMQ
+and Redis accordingly. Just replace the hostnames wherever needed.
 
 
 ## Preparations
@@ -129,8 +140,11 @@ At this point you may want to test Redis:
 
 ## Configure TCP keepalive settings
 
-As is the case for the [database](setup_db.md), also the message broker and result backend instance(s) _might_ require you to set TCP keepalive options, e.g. when run on [MS Azure](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-outbound-connections#idletimeout).
-Run the following code block for your _AIController_ instance, resp. for the machine(s) running RabbitMQ and/or Redis.
+As is the case for the [database](setup_db.md), also the message broker and result backend
+instance(s) _might_ require you to set TCP keepalive options, e.g. when run on [MS
+Azure](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-outbound-connections#idletimeout).
+Run the following code block for your _AIController_ instance, resp. for the machine(s) running
+RabbitMQ and/or Redis.
 
 ```bash
     if ! sudo grep -q ^net.ipv4.tcp_keepalive_* /etc/sysctl.conf ; then
@@ -158,6 +172,8 @@ As a last step, the appropriate settings need to be added to the [configuration 
 ```
 
 Notes:
-* By default, `<rabbitmq_host>` and `<redis_host>` refer to the host address of the _AIController_ instance, unless you decided to employ another machine as the RabbitMQ, resp. Redis server.
+* By default, `<rabbitmq_host>` and `<redis_host>` refer to the host address of the _AIController_
+  instance, unless you decided to employ another machine as the RabbitMQ, resp. Redis server.
 * `aide_vhost` is the virtual host assigned to RabbitMQ above.
-* `/0` designates the channel of Redis. Change this accordingly if you happen to run another service (e.g. another instance of AIDE) running through this Redis server already.
+* `/0` designates the channel of Redis. Change this accordingly if you happen to run another service
+  (e.g. another instance of AIDE) running through this Redis server already.

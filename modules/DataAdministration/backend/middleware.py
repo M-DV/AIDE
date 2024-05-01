@@ -202,7 +202,6 @@ class DataAdministrationMiddleware:
             Returns a list of image IDs and file names that
             were eventually added to the project database schema.
         '''
-
         # submit job
         process = celery_interface.addExistingImages.si(project, imageList, skipIntegrityCheck,
                                                         createVirtualViews, viewParameters)

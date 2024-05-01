@@ -1024,7 +1024,9 @@ fi
 export AIDE_CONFIG_PATH=$config_file_out;
 export AIDE_MODULES=$aide_modules;
 export PYTHONPATH=$aide_root;
-
+# required for macOS High Sierra and above
+# https://stackoverflow.com/questions/50168647/multiprocessing-causes-python-to-crash-and-gives-an-error-may-have-been-in-progr
+export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 
 
 # -----------------------------------------------------------------------------
@@ -1745,7 +1747,7 @@ fi
     log "export AIDE_CONFIG_PATH=$config_file"
     log "export AIDE_MODULES=$aide_modules"
     log "export PYTHONPATH=."
-    log "./AIDE.sh start 0 $python_exec"
+    log "OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES ./AIDE.sh start 0 $python_exec"
 # fi
 
 

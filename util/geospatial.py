@@ -1,11 +1,11 @@
 '''
     Helpers for geospatial operations.
 
-    2023 Benjamin Kellenberger
+    2023-24 Benjamin Kellenberger
 '''
 
 import os
-from typing import Iterable
+from typing import Iterable, Tuple
 import re
 from psycopg2 import sql
 import pyproj
@@ -17,6 +17,7 @@ from modules.Database.app import Database
 from util.drivers import GDALImageDriver
 
 
+
 def get_postgis_version(db_connector: Database) -> str:
     '''
         Queries the database and returns the PostGIS version (or None if not available).
@@ -25,6 +26,7 @@ def get_postgis_version(db_connector: Database) -> str:
     if version is None or len(version) == 0:
         return None
     return version[0]['version']
+
 
 
 def get_project_srid(db_connector: Database,
@@ -42,6 +44,7 @@ def get_project_srid(db_connector: Database,
         SELECT Find_SRID(%s, 'image', 'extent') AS srid;
     ''', (project,), 1)
     return srid[0]['srid'] if srid is not None and len(srid) > 0 else None
+
 
 
 def to_crs(srid: object) -> pyproj.CRS:
@@ -67,6 +70,7 @@ def to_crs(srid: object) -> pyproj.CRS:
     return None
 
 
+
 def to_srid(crs: object) -> int:
     '''
         Receives a "crs", one of:
@@ -90,6 +94,7 @@ def to_srid(crs: object) -> int:
     return None
 
 
+
 def crs_match(crs_a: object, crs_b: object, exact: bool=False) -> bool:
     '''
         Returns True if two given CRS (id, string, pyproj/rasterio CRS) are equal and False
@@ -98,6 +103,22 @@ def crs_match(crs_a: object, crs_b: object, exact: bool=False) -> bool:
     if exact:
         return to_crs(crs_a).is_exact_same(to_crs(crs_b))
     return to_crs(crs_a).equals(to_crs(crs_b))
+
+
+
+def convert(coords_x: Iterable[float],
+            coords_y: Iterable[float],
+            crs_source: object,
+            crs_target: object) -> Tuple[Tuple[float]]:
+    '''
+        Receives an Iterable of x/y coordinates, a source and target CRS, and converts
+        coordinates across reference systems accordingly.
+    '''
+    transformer = pyproj.Transformer.from_crs(to_crs(crs_source),
+                                              to_crs(crs_target),
+                                              always_xy=True)
+    return transformer.transform(xx=coords_x, yy=coords_y)
+
 
 
 def get_geospatial_metadata(file_name: str,

@@ -1,4 +1,4 @@
-<!-- 2020-23 Benjamin Kellenberger -->
+<!-- 2020-24 Benjamin Kellenberger -->
 <div>
     <h2>Data upload</h2>
     <div id="controls">
@@ -360,8 +360,8 @@
             params['splitImages'] = doSplitPatches;
             if(doSplitPatches) {
                 let splitParams = {
-                    'patchSize': [parseInt($('#scandir-patch-size-width').val()), parseInt($('#scandir-patch-size-height').val())],
-                    'stride': [parseInt($('#scandir-patch-stride-width').val()), parseInt($('#scandir-patch-stride-height').val())],
+                    'patchSize': [parseInt($('#scandir-patch-size-height').val()), parseInt($('#scandir-patch-size-width').val())],
+                    'stride': [parseInt($('#scandir-patch-stride-height').val()), parseInt($('#scandir-patch-stride-width').val())],
                     'tight': $('#scandir-patch-tight-chck').prop('checked')
                 }
                 if($('#scandir-discard-empty-chck').prop('checked')) {

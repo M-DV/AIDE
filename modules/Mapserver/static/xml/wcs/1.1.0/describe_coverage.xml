@@ -15,16 +15,16 @@
           <ows:LowerCorner>0 0</ows:LowerCorner>
           <ows:UpperCorner>2560 1600</ows:UpperCorner>
         </ows:BoundingBox> -->
-        <ows:BoundingBox crs="urn:ogc:def:crs:epsg::{srid}" dimensions="2">
+        <ows:BoundingBox crs="urn:ogc:def:crs:EPSG::{srid}" dimensions="2">
           <ows:LowerCorner>{bbox_south} {bbox_west}</ows:LowerCorner>
           <ows:UpperCorner>{bbox_north} {bbox_east}</ows:UpperCorner>
         </ows:BoundingBox>
         <ows:WGS84BoundingBox dimensions="2">
-          <ows:LowerCorner>{bbox_west} {bbox_south}</ows:LowerCorner>
-          <ows:UpperCorner>{bbox_east} {bbox_north}</ows:UpperCorner>
+          <ows:LowerCorner>{bbox_west_wgs84} {bbox_south_wgs84}</ows:LowerCorner>
+          <ows:UpperCorner>{bbox_east_wgs84} {bbox_north_wgs84}</ows:UpperCorner>
         </ows:WGS84BoundingBox>
         <GridCRS>
-          <GridBaseCRS>urn:ogc:def:crs:epsg::{srid}</GridBaseCRS>
+          <GridBaseCRS>urn:ogc:def:crs:EPSG::{srid}</GridBaseCRS>
           <GridType>urn:ogc:def:method:WCS:1.1:2dSimpleGrid</GridType>
           <GridOrigin>{bbox_west} {bbox_north}</GridOrigin>
           <GridOffsets>0.001 -0.0001</GridOffsets>
@@ -35,7 +35,7 @@
     <Range>
       {fields}
     </Range>
-    <SupportedCRS>urn:ogc:def:crs:epsg::{srid}</SupportedCRS>
+    <SupportedCRS>urn:ogc:def:crs:EPSG::{srid}</SupportedCRS>
     <SupportedFormat>image/tiff</SupportedFormat>
   </CoverageDescription>
 </CoverageDescriptions>
