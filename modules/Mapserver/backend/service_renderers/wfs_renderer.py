@@ -59,9 +59,10 @@ class WFSRenderer(AbstractRenderer):
         return None
 
 
-    def get_capabilities(self, projects: dict,
-                                base_url: str,
-                                request_params: dict) -> Tuple[str, dict]:
+    def get_capabilities(self,
+                         projects: dict,
+                         base_url: str,
+                         request_params: dict) -> Tuple[str, dict]:
         '''
             WFS GetCapabilities implementation.
         '''
@@ -75,11 +76,11 @@ class WFSRenderer(AbstractRenderer):
         projects_xml = ''
         for project, project_meta in projects.items():
             #TODO: add to project metadata
-            # srid, extent = project_meta['srid'], project_meta['extent']
-            srid, extent = self._get_project_spatial_metadata(project)
-
-            #TODO: pre-filter
-            if srid is None or extent is None:
+            srid = self._get_project_srid(project)
+            if srid is None:
+                continue
+            extent = geospatial.get_project_extent(self.db_connector, project)
+            if extent is None:
                 # no geodata in project
                 continue
 
@@ -155,15 +156,16 @@ class WFSRenderer(AbstractRenderer):
                 self.DEFAULT_RESPONSE_HEADERS
 
 
-    def describe_feature_type(self, projects: dict,
-                                    base_url: str,
-                                    request_params: dict) -> Tuple[object, dict]:
+    def describe_feature_type(self,
+                              projects: dict,
+                              base_url: str,
+                              request_params: dict) -> Tuple[object, dict]:
         '''
             WFS DescribeFeatureType implementation.
         '''
         version = self.parse_version(request_params, False)
         type_name = request_params.get('TYPENAME', request_params.get('TYPENAMES', None))
-        project, layer_name, entity = self._decode_layer_name(type_name)
+        project, layer_name, _ = self._decode_layer_name(type_name)
         if project not in projects:
             # invalid/inaccessible project requested
             return self.render_error_template(11000,
@@ -171,7 +173,7 @@ class WFSRenderer(AbstractRenderer):
                                                 f'Invalid type name "{type_name}"'), \
                     self.DEFAULT_RESPONSE_HEADERS
         project_meta = projects[project]
-        srid, extent = project_meta['srid'], project_meta['extent']
+        # srid, extent = project_meta['srid'], project_meta['extent']
 
         # get entries
         elements = ''
@@ -234,12 +236,13 @@ class WFSRenderer(AbstractRenderer):
                 self.DEFAULT_RESPONSE_HEADERS
 
 
-    def _encode_features(self, meta: dict,
-                            relation_name: str,
-                            type_name: str,
-                            version: str,
-                            srid: int,
-                            flip_coordinates: bool=False) -> str:
+    def _encode_features(self,
+                         meta: dict,
+                         relation_name: str,
+                         type_name: str,
+                         version: str,
+                         srid: int,
+                         flip_coordinates: bool=False) -> str:
         transform = rasterio.transform.Affine.from_gdal(*meta['affine_transform'])
 
         delim = ','
@@ -292,7 +295,10 @@ class WFSRenderer(AbstractRenderer):
             return ''
 
 
-    def get_feature(self, projects: dict, base_url: str, request_params: dict) -> Tuple[str, dict]:
+    def get_feature(self,
+                    projects: dict,
+                    base_url: str,
+                    request_params: dict) -> Tuple[str, dict]:
         '''
             WFS GetFeature implementation.
         '''
@@ -420,11 +426,11 @@ class WFSRenderer(AbstractRenderer):
                         feature['file_link'] = filename
 
                     gml_features += self._encode_features(feature,
-                                                            layer_name,
-                                                            type_name,
-                                                            version,
-                                                            srid,
-                                                            flip_coordinates)
+                                                          layer_name,
+                                                          type_name,
+                                                          version,
+                                                          srid,
+                                                          flip_coordinates)
 
         format_args = {
             'gml_bbox': bbox_gml,       #TODO: make layer-specific

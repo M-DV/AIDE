@@ -77,11 +77,10 @@ class AbstractRenderer:
         self.project_meta_cache = {}
 
 
-    def _get_project_spatial_metadata(self, project: str) -> Tuple[object]:
+    def _get_project_srid(self, project: str) -> object:
         if project not in self.project_meta_cache:
             srid = geospatial.get_project_srid(self.db_connector, project)
-            extent = geospatial.get_project_extent(self.db_connector, project)
-            self.project_meta_cache[project] = (srid, extent)
+            self.project_meta_cache[project] = srid
         return self.project_meta_cache[project]
 
 

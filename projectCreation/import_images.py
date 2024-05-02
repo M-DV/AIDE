@@ -1,12 +1,12 @@
 '''
-    Helper function that imports a set of unlabeled images into the database.
-    Works recursively (i.e., with images in nested folders) and different file
-    formats and extensions (.jpg, .JPEG, .png, etc.).
-    Skips images that have already been added to the database.
+    Helper function that imports a set of unlabeled images into the database. Works recursively
+    (i.e., with images in nested folders) and different file formats and extensions (.jpg, .JPEG,
+    .png, etc.). Skips images that have already been added to the database.
 
     Using this script requires the following steps:
-    1. Make sure your images are of common format and readable by the web
-       server (i.e., convert camera RAW images first).
+    
+    1. Make sure your images are of common format and readable by the web server (i.e., convert
+       camera RAW images first).
     2. Call the script from the AIDE code base on the FileServer instance.
 
     2019-24 Benjamin Kellenberger

@@ -59,6 +59,13 @@
                         </div>
                     </div>
 
+                    <input type="checkbox" id="match-num-bands" />
+                    <label for="match-num-bands">Match number of image bands precisely.</label>
+                    <div style="font-style:italic;margin-left:18px">If unchecked, images with more
+                    than the number of bands required by project will still be imported. Leave
+                    unchecked to ignore potential alpha bands. Grayscale images will be converted to
+                    RGB for default band configuration. Otherwise, images with fewer than required
+                    bands will always be ignored.</div>
                     <input type="checkbox" id="convert-unsupported-images" checked="checked" />
                     <label for="convert-unsupported-images">Convert unsupported images into TIFFs</label>
                 </div>
@@ -494,6 +501,7 @@
             formData.append('parseAnnotations', parseAnnotations);
             formData.append('numFiles', numFiles);
             formData.append('existingFiles', $('#existing-files [name=existing-files]:checked').val());
+            formData.append('matchNumBandsPrecisely', $('#match-num-bands').prop('checked'));
             formData.append('convertUnsupported', $('#convert-unsupported-images').prop('checked'));
             formData.append('splitImages', doSplitPatches);
             if(doSplitPatches) {

@@ -6,7 +6,7 @@
         - annotation and prediction management: up- and download of annotations and model
           predictions
 
-    2020-23 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
 import html
@@ -111,7 +111,9 @@ class DataAdministrationMiddleware:
 
 
     def createUploadSession(self, project, user, numFiles, uploadImages=True,
-        existingFiles='keepExisting', splitImages=False, splitProperties=None,
+        existingFiles='keepExisting',
+        match_num_bands_precisely: bool=False,
+        splitImages=False, splitProperties=None,
         convertUnsupported=True,
         parseAnnotations=False,
         skipUnknownClasses=False, markAsGoldenQuestions=False,
@@ -132,7 +134,9 @@ class DataAdministrationMiddleware:
             Returns the session ID as a response.
         '''
         return self.dataWorker.createUploadSession(project, user, numFiles, uploadImages,
-                                            existingFiles, splitImages, splitProperties,
+                                            existingFiles,
+                                            match_num_bands_precisely,
+                                            splitImages, splitProperties,
                                             convertUnsupported,
                                             parseAnnotations,
                                             skipUnknownClasses, markAsGoldenQuestions,

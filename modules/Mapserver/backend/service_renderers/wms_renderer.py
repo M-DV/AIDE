@@ -8,6 +8,7 @@ import re
 
 from modules.Database.app import Database
 from util.configDef import Config
+from util import geospatial
 
 from .abstract_renderer import AbstractRenderer
 from .._functional import map_operations
@@ -37,7 +38,10 @@ class WMSRenderer(AbstractRenderer):
         self.mime_pattern = re.compile(r'.*\/')
 
 
-    def get_capabilities(self, projects: dict, base_url: str, request_params: dict) -> str:
+    def get_capabilities(self,
+                         projects: dict,
+                         base_url: str,
+                         request_params: dict) -> str:
         '''
             WMS GetCapabilities implementation.
         '''
@@ -52,11 +56,11 @@ class WMSRenderer(AbstractRenderer):
         projects_xml = ''
         for project, project_meta in projects.items():
             #TODO: add to project metadata
-            # srid, extent = project_meta['srid'], project_meta['extent']
-            srid, extent = self._get_project_spatial_metadata(project)
-
-            #TODO: pre-filter
-            if srid is None or extent is None:
+            srid = self._get_project_srid(project)
+            if srid is None:
+                continue
+            extent = geospatial.get_project_extent(self.db_connector, project)
+            if extent is None:
                 # no geodata in project
                 continue
 
@@ -144,7 +148,10 @@ class WMSRenderer(AbstractRenderer):
                     self.DEFAULT_RESPONSE_HEADERS
 
 
-    def get_map(self, projects: dict, base_url: str, request_params: dict) -> object:
+    def get_map(self,
+                projects: dict,
+                base_url: str,
+                request_params: dict) -> object:
         '''
             WMS GetMap implementation.
         '''

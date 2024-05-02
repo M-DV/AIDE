@@ -83,7 +83,7 @@ class Config():
             return fallback
 
 
-     # pylint: disable=invalid-name,redefined-builtin
+    # pylint: disable=invalid-name,redefined-builtin
     def getProperty(self, module, propertyName, type=str, fallback=None):
         '''
             Legacy method for compatibility.

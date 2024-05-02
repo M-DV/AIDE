@@ -10,6 +10,7 @@ import numpy as np
 
 from modules.Database.app import Database
 from util.configDef import Config
+from util import geospatial
 
 from .abstract_renderer import AbstractRenderer
 from .._functional import map_operations
@@ -40,9 +41,10 @@ class WCSRenderer(AbstractRenderer):
         self.mime_pattern = re.compile(r'.*\/')
 
 
-    def get_capabilities(self, projects: dict,
-                                base_url: str,
-                                request_params: dict) -> Tuple[str, dict]:
+    def get_capabilities(self,
+                         projects: dict,
+                         base_url: str,
+                         request_params: dict) -> Tuple[str, dict]:
         '''
             WCS GetCapabilities implementation.
         '''
@@ -59,11 +61,11 @@ class WCSRenderer(AbstractRenderer):
         layer_identifiers = ''
         for project, project_meta in projects.items():
             #TODO: add to project metadata
-            # srid, extent = project_meta['srid'], project_meta['extent']
-            srid, extent = self._get_project_spatial_metadata(project)
-
-            #TODO: pre-filter
-            if srid is None or extent is None:
+            srid = self._get_project_srid(project)
+            if srid is None:
+                continue
+            extent = geospatial.get_project_extent(self.db_connector, project)
+            if extent is None:
                 # no geodata in project
                 continue
 
@@ -95,9 +97,9 @@ class WCSRenderer(AbstractRenderer):
             })
             layer_identifiers += f'<ows:Value>{layer_id}</ows:Value>'
             project_layers += self.render_service_template(version,
-                                                            'coverage_summary',
-                                                            layer_args,
-                                                            False)
+                                                           'coverage_summary',
+                                                           layer_args,
+                                                           False)
 
             if project_meta['annotation_type'] == 'segmentationmasks':
                 # segmentation masks; encompass individual user's layers in a group
@@ -112,9 +114,9 @@ class WCSRenderer(AbstractRenderer):
                     })
                     layer_identifiers += f'<ows:Value>{layer_name}</ows:Value>'
                     user_details += self.render_service_template(version,
-                                                                'coverage_summary',
-                                                                layer_args,
-                                                                False)
+                                                                 'coverage_summary',
+                                                                 layer_args,
+                                                                 False)
                 group_args = base_args.copy()
                 group_args.update({
                     'identifier': '',
@@ -123,9 +125,9 @@ class WCSRenderer(AbstractRenderer):
                     'children': user_details
                 })
                 project_layers += self.render_service_template(version,
-                                                                'coverage_summary',
-                                                                group_args,
-                                                                False)
+                                                               'coverage_summary',
+                                                               group_args,
+                                                               False)
 
             #TODO: predictions
 
@@ -158,20 +160,21 @@ class WCSRenderer(AbstractRenderer):
                 self.DEFAULT_RESPONSE_HEADERS
 
 
-    def describe_coverage(self, projects: dict,
-                                base_url: str,
-                                request_params: dict) -> Tuple[str, dict]:
+    def describe_coverage(self,
+                          projects: dict,
+                          base_url: str,
+                          request_params: dict) -> Tuple[str, dict]:
         '''
             WCS DescribeCoverage implementation.
         '''
         version = self.parse_version(request_params, False)
         identifier = request_params.get('IDENTIFIER', request_params.get('IDENTIFIERS'))
-        project, layer_name, entity = self._decode_layer_name(identifier)
+        project, layer_name, _ = self._decode_layer_name(identifier)
         if project not in projects:
             # invalid/inaccessible project requested
             return self.render_error_template(11000,
-                                                version,
-                                                f'Invalid identifier "{identifier}"'), \
+                                              version,
+                                              f'Invalid identifier "{identifier}"'), \
                     self.DEFAULT_RESPONSE_HEADERS
         project_meta = projects[project]
         srid, extent = project_meta['srid'], project_meta['extent']
@@ -192,7 +195,10 @@ class WCSRenderer(AbstractRenderer):
                     for band in project_meta['band_config']
                 ])
             }
-            fields += self.render_service_template(version, 'field', field_args, False)
+            fields += self.render_service_template(version,
+                                                   'field',
+                                                   field_args,
+                                                   False)
 
         # annotations
         if layer_name in ('annotation', None) and \
@@ -204,7 +210,10 @@ class WCSRenderer(AbstractRenderer):
                     'abstract': f'AIDE project {project}: annotations by user {user}',
                     'band_keys': '<Key>0</Key>'
                 })
-                fields += self.render_service_template(version, 'field', field_args, False)
+                fields += self.render_service_template(version,
+                                                       'field',
+                                                       field_args,
+                                                       False)
 
         # predictions
         if layer_name in ('prediction', None) and \
@@ -234,7 +243,10 @@ class WCSRenderer(AbstractRenderer):
             'srid': srid,
             'fields': fields
         }
-        return self.render_service_template(version, 'describe_coverage', format_args, True), \
+        return self.render_service_template(version,
+                                            'describe_coverage',
+                                            format_args,
+                                            True), \
                 self.DEFAULT_RESPONSE_HEADERS
 
 
@@ -342,9 +354,9 @@ class WCSRenderer(AbstractRenderer):
             return bytes_obj, response_headers
 
         return self.render_error_template(11002,
-                                            version,
-                                            f'Invalid identifier name "{identifier}"'), \
-                        self.DEFAULT_RESPONSE_HEADERS
+                                          version,
+                                          f'Invalid identifier name "{identifier}"'), \
+                self.DEFAULT_RESPONSE_HEADERS
 
 
     def _load_service_requests(self):

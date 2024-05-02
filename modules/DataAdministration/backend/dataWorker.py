@@ -1,14 +1,12 @@
 '''
-    Class handling long-running data management-
-    related tasks, such as preparing annotations
-    for downloading, or scanning directories for
-    untracked images.
+    Class handling long-running data management- related tasks, such as preparing annotations for
+    downloading, or scanning directories for untracked images.
 
     2020-24 Benjamin Kellenberger
 '''
 
 import os
-from typing import Iterable
+from typing import Iterable, Union, Tuple
 import io
 import re
 import shutil
@@ -28,47 +26,54 @@ from PIL import Image
 from psycopg2 import sql
 from celery import current_task
 
-from modules.LabelUI.backend.annotation_sql_tokens import QueryStrings_annotation, QueryStrings_prediction
-from util.helpers import FILENAMES_PROHIBITED_CHARS, list_directory, base64ToImage, hexToRGB, slugify, current_time, is_fileServer
+from modules.LabelUI.backend.annotation_sql_tokens import (QueryStrings_annotation,
+                                                           QueryStrings_prediction)
+from util.helpers import (FILENAMES_PROHIBITED_CHARS, list_directory, base64ToImage, hexToRGB,
+                          slugify, current_time, is_fileServer)
 from util.imageSharding import get_split_positions, split_image
 from util import drivers, parsers, geospatial
 
 
 class DataWorker:
+    '''
+        Main class implementation for data manipulation tasks.
+    '''
 
-    NUM_IMAGES_LIMIT = 4096         # maximum number of images that can be queried at once (to avoid bottlenecks)
+    # maximum number of images that can be queried at once (to avoid bottlenecks)
+    NUM_IMAGES_LIMIT = 4096
 
-    CELERY_UPDATE_INTERVAL = 100    # number of images to wait until Celery task status gets updated
+    # number of images to wait until Celery task status gets updated
+    CELERY_UPDATE_INTERVAL = 100
 
-    VERIFICATION_BATCH_SIZE = 1024  # number of images to verify at a time
+    # number of images to verify at a time
+    VERIFICATION_BATCH_SIZE = 1024
 
     def __init__(self, config, dbConnector, passiveMode=False):
         self.config = config
-        self.dbConnector = dbConnector
-        self.countPattern = re.compile('\_[0-9]+$')
-        self.passiveMode = passiveMode
+        self.db_connector = dbConnector
+        self.count_pattern = re.compile('\_[0-9]+$')
+        self.passive_mode = passiveMode
 
         if not is_fileServer(self.config):
             raise Exception('Not a FileServer instance.')
 
-        self.filesDir = self.config.get_property('FileServer', 'staticfiles_dir')
-        self.tempDir = self.config.get_property('FileServer',
-                                                'tempfiles_dir',
-                                                dtype=str,
-                                                fallback=tempfile.gettempdir())
+        self.files_dir = self.config.get_property('FileServer', 'staticfiles_dir')
+        self.temp_dir = self.config.get_property('FileServer',
+                                                 'tempfiles_dir',
+                                                 dtype=str,
+                                                 fallback=tempfile.gettempdir())
 
-        self.uploadSessions = {}
+        self.upload_sessions = {}
 
 
-    def _get_geospatial_metadata(self, project_srid: int,
-                                        file_path: str,
-                                        window: tuple=None) -> tuple:
-        geo_meta = geospatial.get_geospatial_metadata(
-            file_path,
-            project_srid,
-            window=window,
-            transform_if_needed=False
-        )
+    def _get_geospatial_metadata(self,
+                                 project_srid: int,
+                                 file_path: str,
+                                 window: tuple=None) -> tuple:
+        geo_meta = geospatial.get_geospatial_metadata(file_path,
+                                                      project_srid,
+                                                      window=window,
+                                                      transform_if_needed=False)
         try:
             extent = geo_meta.get('extent', None)
             transform = list(geo_meta['transform'].to_gdal())
@@ -79,12 +84,11 @@ class DataWorker:
             return None, None, None, None
 
 
-    def aide_internal_notify(self, message):
+    def aide_internal_notify(self, message: str) -> None:
         '''
-            Used for AIDE administrative communication,
-            e.g. for setting up queues.
+            Used for AIDE administrative communication, e.g. for setting up queues.
         '''
-        if self.passiveMode:
+        if self.passive_mode:
             return
         if 'task' in message:
             if message['task'] == 'create_project_folders':
@@ -95,33 +99,33 @@ class DataWorker:
                 # set up folders for a newly created project
                 if 'projectName' in message:
                     dest_path = os.path.join(self.config.get_property('FileServer',
-                                                                     'staticfiles_dir'),
+                                                                      'staticfiles_dir'),
                                              message['projectName'])
                     os.makedirs(dest_path, exist_ok=True)
 
 
-
-    def verifyImages(self, projects=None, image_list=[], quick_check=True,
-            remove_invalid=False):
+    def verifyImages(self,
+                     projects: Union[Iterable[str],str]=None,
+                     image_list: list=[],
+                     quick_check: bool=True,
+                     remove_invalid: bool=False) -> dict:
         '''
-            Iterates through all provided project folders (all registered
-            projects if None specified) and checks all images registered in the
-            database for integrity:
-            1. Attempts to load image from disk
-            2. Checks number of bands and whether this corresponds to the
-               project settings
-            3. Retrieves image dimensions and registers that information in
-               the database (unless already there).
+            Iterates through all provided project folders (all registered projects if None
+            specified) and checks all images registered in the database for integrity:
+                1. Attempts to load image from disk
+                2. Checks number of bands and whether this corresponds to the project settings
+                3. Retrieves image dimensions and registers that information in the database (unless
+                   already there).
 
-            If "quickCheck" is True (default), only images that have no
-            width or height registered will be checked.
+            If "quick_check" is True (default), only images that have no width or height registered
+            will be checked.
         '''
         if isinstance(projects, str):
             projects = (projects,)
         assert len(image_list) == 0 or projects is not None, \
             'ERROR: project name must also be provided when image_list is given'
         print('Starting image verification...')
-        all_projects = self.dbConnector.execute(sql.SQL('''
+        all_projects = self.db_connector.execute(sql.SQL('''
             SELECT shortname FROM "aide_admin".project;
         '''), None, 'all')
         all_projects = {p['shortname'] for p in all_projects}
@@ -131,10 +135,10 @@ class DataWorker:
             projects = set(projects).intersection(all_projects)
         if len(projects) == 0:
             print('\tNo valid project(s) found.')
-            return
+            return {}
 
         def _commit_updates(project, meta):
-            self.dbConnector.insert(sql.SQL('''
+            self.db_connector.insert(sql.SQL('''
                 INSERT INTO {} (id, filename, width, height, corrupt)
                 VALUES %s
                 ON CONFLICT(id) DO UPDATE
@@ -164,8 +168,8 @@ class DataWorker:
             }
 
             # get all registered images
-            with self.dbConnector.get_connection() as conn:
-                with self.dbConnector.execute_cursor(conn,
+            with self.db_connector.get_connection() as conn:
+                with self.db_connector.execute_cursor(conn,
                     sql.SQL('''
                         SELECT id, filename, width, height
                         FROM {}
@@ -186,7 +190,7 @@ class DataWorker:
                         try:
                             # attempt to load image from disk
                             img = drivers.load_from_disk(
-                                os.path.join(self.filesDir, project, next_img['filename']))
+                                os.path.join(self.files_dir, project, next_img['filename']))
                             width, height = img.shape[2], img.shape[1]
                             if next_img['width'] is None or next_img['height'] is None or \
                                 next_img['width'] != width or next_img['height'] != height:
@@ -213,43 +217,50 @@ class DataWorker:
         return response
 
 
-    def listImages(self, project, folder=None, imageAddedRange=None, lastViewedRange=None,
-            viewcountRange=None, numAnnoRange=None, numPredRange=None,
-            orderBy=None, order='desc', startFrom=None, limit=None, offset=None):
+    def listImages(self,
+                   project: str,
+                   folder: str=None,
+                   imageAddedRange: Tuple[datetime]=None,
+                   lastViewedRange: Tuple[datetime]=None,
+                   viewcountRange: Tuple[int]=None,
+                   numAnnoRange: Tuple[int]=None,
+                   numPredRange: Tuple[int]=None,
+                   orderBy: str=None,
+                   order: str='desc',
+                   startFrom: Union[UUID,str]=None,
+                   limit: int=None,
+                   offset: int=None) -> list:
         '''
-            Returns a list of images, with ID, filename,
-            date image was added, viewcount, number of annotations,
-            number of predictions, and last time viewed, for a given
-            project.
-            The list can be filtered by all those properties (e.g. 
-            date and time image was added, last checked; number of
-            annotations, etc.), as well as limited in length (images
-            are sorted by date_added).
+            Returns a list of images, with ID, filename, date image was added, viewcount, number of
+            annotations, number of predictions, and last time viewed, for a given project. The list
+            can be filtered by all those properties (e.g. date and time image was added, last
+            checked; number of annotations, etc.), as well as limited in length (images are sorted
+            by date_added).
         '''
         queryArgs = []
 
-        filterStr = ''
+        filter_str = ''
         if folder is not None and isinstance(folder, str):
-            filterStr += ' filename LIKE %s '
+            filter_str += ' filename LIKE %s '
             queryArgs.append(folder + '%')
         if imageAddedRange is not None:     #TODO
-            filterStr += 'AND date_added >= to_timestamp(%s) AND date_added <= to_timestamp(%s) '
+            filter_str += 'AND date_added >= to_timestamp(%s) AND date_added <= to_timestamp(%s) '
             queryArgs.append(imageAddedRange[0])
             queryArgs.append(imageAddedRange[1])
         if lastViewedRange is not None:     #TODO
-            filterStr += 'AND last_viewed >= to_timestamp(%s) AND last_viewed <= to_timestamp(%s) '
+            filter_str += 'AND last_viewed >= to_timestamp(%s) AND last_viewed <= to_timestamp(%s) '
             queryArgs.append(lastViewedRange[0])
             queryArgs.append(lastViewedRange[1])
         if viewcountRange is not None:
-            filterStr += 'AND viewcount >= %s AND viewcount <= %s '
+            filter_str += 'AND viewcount >= %s AND viewcount <= %s '
             queryArgs.append(viewcountRange[0])
             queryArgs.append(viewcountRange[1])
         if numAnnoRange is not None:
-            filterStr += 'AND num_anno >= %s AND numAnno <= %s '
+            filter_str += 'AND num_anno >= %s AND numAnno <= %s '
             queryArgs.append(numAnnoRange[0])
             queryArgs.append(numAnnoRange[1])
         if numPredRange is not None:
-            filterStr += 'AND num_pred >= %s AND num_pred <= %s '
+            filter_str += 'AND num_pred >= %s AND num_pred <= %s '
             queryArgs.append(numPredRange[0])
             queryArgs.append(numPredRange[1])
         if startFrom is not None:
@@ -259,25 +270,25 @@ class DataWorker:
                 except Exception:
                     startFrom = None
             if startFrom is not None:
-                filterStr += ' AND img.id > %s '
+                filter_str += ' AND img.id > %s '
                 queryArgs.append(startFrom)
-        filterStr = filterStr.strip()
-        if filterStr.startswith('AND'):
-            filterStr = filterStr[3:]
-        if len(filterStr.strip()):
-            filterStr = 'WHERE ' + filterStr
-        filterStr = sql.SQL(filterStr)
+        filter_str = filter_str.strip()
+        if filter_str.startswith('AND'):
+            filter_str = filter_str[3:]
+        if len(filter_str.strip()) > 0:
+            filter_str = 'WHERE ' + filter_str
+        filter_str = sql.SQL(filter_str)
 
-        orderStr = sql.SQL('ORDER BY img.id ASC')
+        order_str = sql.SQL('ORDER BY img.id ASC')
         if orderBy is not None:
-            orderStr = sql.SQL('ORDER BY {} {}, img.id ASC').format(
+            order_str = sql.SQL('ORDER BY {} {}, img.id ASC').format(
                 sql.SQL(orderBy),
                 sql.SQL(order)
             )
 
-        limitStr = sql.SQL('')
+        limit_str = sql.SQL('')
         if isinstance(limit, float):
-            if not math.isnan(limit):
+            if math.isfinite(limit):
                 limit = int(limit)
             else:
                 limit = self.NUM_IMAGES_LIMIT
@@ -289,10 +300,10 @@ class DataWorker:
         elif not isinstance(limit, int):
             limit = self.NUM_IMAGES_LIMIT
         limit = max(min(limit, self.NUM_IMAGES_LIMIT), 1)
-        limitStr = sql.SQL('LIMIT %s')
+        limit_str = sql.SQL('LIMIT %s')
         queryArgs.append(limit)
 
-        offsetStr = sql.SQL('')
+        offset_str = sql.SQL('')
         if isinstance(offset, float):
             if not math.isnan(offset):
                 offset = int(offset)
@@ -304,10 +315,10 @@ class DataWorker:
             except Exception:
                 offset = None
         if isinstance(offset, int):
-            offsetStr = sql.SQL('OFFSET %s')
+            offset_str = sql.SQL('OFFSET %s')
             queryArgs.append(offset)
 
-        queryStr = sql.SQL('''
+        query_str = sql.SQL('''
             SELECT img.id, filename,
                 img.x AS w_x, img.y AS w_y, img.width AS w_width, img.height AS w_height,
                 EXTRACT(epoch FROM date_added) AS date_added,
@@ -344,13 +355,13 @@ class DataWorker:
             id_iu=sql.Identifier(project, 'image_user'),
             id_anno=sql.Identifier(project, 'annotation'),
             id_pred=sql.Identifier(project, 'prediction'),
-            filter=filterStr,
-            order=orderStr,
-            limit=limitStr,
-            offset=offsetStr
+            filter=filter_str,
+            order=order_str,
+            limit=limit_str,
+            offset=offset_str
         )
 
-        result = self.dbConnector.execute(queryStr, tuple(queryArgs), 'all')
+        result = self.db_connector.execute(query_str, tuple(queryArgs), 'all')
         for idx, row in enumerate(result):
             result[idx]['id'] = str(row['id'])
         return result
@@ -358,7 +369,9 @@ class DataWorker:
 
 
     def createUploadSession(self, project, user, numFiles, uploadImages=True,
-        existingFiles='keepExisting', splitImages=False, splitProperties=None,
+        existingFiles='keepExisting',
+        match_num_bands_precisely: bool=False,
+        splitImages=False, splitProperties=None,
         convertUnsupported=True,
         parseAnnotations=False,
         skipUnknownClasses=False, markAsGoldenQuestions=False,
@@ -383,12 +396,12 @@ class DataWorker:
         sessionID = hashlib.md5(bytes(sessionName, 'utf-8')).hexdigest()
 
         # create temporary file structures and save metadata file
-        tempDir_session = os.path.join(self.tempDir, project, 'upload_sessions', sessionID)
+        tempDir_session = os.path.join(self.temp_dir, project, 'upload_sessions', sessionID)
         os.makedirs(os.path.join(tempDir_session, 'files'), exist_ok=False)             # temporary location of uploaded files
         os.makedirs(os.path.join(tempDir_session, 'uploads'), exist_ok=False)           # location to store lists of uploaded files and corresponding AIDE imports
 
         # cache project-specific properties
-        projectProps = self.dbConnector.execute('''
+        projectProps = self.db_connector.execute('''
             SELECT annotationType, band_config
             FROM "aide_admin".project
             WHERE shortname = %s;
@@ -433,14 +446,15 @@ class DataWorker:
 
             'annotationType': projectProps['annotationtype'],
             'bandNum': bandNum,
+            'matchNumBandsPrecisely': match_num_bands_precisely,
             'customBandConfig': customBandConfig
         }
-        tempDir_metaFile = os.path.join(self.tempDir, project, 'upload_sessions')
+        tempDir_metaFile = os.path.join(self.temp_dir, project, 'upload_sessions')
         os.makedirs(tempDir_metaFile, exist_ok=True)
         json.dump(sessionMeta, open(os.path.join(tempDir_metaFile, sessionID+'.json'), 'w'))
 
         # cache for faster access
-        self.uploadSessions[sessionID] = sessionMeta
+        self.upload_sessions[sessionID] = sessionMeta
 
         return sessionID
 
@@ -452,19 +466,19 @@ class DataWorker:
             (i.e., they initiated it) and False if not or if the session with
             given ID does not exist.
         '''
-        if sessionID not in self.uploadSessions:
+        if sessionID not in self.upload_sessions:
             # check if on disk
-            tempDir_metaFile = os.path.join(self.tempDir, project, 'upload_sessions', sessionID+'.json')
+            tempDir_metaFile = os.path.join(self.temp_dir, project, 'upload_sessions', sessionID+'.json')
             if not os.path.isfile(tempDir_metaFile):
                 return False
             try:
                 meta = json.load(open(tempDir_metaFile, 'r'))
-                self.uploadSessions[sessionID] = meta    
+                self.upload_sessions[sessionID] = meta    
             except Exception:
                 return False
         try:
-            assert self.uploadSessions[sessionID]['project'] == project
-            assert self.uploadSessions[sessionID]['user'] == user
+            assert self.upload_sessions[sessionID]['project'] == project
+            assert self.upload_sessions[sessionID]['user'] == user
             return True
         except Exception:
             return False
@@ -555,10 +569,10 @@ class DataWorker:
         now = slugify(current_time())
 
         # load session metadata
-        meta = self.uploadSessions[session_id]
+        meta = self.upload_sessions[session_id]
 
         # load geospatial project metadata
-        srid = geospatial.get_project_srid(self.dbConnector, project)
+        srid = geospatial.get_project_srid(self.db_connector, project)
 
         # temp dir to save raw files to
         tempRoot = os.path.join(meta['sessionDir'], 'files')
@@ -620,7 +634,7 @@ class DataWorker:
                         while os.path.exists(destPath):
                             # rename file
                             fn, ext = os.path.splitext(nextFileName)
-                            match = self.countPattern.search(fn)
+                            match = self.count_pattern.search(fn)
                             if match is None:
                                 nextFileName = fn + '_1' + ext
                             else:
@@ -668,13 +682,18 @@ class DataWorker:
 
                     bandNum_current = size[0]
                     if bandNum_current not in bandNum:
-                        raise Exception(f'Image "{originalFileName}" has invalid number of ' + \
-                            f'bands (expected: {str(bandNum)}, actual: {str(bandNum_current)}).')
-                    if bandNum_current == 1 and not hasCustomBandConfig:
-                        # project expects RGB data but image is grayscale; replicate for maximum compatibility
-                        pixelArray = drivers.load_from_disk(tempFileName)
-                        pixelArray = np.concatenate((pixelArray, pixelArray, pixelArray), 0)
-                        forceConvert = True         # set to True to force saving file to disk instead of simply copying it
+                        if bandNum_current == 1 and not hasCustomBandConfig:
+                            # project expects RGB data but image is grayscale; replicate for maximum
+                            # compatibility
+                            pixelArray = drivers.load_from_disk(tempFileName)
+                            pixelArray = np.concatenate((pixelArray, pixelArray, pixelArray), 0)
+                            forceConvert = True     # force saving disk instead of simply copying it
+                        elif bandNum_current < max(bandNum) or \
+                            not meta.get('matchNumBandsPrecisely', False):
+                            # image has insufficient or else incorrect number of bands
+                            raise Exception(f'Image "{originalFileName}" has invalid number ' + \
+                                    f'of bands (expected: {str(bandNum)}, ' + \
+                                        f'actual: {str(bandNum_current)}).')
 
                     targetMimeType = None
                     if ext.lower() not in drivers.SUPPORTED_DATA_EXTENSIONS:
@@ -688,11 +707,13 @@ class DataWorker:
                                 pixelArray = drivers.load_from_disk(tempFileName)
                             imgs_warn[key] = {
                                 'filename': nextFileName,
-                                'message': f'Image "{originalFileName}" has been converted to {targetMimeType} and renamed to "{nextFileName}".'
+                                'message': f'Image "{originalFileName}" has been converted to ' + \
+                                           f'{targetMimeType} and renamed to "{nextFileName}".'
                             }
                         else:
                             # skip and add error message
-                            raise Exception(f'Unsupported file type for image "{originalFileName}".')
+                            raise Exception('Unsupported file type for image ' + \
+                                            f'"{originalFileName}".')
 
                     if meta['splitImages'] and meta['splitProperties'] is not None:
                         split_props = meta['splitProperties']
@@ -883,7 +904,7 @@ class DataWorker:
                                 id_pred=sql.Identifier(project, 'prediction'),
                                 id_img=sql.Identifier(project, 'image')
                             )
-                            self.dbConnector.execute(query_str,
+                            self.db_connector.execute(query_str,
                                 tuple([new_filename]*4), None)
 
                             # remove file
@@ -976,7 +997,7 @@ class DataWorker:
                         ''').format(
                             id_img=sql.Identifier(project, 'image')
                         )
-                        self.dbConnector.execute(query_str,
+                        self.db_connector.execute(query_str,
                             (
                                 img_valid['filename'],
                                 img_valid.get('x', None),
@@ -1000,7 +1021,7 @@ class DataWorker:
                     ''').format(
                         id_img=sql.Identifier(project, 'image')
                     )
-                    self.dbConnector.insert(query_str,
+                    self.db_connector.insert(query_str,
                         [
                             (
                                 img_val['filename'],
@@ -1088,7 +1109,7 @@ class DataWorker:
                 # parse
                 parser_class = parsers.PARSERS[meta['annotationType']][parserID]
                 parser = parser_class(self.config,
-                                      self.dbConnector,
+                                      self.db_connector,
                                       project,
                                       tempRoot,
                                       meta['user'],
@@ -1101,7 +1122,7 @@ class DataWorker:
 
                 if len(parseResult['result']) > 0:
                     # retrieve file names for images annotations were imported for & append messages
-                    fileNames = self.dbConnector.execute(sql.SQL('''
+                    fileNames = self.db_connector.execute(sql.SQL('''
                         SELECT id, filename, x, y, width, height FROM {}
                         WHERE id IN %s;
                     ''').format(sql.Identifier(project, 'image')),
@@ -1156,7 +1177,7 @@ class DataWorker:
         '''
         # get band configuration for project
         hasCustomBandConfig = False
-        bandConfig = self.dbConnector.execute(
+        bandConfig = self.db_connector.execute(
             'SELECT band_config FROM "aide_admin".project WHERE shortname = %s;',
             (project,), 1
         )
@@ -1183,7 +1204,7 @@ class DataWorker:
         ''').format(
             id_img=sql.Identifier(project, 'image')
         )
-        result = self.dbConnector.execute(queryStr, None, 'all')
+        result = self.db_connector.execute(queryStr, None, 'all')
         for r in range(len(result)):
             imgs_database.add(result[r]['filename'])
 
@@ -1292,7 +1313,7 @@ class DataWorker:
         current_task.update_state(meta={'message': 'locating images...'})
 
         # load geospatial project metadata
-        srid = geospatial.get_project_srid(self.dbConnector, project)
+        srid = geospatial.get_project_srid(self.db_connector, project)
 
         # get all images on disk that are not in database
         imgs_candidates = self.scanForImages(project,
@@ -1399,7 +1420,7 @@ class DataWorker:
                 ''').format(
                     id_img=sql.Identifier(project, 'image')
                 )
-                self.dbConnector.execute(query_str,
+                self.db_connector.execute(query_str,
                     (
                         *img_meta,
                         transform,
@@ -1415,7 +1436,7 @@ class DataWorker:
             ''').format(
                 id_img=sql.Identifier(project, 'image')
             )
-            self.dbConnector.insert(query_str, tuple(db_values))
+            self.db_connector.insert(query_str, tuple(db_values))
 
         # get IDs of newly added images     #TODO: virtual views?
         query_str = sql.SQL('''
@@ -1424,7 +1445,7 @@ class DataWorker:
         ''').format(
             id_img=sql.Identifier(project, 'image')
         )
-        result = self.dbConnector.execute(query_str, (tuple(imgs_add),), 'all')
+        result = self.db_connector.execute(query_str, (tuple(imgs_add),), 'all')
 
         status = (0 if result is not None and len(result) else 1)  #TODO
         return status, result
@@ -1515,14 +1536,14 @@ class DataWorker:
             deleteArgs = tuple([imageList] * 4)
 
         # retrieve images to be deleted
-        imgs_del = self.dbConnector.execute(queryStr, queryArgs, 'all')
+        imgs_del = self.db_connector.execute(queryStr, queryArgs, 'all')
 
         if imgs_del is None:
             imgs_del = []
 
         if len(imgs_del):
             # delete images
-            self.dbConnector.execute(deleteStr, deleteArgs, None)
+            self.db_connector.execute(deleteStr, deleteArgs, None)
 
             if deleteFromDisk:
                 project_folder = os.path.join(self.config.get_property('FileServer',
@@ -1548,7 +1569,7 @@ class DataWorker:
             and returns those entries and all associated (meta-) data from the
             database.
         '''
-        imgs_DB = self.dbConnector.execute(sql.SQL('''
+        imgs_DB = self.db_connector.execute(sql.SQL('''
             SELECT id, filename FROM {id_img};
         ''').format(
             id_img=sql.Identifier(project, 'image')
@@ -1571,7 +1592,7 @@ class DataWorker:
             return []
 
         # remove
-        self.dbConnector.execute(sql.SQL('''
+        self.db_connector.execute(sql.SQL('''
             DELETE FROM {id_iu} WHERE image IN %s;
             DELETE FROM {id_anno} WHERE image IN %s;
             DELETE FROM {id_pred} WHERE image IN %s;
@@ -1596,7 +1617,7 @@ class DataWorker:
             Mapserver operations.
         '''
         # load geospatial project metadata
-        srid = geospatial.get_project_srid(self.dbConnector, project)
+        srid = geospatial.get_project_srid(self.db_connector, project)
 
         if srid is None:
             # no geospatial project; abort
@@ -1610,7 +1631,7 @@ class DataWorker:
             img_query_str = f'WHERE id IN ({",".join(["%s" for _ in image_ids])})'
             query_args = tuple(UUID(img_id) for img_id in image_ids)
 
-        query = self.dbConnector.execute(sql.SQL('''
+        query = self.db_connector.execute(sql.SQL('''
             SELECT id, filename
             FROM {id_img}
             {query_str};
@@ -1621,7 +1642,7 @@ class DataWorker:
         if query is None or len(query) == 0:
             return []
         image_ids = [str(row['id']) for row in query]
-        filenames = [os.path.join(self.filesDir, project, row['filename']) for row in query]
+        filenames = [os.path.join(self.files_dir, project, row['filename']) for row in query]
         geospatial.create_image_overviews(filenames, scale_factors, method, True)
         return image_ids
 
@@ -1656,7 +1677,7 @@ class DataWorker:
         # argument check
         dataType = dataType.lower()
         assert dataType in ('annotation', 'prediction')
-        annoType = self.dbConnector.execute(sql.SQL('''
+        annoType = self.db_connector.execute(sql.SQL('''
             SELECT annotationType, predictionType
             FROM "aide_admin".project
             WHERE shortname = %s;
@@ -1722,7 +1743,7 @@ class DataWorker:
             dateStr=sql.SQL(dateStr),
             ignoreImportedStr=sql.SQL(ignoreImportedStr)
         )
-        query = self.dbConnector.execute(
+        query = self.db_connector.execute(
             queryStr,
             tuple(queryArgs),
             'all'
@@ -1732,13 +1753,13 @@ class DataWorker:
         
         # query image info
         imgIDs = set([q['image'] for q in query])
-        images = self.dbConnector.execute(sql.SQL('''
+        images = self.db_connector.execute(sql.SQL('''
             SELECT * FROM {}
             WHERE id IN %s;
         ''').format(sql.Identifier(project, 'image')), (tuple((i,) for i in imgIDs),), 'all')
 
         # also query label classes
-        labelclasses = self.dbConnector.execute(
+        labelclasses = self.db_connector.execute(
             sql.SQL('''
                 SELECT * FROM {id_lc};
             ''').format(id_lc=sql.Identifier(project, 'labelclass')),
@@ -1761,14 +1782,14 @@ class DataWorker:
             slugify(parserClass.NAME),
             now.strftime('%Y-%m-%d_%H-%M-%S')
         )
-        destPath = os.path.join(self.tempDir, 'aide/downloadRequests', project)
+        destPath = os.path.join(self.temp_dir, 'aide/downloadRequests', project)
         os.makedirs(destPath, exist_ok=True)
         destPath = os.path.join(destPath, filename)
 
         mainFile = zipfile.ZipFile(destPath, 'w', zipfile.ZIP_DEFLATED)
         try:
             # create parser
-            parser = parserClass(self.config, self.dbConnector, project, self.tempDir, username, annoType)
+            parser = parserClass(self.config, self.db_connector, project, self.temp_dir, username, annoType)
             parser.export_annotations(annotations, mainFile, **parserKwargs)
             return filename
         finally:
@@ -1851,7 +1872,7 @@ class DataWorker:
             metaField = 'predictiontype'
         else:
             raise Exception('Invalid dataType specified ({})'.format(dataType))
-        metaType = self.dbConnector.execute('''
+        metaType = self.db_connector.execute('''
                 SELECT {} FROM aide_admin.project
                 WHERE shortname = %s;
             '''.format(metaField),
@@ -1867,7 +1888,7 @@ class DataWorker:
             if segmaskEncoding == 'indexed':
                 try:
                     indexedColors = []
-                    labelClasses = self.dbConnector.execute(sql.SQL('''
+                    labelClasses = self.db_connector.execute(sql.SQL('''
                             SELECT idx, color FROM {id_lc} ORDER BY idx ASC;
                         ''').format(id_lc=sql.Identifier(project, 'labelclass')),
                         None, 'all')
@@ -1901,7 +1922,7 @@ class DataWorker:
 
         # prepare output file
         filename = 'aide_query_{}'.format(now.strftime('%Y-%m-%d_%H-%M-%S')) + fileExtension
-        destPath = os.path.join(self.tempDir, 'aide/downloadRequests', project)
+        destPath = os.path.join(self.temp_dir, 'aide/downloadRequests', project)
         os.makedirs(destPath, exist_ok=True)
         destPath = os.path.join(destPath, filename)
 
@@ -1986,7 +2007,7 @@ class DataWorker:
             mainFile = open(destPath, 'w')
         metaStr = '; '.join(queryFields) + '\n'
 
-        allData = self.dbConnector.execute(queryStr, tuple(queryArgs), 'all')
+        allData = self.db_connector.execute(queryStr, tuple(queryArgs), 'all')
         if allData is not None and len(allData):
             for b in allData:
                 if is_segmentation:
@@ -2035,7 +2056,7 @@ class DataWorker:
             ''').format(
                 id_lc=sql.Identifier(project, 'labelclass')
             )
-            result = self.dbConnector.execute(labelclassQuery, None, 'all')
+            result = self.db_connector.execute(labelclassQuery, None, 'all')
             lcStr = 'id,name,color,labelclassgroup,labelclass_index\n'
             for r in result:
                 lcStr += '{},{},{},{},{}\n'.format(
@@ -2059,7 +2080,7 @@ class DataWorker:
             enabled and updates the projects, one by one, with the latest image
             changes.
         '''
-        projects = self.dbConnector.execute('''
+        projects = self.db_connector.execute('''
                 SELECT shortname, watch_folder_remove_missing_enabled
                 FROM aide_admin.project
                 WHERE watch_folder_enabled IS TRUE;
@@ -2094,14 +2115,14 @@ class DataWorker:
 
         # remove database entries
         print('\tRemoving database entries...')
-        self.dbConnector.execute('''
+        self.db_connector.execute('''
             DELETE FROM aide_admin.authentication
             WHERE project = %s;
             DELETE FROM aide_admin.project
             WHERE shortname = %s;
         ''', (project, project,), None)     # already done by DataAdministration.middleware, but we do it again to be sure
 
-        self.dbConnector.execute('''
+        self.db_connector.execute('''
             DROP SCHEMA IF EXISTS "{}" CASCADE;
         '''.format(project), None, None)        #TODO: Identifier?
 
