@@ -7,7 +7,7 @@
 '''
 
 import copy
-from collections.abc import Iterable
+from typing import Iterable
 
 from util import helpers
 

@@ -5,8 +5,7 @@
     2020-24 Benjamin Kellenberger
 '''
 
-from typing import Union, List
-from collections.abc import Iterable
+from typing import Union, List, Iterable
 import json
 from uuid import UUID
 from datetime import datetime

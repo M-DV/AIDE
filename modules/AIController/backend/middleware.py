@@ -4,8 +4,7 @@
     2019-24 Benjamin Kellenberger
 '''
 
-from typing import Tuple, List, Union
-from collections.abc import Iterable
+from typing import Tuple, List, Union, Iterable
 from datetime import datetime
 from uuid import UUID
 import re
@@ -1387,7 +1386,7 @@ class AIMiddleware():
     def deleteWorkflow(self,
                        project: str,
                        username: str,
-                       workflowID: Union[UUID,str]) -> dict:
+                       workflowID: Union[UUID,str,Iterable[Union[UUID,str]]]) -> dict:
         '''
             Receives a str or iterable of str variables under "workflowID" and finds and deletes
             them for a given project. Only deletes them if they were created by the user provided in
@@ -1429,7 +1428,7 @@ class AIMiddleware():
 
     def deleteWorkflow_history(self,
                                project: str,
-                               workflowID: Union[UUID,str],
+                               workflowID: Union[UUID,str,Iterable[Union[UUID,str]]],
                                revokeIfRunning: bool=False) -> dict:
         '''
             Receives a str or iterable of str variables under "workflowID" and finds and deletes

@@ -4,7 +4,7 @@
     2019-24 Benjamin Kellenberger
 '''
 
-from typing import Union, Tuple, Any
+from typing import Union, Tuple, Any, Iterable
 from types import ModuleType
 import os
 import sys
@@ -14,7 +14,6 @@ import random
 import re
 import decimal
 import uuid
-from collections.abc import Iterable
 import json
 from datetime import datetime
 import socket

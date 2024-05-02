@@ -2,12 +2,12 @@
     Handles administration (sharing, uploading, selecting, etc.)
     of model states through the model marketplace.
 
-    2020-23 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
 import os
 import glob
-from collections.abc import Iterable
+from typing import Iterable
 from uuid import UUID
 import json
 from psycopg2 import sql
@@ -386,8 +386,7 @@ class ModelMarketplaceMiddleware:
             }
         
         modelID = modelID[0]['origin_uuid']
-        return self.shareModel(project, username, modelID, None, None, None, None, None)
-    
+        return self.shareModel(project, username, modelID, None, None, None, None, None, False, False)
 
     
     def unshareModel(self, project, username, modelID):

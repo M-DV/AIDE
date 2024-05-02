@@ -1,14 +1,15 @@
 '''
     Wrappers around image region utilities.
 
-    2021 Benjamin Kellenberger
+    2021-24 Benjamin Kellenberger
 '''
 
-from collections.abc import Iterable
+from typing import Iterable
 import numpy as np
 from skimage import segmentation
 from sklearn.cluster import KMeans
 from imantics import Mask
+
 
 
 def find_regions(image, methodName, methodKwargs={}):
@@ -45,22 +46,24 @@ def histogram_of_colors(image, regionMap, num_bins=10):
 
     img_flat = np.reshape(image, (-1, sz[2]))
     rmap_flat = regionMap.ravel().astype(np.int32)
-    regionIdx = np.sort(np.unique(rmap_flat))
-    hoc = np.zeros(shape=(len(regionIdx), num_bins))
+    region_idx = np.sort(np.unique(rmap_flat))
+    hoc = np.zeros(shape=(len(region_idx), num_bins))
 
     #TODO: speedup using numba?
-    for r in regionIdx:
+    for r in region_idx:
         mask = rmap_flat==r
-        hoc[r,:] = np.histogram(img_flat[mask,:], num_bins, range=(0,255))[0].astype(np.float32) / mask.sum()
+        hoc[r,:] = np.histogram(img_flat[mask,:],
+                                num_bins,
+                                range=(0,255))[0].astype(np.float32) / mask.sum()
     return hoc
 
 
 
 def bag_of_visual_words(image, regionMap, k, num_bins=10):
     '''
-        Calculates a BovW histogram on an image for each region in a given
-        region map. The image can have an arbitrary number of bands (HxWxB) and
-        may consist of pixel-wise features in the first place.
+        Calculates a BovW histogram on an image for each region in a given region map. The image can
+        have an arbitrary number of bands (HxWxB) and may consist of pixel-wise features in the
+        first place.
     '''
     if image.ndim == 2:
         image = image[:,:,np.newaxis]
@@ -68,24 +71,25 @@ def bag_of_visual_words(image, regionMap, k, num_bins=10):
 
     img_flat = np.reshape(image, (-1, sz[2]))
     rmap_flat = regionMap.ravel().astype(np.int32)
-    regionIdx = np.sort(np.unique(rmap_flat))
+    region_idx = np.sort(np.unique(rmap_flat))
 
-    bovwH = np.zeros(shape=(len(regionIdx), num_bins))
+    bovw_h = np.zeros(shape=(len(region_idx), num_bins))
     img_clu = KMeans(k).fit(img_flat).labels_
 
     #TODO: speedup using numba?
-    for r in regionIdx:
+    for r in region_idx:
         mask = rmap_flat==r
-        bovwH[r,:] = np.histogram(img_clu[mask], num_bins, range=(0,num_bins))[0].astype(np.float32) / mask.sum()
-    return bovwH
+        bovw_h[r,:] = np.histogram(img_clu[mask],
+                                  num_bins,
+                                  range=(0,num_bins))[0].astype(np.float32) / mask.sum()
+    return bovw_h
 
 
 
 def custom_features(image, regionMap, featureFuns):
     '''
-        Receives an image, region map, as well as one or more functions that
-        return a vector of features for each region, and applies them to the
-        image.
+        Receives an image, region map, as well as one or more functions that return a vector of
+        features for each region, and applies them to the image.
     '''
     if not isinstance(featureFuns, Iterable):
         featureFuns = (featureFuns,)
@@ -97,12 +101,12 @@ def custom_features(image, regionMap, featureFuns):
 
     img_flat = np.reshape(image, (-1, sz[2]))
     rmap_flat = regionMap.ravel().astype(np.int32)
-    regionIdx = np.sort(np.unique(rmap_flat))
+    region_idx = np.sort(np.unique(rmap_flat))
 
     out = []
 
     #TODO: speedup using numba?
-    for r in regionIdx:
+    for r in region_idx:
         mask = rmap_flat==r
         out.append(np.concatenate([f(img_flat[mask]) for f in featureFuns]))
     return np.array(out)
@@ -148,26 +152,25 @@ def mask_to_poly(mask, largest_only=False, mustContain=None):
         considered, or None if this does not apply.
     '''
     polys_out = Mask(mask).polygons()
-    if not len(polys_out.points):
+    if len(polys_out.points) == 0:
         return None
-    else:
-        result = []
-        max_poly_area = 0
-        max_poly = None
-        for poly in polys_out.points:
-            if len(poly) < 3:
-                continue
-            if mustContain is not None and not all(contains_point(poly, mustContain)):
-                continue
-            if largest_only:
-                area = polygon_area(poly[:,0], poly[:,1])
-                if area > max_poly_area:
-                    max_poly_area = area
-                    max_poly = poly.ravel()
-            else:
-                result.append(poly)
-    
+
+    result = []
+    max_poly_area = 0
+    max_poly = None
+    for poly in polys_out.points:
+        if len(poly) < 3:
+            continue
+        if mustContain is not None and not all(contains_point(poly, mustContain)):
+            continue
         if largest_only:
-            return max_poly
+            area = polygon_area(poly[:,0], poly[:,1])
+            if area > max_poly_area:
+                max_poly_area = area
+                max_poly = poly.ravel()
         else:
-            return result
+            result.append(poly)
+
+    if largest_only:
+        return max_poly
+    return result

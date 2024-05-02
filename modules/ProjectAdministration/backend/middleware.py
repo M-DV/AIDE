@@ -11,7 +11,7 @@ import secrets
 import json
 import uuid
 from datetime import datetime
-from collections.abc import Iterable
+from typing import Iterable
 import requests
 from psycopg2 import sql
 from bottle import request
