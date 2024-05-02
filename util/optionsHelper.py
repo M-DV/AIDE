@@ -1,63 +1,58 @@
 '''
-    Various helper functions to deal with the GUI-enhanced,
-    JSON-formatted AI and AL model options.
+    Various helper functions to deal with the GUI-enhanced, JSON-formatted AI and AL model options.
     Some of these functions are analogous to the "optionsEngine.js".
 
-    2020-21 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
 import copy
-from typing import Iterable
+from typing import Iterable, Union
 
 from util import helpers
 
 
-RESERVED_KEYWORDS = [
+RESERVED_KEYWORDS = (
     'id', 'name', 'description', 'type', 'min', 'max', 'value', 'style', 'options'
-]
+)
 
 
-def _flatten_globals(options, defs=None):
+def _flatten_globals(options: Union[dict,any], defs: dict=None) -> dict:
     '''
-        Traverses a hierarchical dict of "options" and copies
-        all sub-entries to the top level.
+        Traverses a hierarchical dict of "options" and copies all sub-entries to the top level.
     '''
     if options is None:
-        return
+        return None
     if defs is None:
         defs = options.copy()
     if not isinstance(options, dict):
-        return
+        return None
     for key in options.keys():
         if key in RESERVED_KEYWORDS:
             continue
-        elif isinstance(key, str):
+        if isinstance(key, str):
             defs[key] = options[key]
-            if isinstance(defs[key], dict) and not 'id' in defs[key]:   #not isinstance(options, Iterable):
+            if isinstance(defs[key], dict) and not 'id' in defs[key]:
                 defs[key]['id'] = key
             _flatten_globals(options[key], defs)
     return defs
 
 
 
-def _fill_globals(options, defs):
+def _fill_globals(options: dict, defs: dict) -> dict:
     '''
-        Receives a dict of "options" that contains keywords
-        under e.g. "value" keys, and searches the "defs"
-        for substitutes.
-        Replaces all entries in "options" in-place by corres-
-        ponding entries in "defs", if present.
+        Receives a dict of "options" that contains keywords under e.g. "value" keys, and searches
+        the "defs" for substitutes. Replaces all entries in "options" in-place by corres- ponding
+        entries in "defs", if present.
     '''
     if defs is None:
         return options
     if isinstance(options, str):
         if options in defs:
             return defs[options]
-        else:
-            # no match found
-            return options
+        # no match found
+        return options
 
-    elif isinstance(options, dict):
+    if isinstance(options, dict):
         # for lists and selects: add options to global definitions if not yet present
         if 'options' in options:
             if isinstance(options['options'], dict):
@@ -76,8 +71,8 @@ def _fill_globals(options, defs):
         keys = list(options.keys())
         for key in keys:
             if key in RESERVED_KEYWORDS and key != 'value':
-                    continue
-            elif isinstance(options[key], str):
+                continue
+            if isinstance(options[key], str):
                 if options[key] in defs:
                     options[key] = defs[options[key]]
                 elif 'options' in options and options[key] in options['options']:
@@ -92,25 +87,22 @@ def _fill_globals(options, defs):
             if isinstance(option, str):
                 if option in RESERVED_KEYWORDS and option != 'value':
                     continue
-                elif option in defs:
+                if option in defs:
                     options[idx] = defs[option]
                     if isinstance(options[idx], dict) and not 'id' in options[idx]:
                         options[idx]['id'] = option
             elif isinstance(option, dict):
                 options[idx] = _fill_globals(options[idx], defs)
-        
+
     return options
 
 
 
-def substitute_definitions(options):
+def substitute_definitions(options: dict) -> dict:
     '''
-        Receives a dict of "options" with two main sub-dicts
-        under keys "defs" (global definitions) and "options"
-        (actual options for the model).
-        First flattens the "defs" and substitutes values in
-        the "defs" themselves, then substitutes values in
-        "options" based on the "defs".
+        Receives a dict of "options" with two main sub-dicts under keys "defs" (global definitions)
+        and "options" (actual options for the model). First flattens the "defs" and substitutes
+        values in the "defs" themselves, then substitutes values in "options" based on the "defs".
         Does everything on a new copy.
     '''
     if options is None:
@@ -129,27 +121,18 @@ def substitute_definitions(options):
 
 def get_hierarchical_value(dictObject, keys, lookFor=('value', 'id'), fallback=None):
     '''
-        Accepts a Python dict object and an iterable
-        of str corresponding to hierarchically defined
-        keys. Traverses the dict and returns the value
-        provided under the key.
+        Accepts a Python dict object and an iterable of str corresponding to hierarchically defined
+        keys. Traverses the dict and returns the value provided under the key.
 
-        "lookFor" can either be a str or an Iterable of
-        str that are used for querying if the next key
-        in line in "keys" cannot be found in the current
-        (sub-) entry of "dictObject". For example, if
-        "lookFor" is "('value', 'id')" and the current
-        key in line is not present in the current
-        "dictObject" sub-entry, that object will first be
-        tried for 'value', then for 'id', and whichever
-        comes first will be returned. If nothing could be
-        found or in case of an error, the value specified
-        under "fallback" is returned.
+        "lookFor" can either be a str or an Iterable of str that are used for querying if the next
+        key in line in "keys" cannot be found in the current (sub-) entry of "dictObject". For
+        example, if "lookFor" is "('value', 'id')" and the current key in line is not present in the
+        current "dictObject" sub-entry, that object will first be tried for 'value', then for 'id',
+        and whichever comes first will be returned. If nothing could be found or in case of an
+        error, the value specified under "fallback" is returned.
 
-        Note also that this means that the ultimate key
-        MUST be specified in the list of "keys", even if
-        it is one of the reserved keywords (e.g. "id" or
-        "value").
+        Note also that this means that the ultimate key MUST be specified in the list of "keys",
+        even if it is one of the reserved keywords (e.g. "id" or "value").
     '''
     try:
         #return reduce(dict.get, keys, dictObject)
@@ -161,7 +144,7 @@ def get_hierarchical_value(dictObject, keys, lookFor=('value', 'id'), fallback=N
                 keys = [keys]
             else:
                 keys = list(keys)
-        if not len(keys):
+        if len(keys) == 0:
             return dictObject
             # if isinstance(lookFor, str) and lookFor in dictObject:
             #     return get_hierarchical_value(dictObject[lookFor], keys, lookFor)
@@ -175,15 +158,14 @@ def get_hierarchical_value(dictObject, keys, lookFor=('value', 'id'), fallback=N
         if keys[0] in dictObject:
             key = keys.pop(0)
             return get_hierarchical_value(dictObject[key], keys, lookFor)
-        elif isinstance(lookFor, str) and lookFor in dictObject:
+        if isinstance(lookFor, str) and lookFor in dictObject:
             return get_hierarchical_value(dictObject[lookFor], keys, lookFor)
-        elif isinstance(lookFor, Iterable):
+        if isinstance(lookFor, Iterable):
             for keyword in lookFor:
                 if keyword in dictObject:
                     return get_hierarchical_value(dictObject[keyword], keys, lookFor)
             return dictObject
-        else:
-            return fallback
+        return fallback
     except Exception:
         return fallback
 
@@ -195,40 +177,34 @@ def _append_current_hierarchy(dictObject, current, hierarchy=[]):
         for key in dictObject.keys():
             if key in RESERVED_KEYWORDS:
                 continue
-            
+
     return hierarchy
 
 
 
-def get_hierarchy(dictObject, substitute_globals=True):
+def get_hierarchy(dict_object: str, substitute_globals: bool=True) -> None:
     '''
-        Receives a Python dict (options) object and returns
-        a list of lists with IDs/names of each hierarchical
-        level for all entries. Ignores entries under reser-
-        ved keywords ('name', 'description', etc.).
-        If "substitute_globals" is True, global definitions
-        are parsed and added to the options prior to tra-
-        versal.
+        Receives a Python dict (options) object and returns a list of lists with IDs/names of each
+        hierarchical level for all entries. Ignores entries under reser- ved keywords ('name',
+        'description', etc.). If "substitute_globals" is True, global definitions are parsed and
+        added to the options prior to tra- versal.
     '''
-    options = copy.deepcopy(dictObject)
-    if substitute_globals:
-        options = substitute_definitions(options)
+    raise NotImplementedError('Not yet implemented.')
+    # options = copy.deepcopy(dict_object)
+    # if substitute_globals:
+    #     options = substitute_definitions(options)
     
-    # iterate
-    result = []
-    #TODO
+    # # iterate
+    # result = []
+    # #TODO
 
 
 def set_hierarchical_value(dictObject, keys, value):
     '''
-        Accepts a Python dict object and an iterable
-        of str corresponding to hierarchically defined
-        keys. Traverses the dict and updates the value
-        at the final, hierarchical position provided
-        under the keys with the new "value". Silently
-        aborts if the keys could not be found.
-        Modifications are done in-place, hence this
-        method does not return anything.
+        Accepts a Python dict object and an iterable of str corresponding to hierarchically defined
+        keys. Traverses the dict and updates the value at the final, hierarchical position provided
+        under the keys with the new "value". Silently aborts if the keys could not be found.
+        Modifications are done in-place, hence this method does not return anything.
     '''
     if not isinstance(keys, str) and len(keys) == 1:
         keys = keys[0]
@@ -241,28 +217,23 @@ def set_hierarchical_value(dictObject, keys, value):
 
 def update_hierarchical_value(sourceOptions, targetOptions, sourceKeys, targetKeys):
     '''
-        Retrieves a value from nested "sourceOptions" dict under the
-        hierarchical list of "sourceKeys" and applies it under the
-        hierarchical list of "targetKeys" in "targetOptions".
-        Silently aborts if source and/or target keys/values are not
-        existent.
+        Retrieves a value from nested "sourceOptions" dict under the hierarchical list of
+        "sourceKeys" and applies it under the hierarchical list of "targetKeys" in "targetOptions".
+        Silently aborts if source and/or target keys/values are not existent.
     '''
-    sourceVal = get_hierarchical_value(sourceOptions, sourceKeys)
-    if sourceVal is None:
+    source_val = get_hierarchical_value(sourceOptions, sourceKeys)
+    if source_val is None:
         return
-    set_hierarchical_value(targetOptions, targetKeys, sourceVal)
+    set_hierarchical_value(targetOptions, targetKeys, source_val)
 
 
 
 def filter_reserved_children(options, recursive=False):
     '''
-        Receives an "options" dict (might also be just a part)
-        and returns a copy that only contains child entries whose
-        ID is non-standard (i.e., not of one of the reserved
-        keywords).
-        If "recursive" is set to True, it also traverses through
-        the tree and applies the same logic for all child elements,
-        keeping only the "value" entry.
+        Receives an "options" dict (might also be just a part) and returns a copy that only contains
+        child entries whose ID is non-standard (i.e., not of one of the reserved keywords). If
+        "recursive" is set to True, it also traverses through the tree and applies the same logic
+        for all child elements, keeping only the "value" entry.
     '''
     if isinstance(options, dict):
         response = {}
@@ -271,84 +242,81 @@ def filter_reserved_children(options, recursive=False):
                 response[key] = filter_reserved_children(options[key], recursive)
             else:
                 continue
-    
+
         # return value under 'value', then 'id', if nothing could be found
-        if not len(response):
+        if len(response) == 0:
             if 'value' in options:
                 return filter_reserved_children(options['value'], recursive)
-            elif 'id' in options:
+            if 'id' in options:
                 return filter_reserved_children(options['id'], recursive)
-    
-    elif isinstance(options, list) or isinstance(options, tuple):
+
+    elif isinstance(options, (list, tuple)):
         response = []
         for option in options:
             response.append(filter_reserved_children(option, recursive))
-
     else:
         return options
-        
+
     return response
 
 
 
 def verify_options(options, autoCorrect=False):
     '''
-        Receives an "options" dict (might also be just a part)
-        and verifies whether the values are correct w.r.t. the
-        indicated options type and value range. Skips verifica-
-        tion of values whose validity cannot be determined.
-        If "autoCorrect" is True, every value that can be cor-
-        rected will be accordingly. For example, if an option
-        is to be a numerical value and the value is beyond the
-        min-max range, it will be clipped accordingly; bool va-
-        lues will be parsed; etc.
+        Receives an "options" dict (might also be just a part) and verifies whether the values are
+        correct w.r.t. the indicated options type and value range. Skips verifica- tion of values
+        whose validity cannot be determined. If "autoCorrect" is True, every value that can be cor-
+        rected will be accordingly. For example, if an option is to be a numerical value and the
+        value is beyond the min-max range, it will be clipped accordingly; bool va- lues will be
+        parsed; etc.
 
         Returns:
-            - "options": the input dict with values corrected
-                         (if specified)
-            - "warnings": a list of str describing any warnings
-                          that were encountered during parsing
-            - "errors": a list of str describing uncorrectable
-                        errors that were encountered. If there
-                        are any, the options can be considered
-                        as invalid.
+            - "options":    dict, input with values corrected (if specified)
+            - "warnings":   list, contains str describing any warnings that were encountered during
+                            parsing
+            - "errors":     list, contains str describing uncorrectable errors that were
+                            encountered. If there are any, the options can be considered as invalid.
     '''
     warnings, errors = [], []
 
     if isinstance(options, dict):
-        valueType = (options['type'] if 'type' in options else None)
+        value_type = (options['type'] if 'type' in options else None)
         for key in options.keys():
             if key == 'value':
                 if isinstance(options[key], dict):
                     # get available options
-                    valid_IDs = set()
+                    ids_valid = set()
                     if 'options' in options:
                         for o in options['options']:
-                            valid_IDs.add(get_hierarchical_value(o, ['id']))
+                            ids_valid.add(get_hierarchical_value(o, ['id']))
 
-                        thisID = get_hierarchical_value(options[key], ['id'])
-                        if thisID not in valid_IDs:
-                            errors.append(f'Selected option "{thisID}" for entry {key} could not be found in available options.')
+                        this_id = get_hierarchical_value(options[key], ['id'])
+                        if this_id not in ids_valid:
+                            errors.append(f'Selected option "{this_id}" for entry {key} ' + \
+                                          'could not be found in available options.')
                 else:
                     value = helpers.to_number(options[key])
                     if value is not None:
                         # numerical value
-                        if valueType is not None and valueType not in  ('number', 'int', 'float'):
-                            errors.append(f'Expected {valueType} for entry {key}, got {type(options[key])}.') #TODO: key
+                        if value_type is not None and value_type not in  ('number', 'int', 'float'):
+                            errors.append(f'Expected {value_type} for entry {key}, ' + \
+                                          f'got {type(options[key])}.') #TODO: key
                         else:
                             # check if there's a min-max range
                             if 'min' in options:
-                                minVal = helpers.to_number(options['min'])
-                                if minVal is not None and value < minVal:
-                                    warnings.append(f'Value "{value}" for entry {key} is smaller than specified minimum {minVal}.')
+                                min_val = helpers.to_number(options['min'])
+                                if min_val is not None and value < min_val:
+                                    warnings.append(f'Value "{value}" for entry {key} ' + \
+                                                    f'is smaller than specified minimum {min_val}.')
                                     if autoCorrect:
-                                        value = minVal
+                                        value = min_val
                             if 'max' in options:
-                                maxVal = helpers.to_number(options['max'])
-                                if maxVal is not None and value > maxVal:
-                                    warnings.append(f'Value "{value}" for entry {key} is larger than specified maximum {maxVal}.')
+                                max_val = helpers.to_number(options['max'])
+                                if max_val is not None and value > max_val:
+                                    warnings.append(f'Value "{value}" for entry {key} ' + \
+                                                    f'is larger than specified maximum {max_val}.')
                                     if autoCorrect:
-                                        value = maxVal
+                                        value = max_val
                         options[key] = value
 
             elif key in RESERVED_KEYWORDS:
@@ -356,12 +324,13 @@ def verify_options(options, autoCorrect=False):
 
             else:
                 # verify child options
-                childOpts, childWarnings, childErrors = verify_options(options[key], autoCorrect)
-                options[key] = childOpts
-                warnings.extend(childWarnings)
-                errors.extend(childErrors)
-    
+                child_opts, child_warnings, child_errors = verify_options(options[key], autoCorrect)
+                options[key] = child_opts
+                warnings.extend(child_warnings)
+                errors.extend(child_errors)
+
     return options, warnings, errors
+
 
 
 def _update_values(baseOptions, updates, allow_new_keys=True):
@@ -373,19 +342,22 @@ def _update_values(baseOptions, updates, allow_new_keys=True):
             if key not in baseOptions:
                 baseOptions[key] = updates[key]
             elif key in updates:
-                baseOptions[key] = _update_values(baseOptions[key], updates[key], allow_new_keys)
+                baseOptions[key] = _update_values(baseOptions[key],
+                                                  updates[key],
+                                                  allow_new_keys)
     elif updates != baseOptions:
         baseOptions = updates
     return baseOptions
 
 
+
 def merge_options(baseOptions, updates, allow_new_keys=True):
     '''
-        Receives two options dicts and updates one with values
-        from the other.
-        Returns an expanded set of updated/merged options.
+        Receives two options dicts and updates one with values from the other. Returns an expanded
+        set of updated/merged options.
     '''
-    assert isinstance(baseOptions, dict) and isinstance(updates, dict), 'Both baseOptions and updates must be dicts.'
+    assert isinstance(baseOptions, dict) and isinstance(updates, dict), \
+            'Both baseOptions and updates must be dicts.'
 
     # expand individual definitions
     base_ = copy.deepcopy(baseOptions)

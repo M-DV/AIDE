@@ -209,11 +209,11 @@ class Mapserver:
 
             # delegate service request to middleware
             response_item, headers = self.middleware.service(service,
-                                                            request_item,
-                                                            params,
-                                                            project,
-                                                            username,
-                                                            self._get_base_url(request.url))
+                                                             request_item,
+                                                             params,
+                                                             project,
+                                                             username,
+                                                             self._get_base_url(request.url))
             for header, value in headers.items():
                 response.set_header(header, value)
             return response_item

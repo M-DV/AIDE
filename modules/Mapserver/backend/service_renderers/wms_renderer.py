@@ -150,7 +150,7 @@ class WMSRenderer(AbstractRenderer):
 
     def get_map(self,
                 projects: dict,
-                base_url: str,
+                _: str,
                 request_params: dict) -> object:
         '''
             WMS GetMap implementation.
@@ -161,9 +161,9 @@ class WMSRenderer(AbstractRenderer):
         if project not in projects:
             # invalid/inaccessible project requested
             return self.render_error_template(11000,
-                                                version,
-                                                f'Invalid layer "{layer}"'), \
-                        self.DEFAULT_RESPONSE_HEADERS
+                                              version,
+                                              f'Invalid layer "{layer}"'), \
+                    self.DEFAULT_RESPONSE_HEADERS
         project_meta = projects[project]
         srid = project_meta['srid']
         bbox = request_params.get('BBOX', None)
@@ -181,8 +181,8 @@ class WMSRenderer(AbstractRenderer):
         width, height = request_params.get('WIDTH', None), request_params.get('HEIGHT', None)
         if all(item is not None for item in (bbox, width, height)):
             resolution = (
-                (bbox[2]-bbox[0]) / float(width),
-                (bbox[3]-bbox[1]) / float(height)
+                (bbox[2]-bbox[0]) / float(height),
+                (bbox[3]-bbox[1]) / float(width)
             )
         else:
             resolution = None
@@ -198,14 +198,14 @@ class WMSRenderer(AbstractRenderer):
 
         if layer_name == 'images':
             bytes_obj = map_operations.get_map_images(self.db_connector,
-                                                        self.static_dir,
-                                                        project,
-                                                        project_meta,
-                                                        bbox,
-                                                        srid,
-                                                        resolution,
-                                                        image_ext,
-                                                        raw=False)
+                                                      self.static_dir,
+                                                      project,
+                                                      project_meta,
+                                                      bbox,
+                                                      srid,
+                                                      resolution,
+                                                      image_ext,
+                                                      raw=False)
             response_headers.update({
                 'Content-Type': mime_type,
                 'Content-Length': len(bytes_obj)

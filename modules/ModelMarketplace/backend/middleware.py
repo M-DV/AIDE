@@ -12,9 +12,12 @@ from uuid import UUID
 import json
 from psycopg2 import sql
 import celery
+
 from ai import PREDICTION_MODELS
-from modules.LabelUI.backend.middleware import DBMiddleware     # required to obtain label class definitions (TODO: make more elegant)
+# required to obtain label class definitions (TODO: make more elegant)
+from modules.LabelUI.backend.middleware import DBMiddleware
 from . import celery_interface
+
 
 
 class ModelMarketplaceMiddleware:

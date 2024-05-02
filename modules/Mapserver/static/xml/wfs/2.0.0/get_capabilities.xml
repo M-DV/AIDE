@@ -32,6 +32,19 @@
         </ows:AllowedValues>
       </ows:Parameter>
     </ows:Operation>
+    <ows:Operation name="DescribeFeatureType">
+      <ows:DCP>
+        <ows:HTTP>
+          <ows:Get xlink:href="{base_href}?"/>
+          <ows:Post xlink:href="{base_href}?"/>
+        </ows:HTTP>
+      </ows:DCP>
+      <ows:Parameter name="outputFormat">
+        <ows:AllowedValues>
+          <ows:Value>text/xml; subtype=gml/3.2</ows:Value>
+        </ows:AllowedValues>
+      </ows:Parameter>
+      </ows:Operation>
     <ows:Operation name="GetFeature">
       <ows:DCP>
         <ows:HTTP>

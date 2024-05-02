@@ -6,7 +6,6 @@
 
 from typing import Tuple
 import re
-import numpy as np
 
 from modules.Database.app import Database
 from util.configDef import Config
@@ -179,6 +178,9 @@ class WCSRenderer(AbstractRenderer):
         project_meta = projects[project]
         srid, extent = project_meta['srid'], project_meta['extent']
 
+        # convert to WGS84 for Mapserver
+        extent_wgs84 = self._convert_extent(extent, srid, 4326)
+
         #TODO: support multiple projects?
 
         # assemble available fields for project
@@ -239,6 +241,10 @@ class WCSRenderer(AbstractRenderer):
             'bbox_south': extent[1],
             'bbox_east': extent[2],
             'bbox_north': extent[3],
+            'bbox_west_wgs84': extent_wgs84[0],
+            'bbox_south_wgs84': extent_wgs84[1],
+            'bbox_east_wgs84': extent_wgs84[2],
+            'bbox_north_wgs84': extent_wgs84[3],
             'crs': f'urn:ogc:def:crs:EPSG::{srid}',
             'srid': srid,
             'fields': fields
@@ -263,29 +269,13 @@ class WCSRenderer(AbstractRenderer):
         if project not in projects:
             # invalid/inaccessible project requested
             return self.render_error_template(11000,
-                                                version,
-                                                f'Invalid identifier "{identifier}"'), \
+                                              version,
+                                              f'Invalid identifier "{identifier}"'), \
                     self.DEFAULT_RESPONSE_HEADERS
         project_meta = projects[project]
+        flip_coordinates = request_params.get('FLIP_COORDINATES', False)
         srid = project_meta['srid']
         bbox = request_params.get('BBOX', None)
-        flip_coordinates = request_params.get('FLIP_COORDINATES', False)
-
-        resolution = None
-        grid_offsets = request_params.get('GRIDOFFSETS', None)
-        if isinstance(grid_offsets, str) and len(grid_offsets) > 0:
-            grid_offsets = grid_offsets.strip().split(',')
-            if len(grid_offsets) >= 2:
-                try:
-                    resolution = (
-                        np.abs(float(grid_offsets[0])),
-                        np.abs(float(grid_offsets[1]))
-                    )
-                    if flip_coordinates:
-                        resolution = (resolution[1], resolution[0])
-                except Exception:
-                    resolution = None
-
         if bbox is not None:
             if flip_coordinates:
                 bbox = (
@@ -293,15 +283,31 @@ class WCSRenderer(AbstractRenderer):
                     bbox[3], bbox[2]
                 )
 
-            bbox = self._convert_extent(bbox,
-                                        request_params.get('CRS', srid),
-                                        srid)
+        bbox = self._convert_extent(bbox,
+                                    request_params.get('CRS', srid),
+                                    srid)
 
-            if resolution is None and all(dim in request_params for dim in ('WIDTH', 'HEIGHT')):
+        resolution = None
+        # grid_offsets = request_params.get('GRIDOFFSETS', None)
+        # if isinstance(grid_offsets, str) and len(grid_offsets) > 0:
+        #     grid_offsets = grid_offsets.strip().split(',')
+        #     if len(grid_offsets) >= 2:
+        #         try:
+        #             resolution = (
+        #                 np.abs(float(grid_offsets[0])),
+        #                 np.abs(float(grid_offsets[1]))
+        #             )
+        #             if flip_coordinates:
+        #                 resolution = (resolution[1], resolution[0])
+        #         except Exception:
+        #             resolution = None
+
+        if bbox is not None and \
+            resolution is None and all(dim in request_params for dim in ('WIDTH', 'HEIGHT')):
                 width, height = request_params['WIDTH'], request_params['HEIGHT']
                 resolution = (
-                    (bbox[2]-bbox[0]) / float(width),
-                    (bbox[3]-bbox[1]) / float(height)
+                    (bbox[2]-bbox[0]) / float(height),
+                    (bbox[3]-bbox[1]) / float(width)
                 )
 
         mime_type = request_params.get('FORMAT', 'image/tiff')

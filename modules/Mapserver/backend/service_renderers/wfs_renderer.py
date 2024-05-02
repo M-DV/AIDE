@@ -85,7 +85,15 @@ class WFSRenderer(AbstractRenderer):
                 continue
 
             # convert to WGS84 for Mapserver
-            extent_wgs84 = self._convert_extent(extent, srid, 4326)
+            extent_wgs84 = self._convert_extent(extent,
+                                                srid,
+                                                4326,
+                                                always_xy=True)
+
+            extent = self._to_orientation(extent,
+                                          srid,
+                                          False,
+                                          False)
 
             base_args = {
                 'srid': srid,
@@ -109,9 +117,9 @@ class WFSRenderer(AbstractRenderer):
                 'abstract': f'Image extent WFS for AIDE project {project}'
             })
             project_layers += self.render_service_template(version,
-                                                            'feature_type',
-                                                            layer_args,
-                                                            False)
+                                                           'feature_type',
+                                                           layer_args,
+                                                           False)
 
             if project_meta['annotation_type'] in \
                     ('labels', 'points', 'polygons', 'boundingboxes'):
@@ -122,9 +130,9 @@ class WFSRenderer(AbstractRenderer):
                     'abstract': f'AIDE project {project}: annotations',
                 })
                 project_layers += self.render_service_template(version,
-                                                            'feature_type',
-                                                            layer_args,
-                                                            False)
+                                                               'feature_type',
+                                                               layer_args,
+                                                               False)
             if project_meta['prediction_type'] in \
                     ('labels', 'points', 'polygons', 'boundingboxes'):
                 # vector predictions
@@ -134,9 +142,9 @@ class WFSRenderer(AbstractRenderer):
                     'abstract': f'AIDE project {project}: predictions',
                 })
                 project_layers += self.render_service_template(version,
-                                                            'feature_type',
-                                                            layer_args,
-                                                            False)
+                                                               'feature_type',
+                                                               layer_args,
+                                                               False)
 
             #TODO: group
             projects_xml += project_layers
@@ -249,7 +257,6 @@ class WFSRenderer(AbstractRenderer):
         if 'coordinates' in meta:
             # polygon
             coords = np.reshape(np.array(meta['coordinates']), (-1, 2)).T
-            # coords = np.concatenate((coords, coords[:,0]), 1)
         elif all(key in meta for key in ('x', 'y')):
             if all(key in meta for key in ('width', 'height')):
                 # bounding box; convert to polygon
@@ -268,19 +275,19 @@ class WFSRenderer(AbstractRenderer):
             # image label or image outline; turn image envelope into polygon
             coords = np.array([
                 [0.0, 0.0],
-                [0.0, 1.0],
-                [1.0, 1.0],
                 [1.0, 0.0],
+                [1.0, 1.0],
+                [0.0, 1.0],
                 [0.0, 0.0]
             ]).T
 
         # geocode coordinates
         coords *= np.array([meta['img_width'], meta['img_height']])[:,np.newaxis]
-        lon, lat = transform * coords
+        east, north = transform * coords
         if flip_coordinates:
-            coords = np.stack((lat, lon), 1).tolist()
+            coords = np.stack((east, north), 1).tolist()
         else:
-            coords = np.stack((lon, lat), 1).tolist()
+            coords = np.stack((north, east), 1).tolist()
         coords = ' '.join(f'{coord[0]}{delim}{coord[1]}' for coord in coords)
 
         # translate to GML
@@ -328,6 +335,7 @@ class WFSRenderer(AbstractRenderer):
             project_meta = projects[project]
 
             srid = project_meta['srid']
+            is_xy = geospatial.is_xy(srid)
             bbox = request_params.get('BBOX', None)
             usernames = project_meta['users']           #TODO: also check with entity
 
@@ -335,6 +343,10 @@ class WFSRenderer(AbstractRenderer):
             query_args = []
             bbox_sql, bbox_gml = '', ''
             if bbox is not None:
+                bbox = self._to_orientation(bbox,
+                                            srid,
+                                            False,
+                                            False)
                 if flip_coordinates:
                     bbox = (
                         bbox[1], bbox[0],
@@ -430,7 +442,7 @@ class WFSRenderer(AbstractRenderer):
                                                           type_name,
                                                           version,
                                                           srid,
-                                                          flip_coordinates)
+                                                          flip_coordinates and is_xy)
 
         format_args = {
             'gml_bbox': bbox_gml,       #TODO: make layer-specific

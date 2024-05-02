@@ -8,6 +8,7 @@ import os
 from typing import Tuple, Iterable, Callable
 from abc import abstractmethod
 from collections import defaultdict
+import itertools
 
 from modules.Database.app import Database
 from util.configDef import Config
@@ -85,9 +86,32 @@ class AbstractRenderer:
 
 
     @staticmethod
+    def _to_orientation(coords: Iterable[float],
+                        crs: object,
+                        to_xy: bool=True,
+                        sort: bool=False) -> Tuple[float]:
+        '''
+            Receives an Iterable of coordinates and an object parseable as a CRS. Returns the same
+            coordinates either as XY or YX based on the CRS and flag. Sorts the coordinates if
+            "sort" is True (default: False); useful for e.g. extents.
+        '''
+        is_xy = geospatial.is_xy(crs)
+        if (is_xy and to_xy) or (not is_xy and not to_xy):
+            return coords
+        # swap axes
+        coords = list(coords)
+        coords_a, coords_b = coords[0::2], coords[1::2]
+        if sort:
+            coords_a.sort()
+            coords_b.sort()
+        return tuple(itertools.chain.from_iterable(zip(coords_b, coords_a)))
+
+
+    @staticmethod
     def _convert_extent(extent: Tuple[float],
                         source_crs: object,
-                        target_crs: object) -> Tuple[float]:
+                        target_crs: object,
+                        always_xy: bool=True) -> Tuple[float]:
         '''
             Convenience function to convert project extents (west, south, east, north) from source
             to target CRS (typically, from the project's CRS to WGS84).
@@ -99,7 +123,11 @@ class AbstractRenderer:
         extent_x, extent_y = geospatial.convert(extent[0::2],
                                                 extent[1::2],
                                                 source_crs,
-                                                target_crs)
+                                                target_crs,
+                                                always_xy=always_xy)
+        extent_x, extent_y = list(extent_x), list(extent_y)
+        extent_x.sort()
+        extent_y.sort()
         return (extent_x[0], extent_y[0], extent_x[1], extent_y[1])
 
 

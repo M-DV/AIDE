@@ -1,11 +1,9 @@
-# Convenience function to run a FileServer instance.
-# Requires pwd to be the root of the project and the correct Python
-# env to be loaded.
+#!/bin/bash
+
+# Convenience function to run a FileServer instance. Requires pwd to be the root of the project and
+# the correct Python env to be loaded.
 #
-# NEVER, EVER USE THIS FOR DEPLOYMENT!
-# Instead, it is strongly recommended to use a proper file server like nginx.
-#
-# 2019-21 Benjamin Kellenberger
+# 2019-24 Benjamin Kellenberger
 
 # modules to run
 export AIDE_MODULES=FileServer

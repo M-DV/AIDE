@@ -1,21 +1,28 @@
 '''
-    Abstract model class, providing code shells for the AIWorker.
+    Parent model class, providing code shells for the AIWorker.
 
-    2019-21 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
+from typing import Any, Union, Iterable
+
+
+
 class AIModel:
+    '''
+        {aremt} base class for general AI model.
+    '''
     def __init__(self, project, config, dbConnector, fileServer, options=None):
-        """
+        '''
             Model constructor. This is called by both the AIWorker and AIController
             modules when starting up.
             Args:
-                project: str, name of the current AIDE project
-                config: Configuration for the platform
-                dbConnector: Access to the project database
-                fileServer: Access to the instance storing the images
-                options: A custom set of options in JSON format for this model
-        """
+                "project":      str, name of the current AIDE project
+                "config":       Configuration for the platform
+                "dbConnector":  Access to the project database
+                "fileServer":   Access to the instance storing the images
+                "options":      A custom set of options in JSON format for this model
+        '''
         self.project = project
         self.config = config
         self.dbConnector = dbConnector
@@ -26,7 +33,7 @@ class AIModel:
         opts_verified = self.verifyOptions(options)
         if opts_verified is not None and isinstance(opts_verified, dict):
             if 'valid' in opts_verified and not opts_verified['valid']:
-                raise Exception('Model options appear to be invalid.')
+                raise ValueError('Model options appear to be invalid.')
             if 'options' in opts_verified and isinstance(opts_verified['options'], dict):
                 self.options = opts_verified['options']
         else:
@@ -43,37 +50,46 @@ class AIModel:
             WHERE shortname = %s;
             ''', (project,), 1)
         try:
-            annotationType = unlabeled[0]['annotationtype']
-            if annotationType == 'segmentationMasks':
+            annotation_type = unlabeled[0]['annotationtype']
+            if annotation_type == 'segmentationMasks':
                 self.ignore_unlabeled = unlabeled[0]['segmentation_ignore_unlabeled']
             else:
                 self.ignore_unlabeled = True
         except Exception as e:
             self.ignore_unlabeled = True
-            print(f'WARNING: project "{project}" has invalid specifications on how to treat unlabeled pixels')
+            print(f'WARNING: project "{project}" has invalid specifications ' + \
+                  'on how to treat unlabeled pixels')
             print(f'(error: "{str(e)}"). Ignoring unlabeled pixels by default.')
 
 
     @staticmethod
-    def getDefaultOptions():
+    def getDefaultOptions() -> Any:
+        '''
+            Returns default model options (as base for overriding or if no custom options have been
+            provided.)
+        '''
         raise NotImplementedError('not implemented for base class.')
-    
-    
-    def getOptions(self):
+
+
+    def getOptions(self) -> Any:
+        '''
+            Returns model options for current instance.
+        '''
         return self.options
 
-    
+
     @staticmethod
-    def verifyOptions(options):
-        """
-            Placeholder to verify whether a given dict of options are valid
-            or not. To be overridden by subclasses.
+    def verifyOptions(options: Any) -> Union[dict,bool]:
+        '''
+            Placeholder to verify whether a given dict of options are valid or not. To be overridden
+            by subclasses.
+            
             Args:
-                options: a dict object containing parameters for a model.
+                "options":  Any, object containing parameters for a model (e.g., a dict).
             
             Returns:
-                - None if the subclass does not support the method (for compa-
-                  tibility reasons with legacy implementations)
+                - None if the subclass does not support the method (for compatibility reasons with
+                  legacy implementations)
                 - True/False if the given options are valid/invalid (minimal format)
                 - A dict with the following entries:
                     - 'valid': bool, True/False if the given options are valid/invalid.
@@ -82,50 +98,55 @@ class AIModel:
                     - 'errors': list of strings containing errors encountered during par-
                                 sing (optional).
                     - 'options': dict of updated options that will be used instead of the
-                                 provided ones. This can be used to e.g. auto-complete mis-
-                                 sing parameters in the provided options, or auto-correct
-                                 simple mistakes. If provided, these values will be used in
-                                 the GUI in lieu of what the user specified (optional).
-        """
+                                 provided ones. This can be used to e.g. auto-complete mis- sing
+                                 parameters in the provided options, or auto-correct simple
+                                 mistakes. If provided, these values will be used in the GUI in lieu
+                                 of what the user specified (optional).
+        '''
         return None
 
 
-    def train(self, stateDict, data, updateStateFun):
-        """
+    def train(self,
+              stateDict: bytes,
+              data: dict,
+              updateStateFun: callable) -> bytes:
+        '''
             Training function. This function gets called by each individual AIWorkers
             when the model is supposed to be trained for another round.
             Args:
-                stateDict: a bytes object containing the model's current state
-                data: a dict object containing the image metadata to be trained on
-                updateStateFun: function handle for updating the progress to the
-                                AIController
+                "stateDict":        bytes, contains the model's current state
+                "data":             dict, contains the image metadata to be trained on
+                "updateStateFun":   callable, function handle for updating the progress to the
+                                    AIController
             
             Returns:
-                stateDict: a bytes object containing the model's state after training
-        """
+                bytes, contains the model state after training
+        '''
         raise NotImplementedError('not implemented for base class.')
-    
 
-    def average_model_states(self, stateDicts, updateStateFun):
-        """
+
+    def average_model_states(self,
+                             stateDicts: Iterable[bytes],
+                             updateStateFun: callable) -> bytes:
+        '''
             Averaging function. If AIDE is configured to distribute training to multiple
             AIWorkers, and if multiple AIWorkers are attached, this function will be called
             by exactly one AIWorker after the "train" function has finished.
             Args:
-                stateDicts: a list of N bytes objects containing model states as trained by
-                            the N AIWorkers attached
-                updateStateFun: function handle for updating the progress to the
-                                AIController
+                "stateDicts":       list, contains N bytes objects containing model states as
+                                    trained by the N AIWorkers attached
+                "updateStateFun":   callable, function handle for updating the progress to the
+                                    AIController
 
             Returns:
-                stateDict: a bytes object containing the combined model states
-        """
+                bytes, contains the combined model states
+        '''
         raise NotImplementedError('not implemented for base class.')
 
 
     # #TODO: this is commented out temporarily to not break compatibility with unoptimized models
     # def update_model(self, stateDict, data, updateStateFun):
-    #     """
+    #     '''
     #         Updater function. Modifies the model to incorporate newly
     #         added label classes.
     #         Implementers are advised to employ advanced heuristics, such as weight
@@ -141,21 +162,27 @@ class AIModel:
 
     #         Returns:
     #             stateDict: a bytes object containing the updated model states    
-    #     """
+    #     '''
     #     raise NotImplementedError('not implemented for base class.')
 
 
-    def inference(self, stateDict, data, updateStateFun):
-        """
-            Inference function. This gets called everytime the model is supposed to be run on
-            a set of images. The inference job might be distributed to multiple AIWorkers, but
-            there is no need to worry about concurrency or race conditions, as each inference
-            job is handled separately.
+    def inference(self,
+                  stateDict: bytes,
+                  data: dict,
+                  updateStateFun: callable) -> dict:
+        '''
+            Inference function. This gets called everytime the model is supposed to be run on a set
+            of images. The inference job might be distributed to multiple AIWorkers, but there is no
+            need to worry about concurrency or race conditions, as each inference job is handled
+            separately.
             Args:
-                stateDict: a bytes object containing the latest model state
-                data: a dict object containing the metadata of the images the model needs to
-                        predict
-                updateStateFun: function handle for updating the progress to the
-                                AIController
-        """
+                "stateDict":        bytes, contains the latest model state
+                "data":             dict, contains the metadata of the images the model needs to
+                                    predict
+                "updateStateFun":   callable, function handle for updating the progress to the
+                                    AIController
+
+            Returns:
+                dict, containing the image metadata and model predictions
+        '''
         raise NotImplementedError('not implemented for base class.')

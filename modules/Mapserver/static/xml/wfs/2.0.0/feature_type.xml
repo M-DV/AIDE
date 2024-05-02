@@ -1,10 +1,11 @@
-<FeatureType>
-    <Name>{name}</Name>
-    <Title>{title}</Title>
-    <Abstract>{abstract}</Abstract>
-    <DefaultCRS>urn:ogc:def:crs:EPSG::{srid}</DefaultCRS>
+<wfs:FeatureType>
+    <wfs:Name>{name}</wfs:Name>
+    <wfs:Title>{title}</wfs:Title>
+    <wfs:Abstract>{abstract}</wfs:Abstract>
+    <wfs:DefaultCRS>urn:ogc:def:crs:EPSG::{srid}</wfs:DefaultCRS>
+    <wfs:OtherCRS>urn:ogc:def:crs:EPSG::4326</wfs:OtherCRS>
     <OutputFormats>
-    <Format>application/xml; subtype="gml/3.2.1"</Format>
+        <Format>application/xml; subtype="gml/3.2.1"</Format>
     </OutputFormats>
     <ows:BoundingBox crs="urn:ogc:def:crs:EPSG::{srid}" dimensions="2">
         <ows:LowerCorner>{bbox_west} {bbox_south}</ows:LowerCorner>
@@ -14,4 +15,4 @@
         <ows:LowerCorner>{bbox_west_wgs84} {bbox_south_wgs84}</ows:LowerCorner>
         <ows:UpperCorner>{bbox_east_wgs84} {bbox_north_wgs84}</ows:UpperCorner>
     </ows:WGS84BoundingBox>
-</FeatureType>
+</wfs:FeatureType>

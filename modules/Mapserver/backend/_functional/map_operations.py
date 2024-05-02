@@ -1,7 +1,7 @@
 '''
     Raster (image, segmentation mask) retrieval, stitching, and rendering functionalities.
 
-    2023 Benjamin Kellenberger
+    2023-24 Benjamin Kellenberger
 '''
 
 import os
@@ -12,6 +12,7 @@ import rasterio.merge
 
 from modules.Database.app import Database
 from util import helpers
+
 
 
 def render_array(array: np.array,
@@ -59,6 +60,9 @@ def get_map_images(db_connector: Database,
     '''
         TODO
     '''
+
+    # pylint: disable=c-extension-no-member
+
     # determine bands to extract (in case of multi-band images)
     bands = None
     if not raw:
@@ -90,7 +94,8 @@ def get_map_images(db_connector: Database,
         id_img=sql.Identifier(project, 'image')
     )
     imgs = db_connector.execute(query_str,
-        (*bbox, srid), 'all')
+                                (*bbox, srid),
+                                'all')
     rio_datasets = []
     if len(imgs) > 0:
         try:
@@ -100,9 +105,9 @@ def get_map_images(db_connector: Database,
 
             # merge
             arr, transform = rasterio.merge.merge(datasets=rio_datasets,
-                                                    bounds=bbox,
-                                                    res=resolution,
-                                                    indexes=bands)
+                                                  bounds=bbox,
+                                                  res=resolution,
+                                                  indexes=bands)
 
             # rescale and convert if necessary
             if not raw:
@@ -131,6 +136,7 @@ def get_map_images(db_connector: Database,
         return bytes()     #TODO
 
 
+
 def get_map_segmentation(db_connector: Database,
                             images_dir: str,
                             project: str,
@@ -145,6 +151,9 @@ def get_map_segmentation(db_connector: Database,
     '''
         TODO
     '''
+
+    # pylint: disable=c-extension-no-member
+
     assert relation_name in ('annotation', 'prediction')
 
     # find all images and segmentation masks that intersect

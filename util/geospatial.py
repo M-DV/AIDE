@@ -106,17 +106,29 @@ def crs_match(crs_a: object, crs_b: object, exact: bool=False) -> bool:
 
 
 
+def is_xy(crs: object) -> bool:
+    '''
+        Attempts to parse a given "crs" object. Returns True if the CRS' coordinate order is x, y
+        (or lon, lat; East, North; etc.), else False.
+    '''
+    axes = to_crs(crs).axis_info
+    return axes[0].direction.lower() in ('east', 'west') \
+            and axes[1].direction.lower() in ('north', 'south')
+
+
+
 def convert(coords_x: Iterable[float],
             coords_y: Iterable[float],
             crs_source: object,
-            crs_target: object) -> Tuple[Tuple[float]]:
+            crs_target: object,
+            always_xy: bool=False) -> Tuple[Tuple[float]]:
     '''
         Receives an Iterable of x/y coordinates, a source and target CRS, and converts
         coordinates across reference systems accordingly.
     '''
     transformer = pyproj.Transformer.from_crs(to_crs(crs_source),
                                               to_crs(crs_target),
-                                              always_xy=True)
+                                              always_xy=always_xy)
     return transformer.transform(xx=coords_x, yy=coords_y)
 
 
