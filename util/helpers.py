@@ -281,7 +281,7 @@ def json_dumps(*args: list, **kwargs: dict) -> str:
 
 
 
-def is_fileServer(config: Config) -> bool:
+def is_file_server(config: Config) -> bool:
     '''
         Returns True if the current instance is a valid file server. For this, the following two
         properties must hold:
@@ -386,10 +386,10 @@ def list_directory(base_dir: str,
 
 
 
-def fileListToHierarchy(file_list: Iterable) -> dict:
+def file_list_to_hierarchy(file_list: Iterable) -> dict:
     '''
-        Receives an Iterable of file names and converts it into a nested dict of
-        dicts, corresponding to the folder hierarchy.
+        Receives an Iterable of file names and converts it into a nested dict of dicts,
+        corresponding to the folder hierarchy.
     '''
     assert isinstance(file_list, Iterable), 'Provided input is not an iterable list of files.'
 
@@ -419,10 +419,9 @@ def fileListToHierarchy(file_list: Iterable) -> dict:
 
 
 
-def fileHierarchyToList(hierarchy: dict) -> list:
+def file_hierarchy_to_list(hierarchy: dict) -> list:
     '''
-        Receives a dict of dicts of files and returns a flattened list of files
-        accordingly.
+        Receives a dict of dicts of files and returns a flattened list of files accordingly.
     '''
     assert isinstance(hierarchy, dict), 'Provided input is not a hierarchy of files.'
 
@@ -438,7 +437,7 @@ def fileHierarchyToList(hierarchy: dict) -> list:
 
 
 
-def rgbToHex(rgb: Iterable[int]) -> str:
+def rgb_to_hex(rgb: Iterable[int]) -> str:
     '''
         Receives a tuple/list with three int values and returns an
         HTML/CSS-compliant hex color string in format:
@@ -453,7 +452,7 @@ def rgbToHex(rgb: Iterable[int]) -> str:
 
 
 
-def hexToRGB(hex_str: str) -> Tuple[int]:
+def hex_to_rgb(hex_str: str) -> Tuple[int]:
     '''
         Receives a HTML/CSS-compliant hex color string of one of the following formats (hash symbol
         optional):
@@ -466,15 +465,15 @@ def hexToRGB(hex_str: str) -> Tuple[int]:
     assert isinstance(hex_str, str), f'ERROR: "{str(hex_str)}" is not a valid string.'
     if not hex_str.startswith('#'):
         hex_str = '#' + hex_str
-    assert len(hex_str)>1, f'ERROR: the provided string is empty.'
+    assert len(hex_str)>1, 'ERROR: the provided string is empty.'
 
     return ImageColor.getrgb(hex_str)
 
 
 
-def offsetColor(color: str,
-                excluded: set=set(),
-                distance: int=0) -> Union[np.ndarray,str]:
+def offset_color(color: str,
+                 excluded: set=None,
+                 distance: int=0) -> Union[np.ndarray,str]:
     '''
         Receives a "color" (hex string) and a set of "excluded" color hex strings. Adjusts the color
         value up or down until its sum of absolute differences of RGB uint8 color values is larger
@@ -486,13 +485,13 @@ def offsetColor(color: str,
 
         #TODO: offsetting colors slightly could bring them too close to the next one again...
     '''
-    if len(excluded) == 0:
+    if excluded is None or len(excluded) == 0:
         return color
 
-    color_rgb = np.array(hexToRGB(color))
+    color_rgb = np.array(hex_to_rgb(color))
     excluded_rgb = set()
     for ex in excluded:
-        excluded_rgb.add(hexToRGB(ex))
+        excluded_rgb.add(hex_to_rgb(ex))
     excluded_rgb = np.array(list(excluded_rgb))
 
     dists = np.sum(np.abs(excluded_rgb - color_rgb), 1)
@@ -512,11 +511,11 @@ def offsetColor(color: str,
     color_rgb[diff_pos] += (np.sign(component_diffs[diff_pos]) * \
                                 component_diffs[diff_pos] * \
                                     max(1, distance/len(diff_pos))).astype(color_rgb.dtype)
-    return rgbToHex(color_rgb.astype(np.uint8).tolist())
+    return rgb_to_hex(color_rgb.astype(np.uint8).tolist())
 
 
 
-def randomHexColor(excluded: set=set(), distance: int=0) -> str:
+def random_hex_color(excluded: set=None, distance: int=0) -> str:
     '''
         Creates a random HTML/CSS-compliant hex color string that is not already
         in the optional set/dict/list/tuple of "excluded" colors.
@@ -524,19 +523,18 @@ def randomHexColor(excluded: set=set(), distance: int=0) -> str:
         If "distance" is an int or float, colors must be spaced apart by more
         than this value in terms of absolute summed numerical RGB differences.
     '''
-    # pylint: disable=consider-using-f-string
 
     # create unique random color
-    random_color = '#{:06x}'.format(random.randint(10, 0xFFFFF0))
+    random_color = f'#{random.randint(10, 0xFFFFF0):06x}'
 
     #offset if needed
-    if distance > 0 and len(excluded) > 0:
-        random_color = offsetColor(random_color, excluded, distance)
+    if distance > 0 and excluded is not None and len(excluded) > 0:
+        random_color = offset_color(random_color, excluded, distance)
     return random_color
 
 
 
-def imageToBase64(image: Image) -> Tuple[str,int,int]:
+def image_to_base64(image: Image) -> Tuple[str,int,int]:
     '''
         Receives a PIL image and converts it into a base64 string. Returns that string plus the
         width and height of the image.
@@ -547,10 +545,10 @@ def imageToBase64(image: Image) -> Tuple[str,int,int]:
 
 
 
-def base64ToImage(base64str: str,
-                  width: int,
-                  height: int,
-                  to_pil: bool=True) -> Image:
+def base64_to_image(base64str: str,
+                    width: int,
+                    height: int,
+                    to_pil: bool=True) -> Image:
     '''
         Receives a base64-encoded string as stored in AIDE's database (e.g. for segmentation masks)
         and returns a PIL image with its contents if "toPIL" is True (default), or an ndarray
@@ -565,8 +563,7 @@ def base64ToImage(base64str: str,
 
 
 
-def download_file(url: str,
-                  local_filename: str=None) -> str:
+def download_file(url: str, local_filename: str=None) -> str:
     '''
         Source:
         https://stackoverflow.com/questions/16694907/download-large-file-in-python-with-requests

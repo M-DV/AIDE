@@ -30,7 +30,7 @@ class FileServer():
         if verbose_start:
             print('FileServer'.ljust(LogDecorator.get_ljust_offset()), end='')
 
-        if not helpers.is_fileServer(config):
+        if not helpers.is_file_server(config):
             if verbose_start:
                 LogDecorator.print_status('fail')
             raise Exception('Not a valid FileServer instance.')

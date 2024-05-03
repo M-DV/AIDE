@@ -1,9 +1,10 @@
 '''
     Utilities to load images of various formats.
 
-    2021-23 Benjamin Kellenberger
+    2021-24 Benjamin Kellenberger
 '''
 
+from typing import Union
 from io import BytesIO
 import mimetypes
 import numpy as np
@@ -57,7 +58,9 @@ def band_selection(img: np.array, bands: tuple=(1,2,3)) -> np.array:
     return img.take(bands, axis=0)
 
 
-def normalize_image(img: np.array, band_axis: int=0, color_range: object=255) -> np.array:
+def normalize_image(img: np.array,
+                    band_axis: int=0,
+                    color_range: Union[int,float]=255) -> np.array:
     '''
         Receives an image in np.array format and normalizes it into a [0, 255] uint8 image.
         Parameter "band_axis" determines in which axis the image bands can be found. Parameter
@@ -105,7 +108,7 @@ class AbstractImageDriver:
     NAME = 'abstract'
     PRIORITY = -1
 
-    SUPPORTED_MEDIA_TYPES = ('image')
+    SUPPORTED_MEDIA_TYPES = ('image',)
 
     SUPPORTED_EXTENSIONS = ()
     MULTIBAND_SUPPORTED = False
@@ -363,7 +366,7 @@ class GDALImageDriver(AbstractImageDriver):
 
         # filter warnings
         import warnings
-        warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
+        warnings.filterwarnings('ignore', category=rasterio.errors.NotGeoreferencedWarning)
         from rasterio import logging
         log = logging.getLogger()
         log.setLevel(logging.ERROR)

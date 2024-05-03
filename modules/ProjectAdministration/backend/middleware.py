@@ -794,11 +794,11 @@ class ProjectConfigMiddleware:
 
             # resolve potentially duplicate/too similar color values
             if isinstance(color, str) and (color not in colors or colors[color] != item_id):
-                color = helpers.offsetColor(color.lower(),
+                color = helpers.offset_color(color.lower(),
                                             colors.keys(),
                                             self.MINIMAL_COLOR_OFFSET)
             elif not isinstance(color, str):
-                color = helpers.randomHexColor(colors.keys(), self.MINIMAL_COLOR_OFFSET)
+                color = helpers.random_hex_color(colors.keys(), self.MINIMAL_COLOR_OFFSET)
 
             color = color.lower()
 
@@ -1015,7 +1015,7 @@ class ProjectConfigMiddleware:
                     ON CONFLICT (name) DO NOTHING
                     RETURNING id, name;
                 ''').format(id_lc=sql.Identifier(project, 'labelclass')),
-                [(l[2],helpers.randomHexColor(),) for l in labelclasses_new.values()],
+                [(l[2],helpers.random_hex_color(),) for l in labelclasses_new.values()],
                 'all')       #TODO: make random colors exclusive from each other
             for row in lc_added:
                 values.append((labelclasses_new[row[1]][0],

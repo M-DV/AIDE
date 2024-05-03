@@ -631,7 +631,7 @@ class ModelMarketplaceWorker:
         
         if autoUpdateEnabled:
             # model has been set up to automatically incorporate new classes; use project's class definitions
-            labelclasses = json.dumps(self.labelUImiddleware.getClassDefinitions(project, False))
+            labelclasses = json.dumps(self.labelUImiddleware.get_class_definitions(project, False))
         else:
             # labelclass auto-update disabled; use inverse of manually defined mapping as class definitions
             labelclasses = {}

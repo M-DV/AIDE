@@ -16,8 +16,8 @@ from util import helpers
 
 
 def render_array(array: np.array,
-                render_config: dict,
-                to_uint8: bool=False) -> np.array:
+                 render_config: dict,
+                 to_uint8: bool=False) -> np.array:
     '''
         Applies the properties specified in "render_config" to a given NumPy ndarray, including:
         - grayscale conversion (if set)
@@ -49,14 +49,14 @@ def render_array(array: np.array,
 
 
 def get_map_images(db_connector: Database,
-                    images_dir: str,
-                    project: str,
-                    project_meta: dict,
-                    bbox: tuple,
-                    srid: int,
-                    resolution: tuple,
-                    image_ext: str,
-                    raw: bool=False) -> bytes:
+                   images_dir: str,
+                   project: str,
+                   project_meta: dict,
+                   bbox: tuple,
+                   srid: int,
+                   resolution: tuple,
+                   image_ext: str,
+                   raw: bool=False) -> bytes:
     '''
         TODO
     '''
@@ -138,16 +138,16 @@ def get_map_images(db_connector: Database,
 
 
 def get_map_segmentation(db_connector: Database,
-                            images_dir: str,
-                            project: str,
-                            project_meta: dict,
-                            relation_name: str,
-                            username: str,
-                            bbox: tuple,
-                            srid: int,
-                            resolution: tuple,
-                            image_ext: str,
-                            raw: bool=False) -> bytes:
+                         images_dir: str,
+                         project: str,
+                         project_meta: dict,
+                         relation_name: str,
+                         username: str,
+                         bbox: tuple,
+                         srid: int,
+                         resolution: tuple,
+                         image_ext: str,
+                         raw: bool=False) -> bytes:
     '''
         TODO
     '''
@@ -195,8 +195,9 @@ def get_map_segmentation(db_connector: Database,
                 continue
             with rasterio.open(img_path, 'r') as f_img:
                 profile = f_img.profile
-            raster = helpers.base64ToImage(item['segmentationmask'],
-                                            profile['width'], profile['height'], False)
+            raster = helpers.base64_to_image(item['segmentationmask'],
+                                             profile['width'],
+                                             profile['height'], False)
             profile.update({
                 'driver': 'GTiff',
                 'dtype': 'uint8',
@@ -213,8 +214,8 @@ def get_map_segmentation(db_connector: Database,
 
         # merge
         arr, transform = rasterio.merge.merge(datasets=rio_datasets,
-                                                bounds=bbox,
-                                                res=resolution)
+                                              bounds=bbox,
+                                              res=resolution)
 
         if not raw:
             # WMS: render as RGB

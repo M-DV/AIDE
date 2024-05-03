@@ -1,7 +1,7 @@
 '''
     Middleware layer for project statistics calculations.
 
-    2019-21 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import copy
@@ -9,7 +9,7 @@ from psycopg2 import sql
 import numpy as np
 from .statisticalFormulas import StatisticalFormulas_user, StatisticalFormulas_model
 from modules.Database.app import Database
-from util.helpers import base64ToImage
+from util.helpers import base64_to_image
 
 
 class ProjectStatisticsMiddleware:
@@ -305,8 +305,8 @@ class ProjectStatisticsMiddleware:
                 if annoType == 'segmentationMasks':
                     # decode segmentation masks
                     try:
-                        mask_target = np.array(base64ToImage(b['q1segmask'], b['q1width'], b['q1height']))
-                        mask_source = np.array(base64ToImage(b['q2segmask'], b['q2width'], b['q2height']))
+                        mask_target = np.array(base64_to_image(b['q1segmask'], b['q1width'], b['q1height']))
+                        mask_source = np.array(base64_to_image(b['q2segmask'], b['q2width'], b['q2height']))
                         
                         if mask_target.shape == mask_source.shape and np.any(mask_target) and np.any(mask_source):
 

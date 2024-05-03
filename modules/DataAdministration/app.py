@@ -36,7 +36,7 @@ class DataAdministrator:
         self.app = app
 
         # set up either direct methods (if is FileServer) or relaying
-        self.is_file_server = helpers.is_fileServer(config)
+        self.is_file_server = helpers.is_file_server(config)
         self.middleware = DataAdministrationMiddleware(config, dbConnector, taskCoordinator)
 
         self.temp_dir = self.config.get_property('FileServer',

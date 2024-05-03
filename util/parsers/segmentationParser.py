@@ -1,7 +1,7 @@
 '''
     Parser for pixel-wise segmentation rasters.
 
-    2022-23 Benjamin Kellenberger
+    2022-24 Benjamin Kellenberger
 '''
 
 import os
@@ -148,7 +148,7 @@ class SegmentationFileParser(AbstractAnnotationParser):
                 # we don't allow empty colors for segmentation projects anymore; flag for update
                 labelclasses_update.add(lc_id)
             else:
-                color = helpers.hexToRGB(color)
+                color = helpers.hex_to_rgb(color)
                 lc_lut_color[color] = lc_meta['idx']
 
         # find segmentation files that have a corresponding image registered
@@ -333,13 +333,13 @@ class SegmentationFileParser(AbstractAnnotationParser):
             lc_vals = []
             if not skipUnknownClasses:
                 for label_class in labelclasses_new:
-                    color = helpers.randomHexColor(lc_colors)
+                    color = helpers.random_hex_color(lc_colors)
                     lc_colors.add(color)
                     lc_vals.append((f'Class {label_class}', label_class, color))
 
             # add color for existing classes to be updated
             for lc_id in labelclasses_update:
-                color = helpers.randomHexColor(lc_colors)
+                color = helpers.random_hex_color(lc_colors)
                 lc_colors.add(color)
                 lc_name = self.labelClasses[lc_id]['name']
                 lc_idx = self.labelClasses[lc_id]['idx']
@@ -406,7 +406,7 @@ class SegmentationFileParser(AbstractAnnotationParser):
             for lc_def in self.labelClasses.values():
                 idx = lc_def['idx']
                 try:
-                    color = helpers.hexToRGB(lc_def['color'])
+                    color = helpers.hex_to_rgb(lc_def['color'])
                 except Exception:
                     # error parsing color; this should never happen
                     color = 0

@@ -6,7 +6,7 @@
 
 from urllib.parse import urlparse
 import bottle
-from bottle import request, response
+from bottle import response
 from util.configDef import Config
 
 # CORS is only required if the FileServer URI is a valid URL
@@ -17,6 +17,9 @@ cors_required = all([result.scheme, result.netloc]) #TODO: might be too strict..
 
 
 def enable_cors(fn) -> None:
+    '''
+        Use as a decorator for functions requiring CORS headers to be sent.
+    '''
     def _enable_cors(*args, **kwargs):
         # set CORS headers
         if cors_required:

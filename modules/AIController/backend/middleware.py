@@ -15,8 +15,7 @@ from modules.AIController.backend import celery_interface as aic_int
 from modules.AIWorker.backend import celery_interface as aiw_int
 from celery import current_app
 from psycopg2 import sql
-from .messageProcessor import MessageProcessor
-from .annotationWatchdog import Watchdog
+
 from modules.AIController.taskWorkflow.workflowDesigner import WorkflowDesigner
 from modules.AIController.taskWorkflow.workflowTracker import WorkflowTracker
 from modules.AIWorker.backend.fileserver import FileServer
@@ -24,6 +23,8 @@ from util import celeryWorkerCommons
 from util.common import get_project_immutables
 from util.helpers import array_split, parse_parameters, get_class_executable, get_library_available
 
+from .messageProcessor import MessageProcessor
+from .annotationWatchdog import Watchdog
 from .sql_string_builder import SQLStringBuilder
 
 

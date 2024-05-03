@@ -28,8 +28,8 @@ from celery import current_task
 
 from modules.LabelUI.backend.annotation_sql_tokens import (QueryStrings_annotation,
                                                            QueryStrings_prediction)
-from util.helpers import (FILENAMES_PROHIBITED_CHARS, list_directory, base64ToImage, hexToRGB,
-                          slugify, current_time, is_fileServer)
+from util.helpers import (FILENAMES_PROHIBITED_CHARS, list_directory, base64_to_image, hex_to_rgb,
+                          slugify, current_time, is_file_server)
 from util.imageSharding import get_split_positions, split_image
 from util import drivers, parsers, geospatial
 
@@ -54,7 +54,7 @@ class DataWorker:
         self.count_pattern = re.compile('\_[0-9]+$')
         self.passive_mode = passiveMode
 
-        if not is_fileServer(self.config):
+        if not is_file_server(self.config):
             raise Exception('Not a FileServer instance.')
 
         self.files_dir = self.config.get_property('FileServer', 'staticfiles_dir')
@@ -1908,7 +1908,7 @@ class DataWorker:
                             indexedColors.extend([0,0,0])
                         else:
                             # convert to RGB format
-                            indexedColors.extend(hexToRGB(color))
+                            indexedColors.extend(hex_to_rgb(color))
 
                 except Exception:
                     # an error occurred; don't convert segmentation mask to indexed colors
@@ -2023,7 +2023,7 @@ class DataWorker:
                     finalFilename = os.path.join(parent, segmaskFilenameOptions['prefix'] + innerFilename + segmaskFilenameOptions['suffix'] +'.tif')
                     segmask_filename += finalFilename
 
-                    segmask = base64ToImage(b['segmentationmask'], b['width'], b['height'])
+                    segmask = base64_to_image(b['segmentationmask'], b['width'], b['height'])
 
                     if indexedColors is not None and len(indexedColors)>0:
                         # convert to indexed color and add color palette from label classes

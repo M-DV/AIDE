@@ -4,7 +4,7 @@
     2021-24 Benjamin Kellenberger
 '''
 
-import os
+import shutil
 
 
 class LogDecorator:
@@ -28,10 +28,8 @@ class LogDecorator:
             (e.g., "[ OK ]", "[FAIL]"). Defaults to 74 if undeterminable (assumes an 80-character
             console).
         '''
-        try:
-            return os.get_terminal_size().columns - 6
-        except Exception:
-            return 74
+        return shutil.get_terminal_size(fallback=(80,60)).columns - 6
+
 
     @staticmethod
     def print_status(status: str,

@@ -193,7 +193,7 @@ class MapserverMiddleware:
                         {
                             'name': item['name'],
                             'idx': item['idx'],
-                            'color': helpers.hexToRGB(item.get('color', '#000000'))
+                            'color': helpers.hex_to_rgb(item.get('color', '#000000'))
                         }
                         for item in lc_meta
                     ]

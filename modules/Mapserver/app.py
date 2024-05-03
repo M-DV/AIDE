@@ -30,7 +30,7 @@ class Mapserver:
         self.middleware = MapserverMiddleware(self.config, self.db_connector)
 
         self.user_handler = user_handler
-        self.is_file_server = helpers.is_fileServer(config)
+        self.is_file_server = helpers.is_file_server(config)
 
         if verbose_start:
             print('Mapserver'.ljust(logDecorator.LogDecorator.get_ljust_offset()), end='')

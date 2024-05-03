@@ -5,7 +5,7 @@
 '''
 
 import os
-from typing import Iterable
+from typing import Iterable, Union
 from uuid import UUID
 from datetime import datetime
 import json
@@ -13,63 +13,64 @@ import pytz
 import dateutil.parser
 from PIL import Image
 from psycopg2 import sql
+
 from util import helpers, common
-from .sql_string_builder import SQLStringBuilder
+from . import sql_string_builder
 from .annotation_sql_tokens import QueryStrings_annotation, AnnotationParser
+
 
 
 class DBMiddleware():
     '''
         Label UI middleware, performing communication between frontend and the database.
     '''
-    def __init__(self, config, dbConnector):
+    def __init__(self, config, dbConnector) -> None:
         self.config = config
-        self.dbConnector = dbConnector
+        self.db_connector = dbConnector
 
         # project settings that cannot be changed (project shorthand -> {settings})
         self.project_immutables = {}
 
-        self._fetchProjectSettings()
-        self.sqlBuilder = SQLStringBuilder()
-        self.annoParser = AnnotationParser()
+        self._fetch_project_settings()
+        self.anno_parser = AnnotationParser()
 
 
-    def _fetchProjectSettings(self):
+    def _fetch_project_settings(self) -> None:
         # AI controller URI
-        aiControllerURI = self.config.get_property('Server', 'aiController_uri')
-        if aiControllerURI is None or aiControllerURI.strip() == '':
+        ai_controller_uri = self.config.get_property('Server', 'aiController_uri')
+        if ai_controller_uri is None or ai_controller_uri.strip() == '':
             # no AI backend configured
-            aiControllerURI = None
+            ai_controller_uri = None
 
         # global, project-independent settings
-        self.globalSettings = {
+        self.global_settings = {
             'indexURI': self.config.get_property('Server',
                                                  'index_uri',
                                                  dtype=str,
                                                  fallback='/'),
             'dataServerURI': self.config.get_property('Server', 'dataServer_uri'),
-            'aiControllerURI': aiControllerURI
+            'aiControllerURI': ai_controller_uri
         }
 
         # default styles
         try:
             # check if custom default styles are provided
             with open('config/default_ui_settings.json', 'r', encoding='utf-8') as f_styles:
-                self.defaultStyles = json.load(f_styles)
+                self.default_styles = json.load(f_styles)
         except Exception:
             # resort to built-in styles
             with open('modules/ProjectAdministration/static/json/default_ui_settings.json',
                       'r',
                       encoding='utf-8') as f_default:
-                self.defaultStyles = json.load(f_default)
+                self.default_styles = json.load(f_default)
 
 
     def _assemble_annotations(self,
                               project: str,
-                              queryData: list,
-                              hideGoldenQuestionInfo: bool) -> dict:
+                              query_data: list,
+                              hide_golden_question_info: bool) -> dict:
         response = {}
-        for row in queryData:
+        for row in query_data:
             img_id = str(row['image'])
             if img_id not in response:
                 response[img_id] = {
@@ -93,7 +94,7 @@ class DBMiddleware():
                     response[img_id]['last_checked'] = max(response[img_id]['last_checked'],
                                                            last_checked)
 
-            if not hideGoldenQuestionInfo:
+            if not hide_golden_question_info:
                 response[img_id]['isGoldenQuestion'] = row['isgoldenquestion']
 
             response[img_id]['isBookmarked'] = row['isbookmarked']
@@ -101,18 +102,18 @@ class DBMiddleware():
             # parse annotations and predictions
             entry_id = str(row['id'])
             if row['ctype'] is not None:
-                colnames = self.sqlBuilder.getColnames(
+                colnames = sql_string_builder.get_colnames(
                     self.project_immutables[project]['annotationType'],
                     self.project_immutables[project]['predictionType'],
                     row['ctype'])
                 entry = {}
-                for c in colnames:
-                    value = row[c]
+                for colname in colnames:
+                    value = row[colname]
                     if isinstance(value, datetime):
                         value = value.timestamp()
                     elif isinstance(value, UUID):
                         value = str(value)
-                    entry[c] = value
+                    entry[colname] = value
 
                 if row['ctype'] == 'annotation':
                     response[img_id]['annotations'][entry_id] = entry
@@ -124,17 +125,15 @@ class DBMiddleware():
 
     def _set_images_requested(self,
                               project: str,
-                              imageIDs: Iterable) -> None:
+                              image_ids: Iterable[UUID]) -> None:
         '''
-            Sets column "last_requested" of relation "image"
-            to the current date. This is done during image
-            querying to signal that an image has been requested,
-            but not (yet) viewed.
+            Sets column "last_requested" of relation "image" to the current date. This is done
+            during image querying to signal that an image has been requested, but not (yet) viewed.
         '''
         # prepare insertion values
         now = datetime.now(tz=pytz.utc)
         vals = []
-        for key in imageIDs:
+        for key in image_ids:
             vals.append(key)
         if len(vals) > 0:
             query_str = sql.SQL('''
@@ -142,17 +141,17 @@ class DBMiddleware():
                 SET last_requested = %s
                 WHERE id IN %s;
             ''').format(id_img=sql.Identifier(project, 'image'))
-            self.dbConnector.execute(query_str, (now, tuple(vals),), None)
+            self.db_connector.execute(query_str, (now, tuple(vals),), None)
 
 
     def _get_sample_metadata(self,
-                             metaType: str) -> dict:
+                             meta_type: str) -> dict:
         '''
-            Returns a dummy annotation or prediction for the sample
-            image in the "exampleData" folder, depending on the "metaType"
-            specified (i.e., labels, points, boundingBoxes, or segmentationMasks).
+            Returns a dummy annotation or prediction for the sample image in the "exampleData"
+            folder, depending on the "metaType" specified (i.e., labels, points, boundingBoxes, or
+            segmentationMasks).
         '''
-        if metaType == 'labels':
+        if meta_type == 'labels':
             return {
                 'id': '00000000-0000-0000-0000-000000000000',
                 'label': '00000000-0000-0000-0000-000000000000',
@@ -160,7 +159,7 @@ class DBMiddleware():
                 'priority': 1.0,
                 'viewcount': None
             }
-        if metaType in ('points', 'boundingBoxes'):
+        if meta_type in ('points', 'boundingBoxes'):
             return {
                 'id': '00000000-0000-0000-0000-000000000000',
                 'label': '00000000-0000-0000-0000-000000000000',
@@ -172,15 +171,15 @@ class DBMiddleware():
                 'priority': 1.0,
                 'viewcount': None
             }
-        if metaType == 'polygons':
+        if meta_type == 'polygons':
             with open('modules/LabelUI/static/exampleData/sample_polygon.json',
                       'r',
                       encoding='utf-8') as f_polygon:
                 return json.load(f_polygon)
-        if metaType == 'segmentationMasks':
+        if meta_type == 'segmentationMasks':
             # read segmentation mask from disk
             segmask = Image.open('modules/LabelUI/static/exampleData/sample_segmentationMask.tif')
-            segmask, width, height = helpers.imageToBase64(segmask)
+            segmask, width, height = helpers.image_to_base64(segmask)
             return {
                 'id': '00000000-0000-0000-0000-000000000000',
                 'width': width,
@@ -208,7 +207,7 @@ class DBMiddleware():
         if self.project_immutables.get(project, {}) is None:
             return None
         if project not in self.project_immutables:
-            anno_type, pred_type = common.get_project_immutables(project, self.dbConnector)
+            anno_type, pred_type = common.get_project_immutables(project, self.db_connector)
             if anno_type is None or pred_type is None:
                 self.project_immutables[project] = None
                 return None
@@ -231,36 +230,36 @@ class DBMiddleware():
                 dict, the project's UI settings
         '''
         query_str = 'SELECT ui_settings FROM aide_admin.project WHERE shortname = %s;'
-        result = self.dbConnector.execute(query_str, (project,), 1)
+        result = self.db_connector.execute(query_str, (project,), 1)
         result = json.loads(result[0]['ui_settings'])
 
         # complete styles with defaults where necessary
         # (may be required for project that got upgraded from v1)
-        result = helpers.check_args(result, self.defaultStyles)
+        result = helpers.check_args(result, self.default_styles)
 
         return result
 
 
-    def getProjectSettings(self,
-                           project: str) -> dict:
+    def get_project_settings(self,
+                             project: str) -> dict:
         '''
             Queries the database for general project-specific metadata, such as:
             - Classes: names, indices, default colors
             - Annotation type: one of {class labels, positions, bboxes}
         '''
         # publicly available info from DB
-        proj_settings = self.getProjectInfo(project)
+        proj_settings = self.get_project_info(project)
 
         # label classes
-        proj_settings['classes'] = self.getClassDefinitions(project)
+        proj_settings['classes'] = self.get_class_definitions(project)
 
         # static and dynamic project settings and properties from configuration file
         proj_settings = {**proj_settings,
                          **self.get_project_immutables(project),
                          **self.get_project_ui_settings(project),
-                         **self.globalSettings}
+                         **self.global_settings}
 
-        # append project shorthand to AIController URI 
+        # append project shorthand to AIController URI
         if 'aiControllerURI' in proj_settings and \
             proj_settings['aiControllerURI'] is not None and \
                 len(proj_settings['aiControllerURI']) > 0:
@@ -270,11 +269,13 @@ class DBMiddleware():
         return proj_settings
 
 
-    def getProjectInfo(self,
-                       project: str) -> dict:
+    def get_project_info(self,
+                         project: str) -> dict:
         '''
             Returns safe, shareable information about the project
             (i.e., users don't need to be part of the project to see these data).
+
+            #TODO: partially redundant with ProjectAdministration middleware function
         '''
         query_str = '''
             SELECT shortname, name, description, demoMode,
@@ -284,7 +285,7 @@ class DBMiddleware():
             FROM aide_admin.project
             WHERE shortname = %s
         '''
-        result = self.dbConnector.execute(query_str, (project,), 1)[0]
+        result = self.db_connector.execute(query_str, (project,), 1)[0]
 
         # provide flag if AI model is available
         ai_models_available = all([
@@ -305,9 +306,9 @@ class DBMiddleware():
         }
 
 
-    def getClassDefinitions(self,
-                            project: str,
-                            showHidden: bool=False) -> dict:
+    def get_class_definitions(self,
+                              project: str,
+                              show_hidden: bool=False) -> dict:
         '''
             Returns a dictionary with entries for all classes in the project.
         '''
@@ -322,10 +323,10 @@ class DBMiddleware():
             ''').format(
                 sql.Identifier(project, 'labelclassgroup'),
                 sql.Identifier(project, 'labelclass'),
-                sql.SQL('' if showHidden else 'WHERE hidden IS false')
+                sql.SQL('' if show_hidden else 'WHERE hidden IS false')
             )
 
-        class_data = self.dbConnector.execute(query_str, None, 'all')
+        class_data = self.db_connector.execute(query_str, None, 'all')
 
         # assemble entries first
         all_entries = {}
@@ -384,49 +385,61 @@ class DBMiddleware():
         return all_entries
 
 
-    def getBatch_fixed(self, project, username, data, hideGoldenQuestionInfo=True):
+    def get_batch_fixed(self,
+                        project: str,
+                        username: str,
+                        image_ids: Iterable[Union[UUID,str]],
+                        hide_golden_question_info=True) -> dict:
         '''
             Returns entries from the database based on the list of data entry identifiers specified.
         '''
 
-        if not len(data):
+        if len(image_ids) == 0:
             return { 'entries': {} }
 
         # query
-        projImmutables = self.get_project_immutables(project)
-        demoMode = common.check_demo_mode(project, self.dbConnector)
-        queryStr = self.sqlBuilder.getFixedImagesQueryString(project, projImmutables['annotationType'], projImmutables['predictionType'], demoMode)
+        proj_immutables = self.get_project_immutables(project)
+        is_demo_mode = common.check_demo_mode(project, self.db_connector)
+        query_str = sql_string_builder.get_fixed_images_query_str(project,
+                                                                  proj_immutables['annotationType'],
+                                                                  proj_immutables['predictionType'],
+                                                                  is_demo_mode)
 
         # verify provided UUIDs
         uuids = []
         imgs_malformed = []
-        for d in data:
+        for img_id in image_ids:
             try:
-                uuids.append(UUID(d))
+                uuids.append(UUID(img_id))
             except Exception:
-                imgs_malformed.append(d)
+                imgs_malformed.append(img_id)
         uuids = tuple(uuids)
 
-        if not len(uuids):
+        if len(uuids) == 0:
             return {
                 'entries': {},
                 'imgs_malformed': imgs_malformed
             }
 
         # parse results
-        if demoMode:
-            queryVals = (uuids,)
+        if is_demo_mode:
+            query_vals = (uuids,)
         else:
-            queryVals = (uuids, username, username,)
+            query_vals = (uuids, username, username,)
 
-        annoResult = self.dbConnector.execute(queryStr, queryVals, 'all')
+        anno_result = self.db_connector.execute(query_str,
+                                                query_vals,
+                                                'all')
         try:
-            response = self._assemble_annotations(project, annoResult, hideGoldenQuestionInfo)
-        except Exception as e:
-            print(e)
-    
+            response = self._assemble_annotations(project,
+                                                  anno_result,
+                                                  hide_golden_question_info)
+        except Exception as exc:
+            print(exc)      #TODO
+
         # filter out images that are invalid
-        imgs_malformed = list(set(imgs_malformed).union(set(data).difference(set(response.keys()))))
+        imgs_malformed = list(set(imgs_malformed).union(
+                                set(image_ids).difference(set(response.keys()))))
 
         # mark images as requested
         self._set_images_requested(project, response)
@@ -434,20 +447,31 @@ class DBMiddleware():
         response = {
             'entries': response
         }
-        if len(imgs_malformed):
+        if len(imgs_malformed) > 0:
             response['imgs_malformed'] = imgs_malformed
 
         return response
-        
 
-    def getBatch_auto(self, project, username, order='unlabeled', subset='default', limit=None, hideGoldenQuestionInfo=True):
+
+    def get_batch_auto(self,
+                       project: str,
+                       username: str,
+                       order: str='unlabeled',
+                       subset: str='default',
+                       limit: int=None,
+                       hide_golden_question_info: bool=True) -> dict:
         '''
             TODO: description
         '''
         # query
-        projImmutables = self.get_project_immutables(project)
-        demoMode = common.check_demo_mode(project, self.dbConnector)
-        queryStr = self.sqlBuilder.getNextBatchQueryString(project, projImmutables['annotationType'], projImmutables['predictionType'], order, subset, demoMode)
+        proj_immutables = self.get_project_immutables(project)
+        is_demo_mode = common.check_demo_mode(project, self.db_connector)
+        query_str = sql_string_builder.get_next_batch_query_str(project,
+                                                                proj_immutables['annotationType'],
+                                                                proj_immutables['predictionType'],
+                                                                order,
+                                                                subset,
+                                                                is_demo_mode)
 
         # limit (TODO: make 128 a hyperparameter)
         if limit is None:
@@ -456,15 +480,19 @@ class DBMiddleware():
             limit = min(int(limit), 128)
 
         # parse results
-        queryVals = (username,username,limit,username,)
-        if demoMode:
-            queryVals = (limit,)
+        query_vals = (username,username,limit,username,)
+        if is_demo_mode:
+            query_vals = (limit,)
 
-        annoResult = self.dbConnector.execute(queryStr, queryVals, 'all')
+        anno_result = self.db_connector.execute(query_str,
+                                                query_vals,
+                                                'all')
         try:
-            response = self._assemble_annotations(project, annoResult, hideGoldenQuestionInfo)
-            
-            # mark images as requested
+            response = self._assemble_annotations(project,
+                                                  anno_result,
+                                                  hide_golden_question_info)
+
+            # mark images as requested (TODO: place into finally clause?)
             self._set_images_requested(project, response)
         except Exception as e:
             print(e)
@@ -473,114 +501,148 @@ class DBMiddleware():
         return { 'entries': response }
 
 
-    def getBatch_timeRange(self, project, minTimestamp, maxTimestamp, userList, skipEmptyImages=False, limit=None, goldenQuestionsOnly=False, hideGoldenQuestionInfo=True, lastImageUUID=None):
+    def get_batch_time_range(self,
+                             project: str,
+                             min_timestamp: float,
+                             max_timestamp: float,
+                             user_list: Iterable[str],
+                             skip_empty_images: bool=False,
+                             limit: int=None,
+                             golden_questions_only: bool=False,
+                             hide_golden_question_info: bool=True,
+                             last_image_uuid: Union[UUID,str]=None) -> dict:
         '''
-            Returns images that have been annotated within the given time range and/or
-            by the given user(s). All arguments are optional.
-            Useful for reviewing existing annotations.
+            Returns images that have been annotated within the given time range and/or by the given
+            user(s). All arguments are optional. Useful for reviewing existing annotations.
         '''
         # query string
-        projImmutables = self.get_project_immutables(project)
-        if isinstance(lastImageUUID, str):
-            lastImageUUID = UUID(lastImageUUID)
-        queryStr = self.sqlBuilder.getDateQueryString(project, projImmutables['annotationType'], minTimestamp, maxTimestamp, userList, skipEmptyImages, goldenQuestionsOnly, lastImageUUID)
+        proj_immutables = self.get_project_immutables(project)
+        if isinstance(last_image_uuid, str):
+            last_image_uuid = UUID(last_image_uuid)
+        query_str = sql_string_builder.get_date_query_str(project,
+                                                          proj_immutables['annotationType'],
+                                                          min_timestamp,
+                                                          max_timestamp,
+                                                          user_list,
+                                                          skip_empty_images,
+                                                          golden_questions_only,
+                                                          last_image_uuid)
 
         # check validity and provide arguments
-        queryVals = []
-        if userList is not None:
-            queryVals.append(tuple(userList))
-        if minTimestamp is not None:
-            queryVals.append(minTimestamp)
-        if maxTimestamp is not None:
-            queryVals.append(maxTimestamp)
-        if lastImageUUID is not None:
-            queryVals.append(lastImageUUID)
-        if skipEmptyImages and userList is not None:
-            queryVals.append(tuple(userList))
+        query_vals = []
+        if user_list is not None:
+            query_vals.append(tuple(user_list))
+        if min_timestamp is not None:
+            query_vals.append(min_timestamp)
+        if max_timestamp is not None:
+            query_vals.append(max_timestamp)
+        if last_image_uuid is not None:
+            query_vals.append(last_image_uuid)
+        if skip_empty_images and user_list is not None:
+            query_vals.append(tuple(user_list))
 
         # limit (TODO: make 128 a hyperparameter)
         if limit is None:
             limit = 128
         else:
             limit = min(int(limit), 128)
-        queryVals.append(limit)
+        query_vals.append(limit)
 
-        if userList is not None:
-            queryVals.append(tuple(userList))
+        if user_list is not None:
+            query_vals.append(tuple(user_list))
 
         # query and parse results
-        annoResult = self.dbConnector.execute(queryStr, tuple(queryVals), 'all')
+        anno_result = self.db_connector.execute(query_str,
+                                                tuple(query_vals),
+                                                'all')
         try:
-            response = self._assemble_annotations(project, annoResult, hideGoldenQuestionInfo)
-        except Exception as e:
-            print(e)
+            response = self._assemble_annotations(project,
+                                                  anno_result,
+                                                  hide_golden_question_info)
+        except Exception as exc:
+            print(exc)      #TODO
 
         # # mark images as requested
         # self._set_images_requested(project, response)
 
-
         return { 'entries': response }
 
-    
-    def get_timeRange(self, project, userList, skipEmptyImages=False, goldenQuestionsOnly=False):
+
+    def get_time_range(self,
+                       project: str,
+                       user_list: Iterable[str],
+                       skip_empty_images: bool=False,
+                       golden_questions_only: bool=False) -> dict:
         '''
-            Returns two timestamps denoting the temporal limits within which
-            images have been viewed by the users provided in the userList.
-            Arguments:
-            - userList: string (single user name) or list of strings (multiple).
-                        Can also be None; in this case all annotations will be
-                        checked.
-            - skipEmptyImages: if True, only images that contain at least one
-                               annotation will be considered.
-            - goldenQuestionsOnly: if True, only images flagged as golden questions
-                                   will be shown.
+            Returns two timestamps denoting the temporal limits within which images have been viewed
+            by the users provided in the userList.
+            
+            Args:
+                - user_list:                str (single user name) or list of strings (multiple).
+                                            Can also be None; in this case all annotations will be
+                                            checked.
+                - skip_empty_images:        bool, if True, only images that contain at least one
+                                            annotation will be considered (default: False).
+                - golden_questions_only:    bool, if True, only images flagged as golden questions
+                                            will be shown (default: False).
+            
+            Returns:
+                - dict, containing "minTimestamp" and "maxTimestamp" (floats) or else an error
+                  message if no annotations could be found.
         '''
         # query string
-        queryStr = self.sqlBuilder.getTimeRangeQueryString(project, userList, skipEmptyImages, goldenQuestionsOnly)
+        query_str = sql_string_builder.get_time_range_query_str(project,
+                                                                user_list,
+                                                                skip_empty_images,
+                                                                golden_questions_only)
 
-        arguments = (None if userList is None else tuple(userList))
-        result = self.dbConnector.execute(queryStr, (arguments,), numReturn=1)
+        arguments = (None if user_list is None else tuple(user_list))
+        result = self.db_connector.execute(query_str,
+                                           (arguments,),
+                                           numReturn=1)
 
         if result is not None and len(result):
             return {
                 'minTimestamp': result[0]['mintimestamp'],
                 'maxTimestamp': result[0]['maxtimestamp'],
             }
-        else:
-            return {
-                'error': 'no annotations made'
-            }
+        return {
+            'error': 'no annotations made'
+        }
 
 
-    def get_sampleData(self, project):
+    def get_sample_data(self, project: str) -> dict:
         '''
-            Returns a sample image from the project, with annotations
-            (from one of the admins) and predictions.
-            If no image, no annotations, and/or no predictions are
-            available, a built-in default is returned instead.
+            Returns a sample image from the project, with annotations (from one of the admins) and
+            predictions. If no image, no annotations, and/or no predictions are available, a
+            built-in default is returned instead.
         '''
-        projImmutables = self.get_project_immutables(project)
-        queryStr = self.sqlBuilder.getSampleDataQueryString(project, projImmutables['annotationType'], projImmutables['predictionType'])
+        proj_immutables = self.get_project_immutables(project)
+        query_str = sql_string_builder.get_sample_data_query_str(project,
+                                                                 proj_immutables['annotationType'],
+                                                                 proj_immutables['predictionType'])
 
         # query and parse results
         response = None
-        annoResult = self.dbConnector.execute(queryStr, None, 'all')
+        anno_result = self.db_connector.execute(query_str, None, 'all')
         try:
-            response = self._assemble_annotations(project, annoResult, True)
-        except Exception as e:
-            print(e)
-        
-        if response is None or not len(response):
+            response = self._assemble_annotations(project, anno_result, True)
+        except Exception as exc:
+            print(exc)      #TODO
+
+        if response is None or len(response) == 0:
             # no valid data found for project; fall back to sample data
             response = {
                 '00000000-0000-0000-0000-000000000000': {
                     'fileName': '/static/interface/exampleData/sample_image.jpg',
                     'viewcount': 1,
                     'annotations': {
-                        '00000000-0000-0000-0000-000000000000': self._get_sample_metadata(projImmutables['annotationType'])
+                        '00000000-0000-0000-0000-000000000000': \
+                            self._get_sample_metadata(proj_immutables['annotationType'])
                     },
                     'predictions': {
-                        '00000000-0000-0000-0000-000000000000': self._get_sample_metadata(projImmutables['predictionType'])
+                        '00000000-0000-0000-0000-000000000000': \
+                            self._get_sample_metadata(proj_immutables['predictionType'])
                     },
                     'last_checked': None,
                     'isGoldenQuestion': True
@@ -589,95 +651,104 @@ class DBMiddleware():
         return response
 
 
-
-    def submitAnnotations(self, project, username, submissions):
+    def submit_annotations(self,
+                           project: str,
+                           username: str,
+                           submissions: dict) -> int:
         '''
             Sends user-provided annotations to the database.
         '''
-        if common.check_demo_mode(project, self.dbConnector):
+        if common.check_demo_mode(project, self.db_connector):
             return 1
 
-        projImmutables = self.get_project_immutables(project)
+        proj_immutables = self.get_project_immutables(project)
 
         # assemble values
-        colnames = getattr(QueryStrings_annotation, projImmutables['annotationType']).value
+        colnames = getattr(QueryStrings_annotation, proj_immutables['annotationType']).value
         values_insert = []
         values_update = []
 
         meta = (None if not 'meta' in submissions else json.dumps(submissions['meta']))
 
-        # for deletion: remove all annotations whose image ID matches but whose annotation ID is not among the submitted ones
+        # for deletion: remove all annotations whose image ID matches but whose annotation ID is not
+        # among the submitted ones
         ids = []
 
-        viewcountValues = []
-        for imageKey in submissions['entries']:
-            entry = submissions['entries'][imageKey]
+        viewcount_vals = []
+        for image_key, entry in submissions['entries'].items():
 
             try:
-                lastChecked = entry['timeCreated']
-                lastTimeRequired = entry['timeRequired']
-                if lastTimeRequired is None: lastTimeRequired = 0
+                last_checked = entry['timeCreated']
+                last_time_required = entry.get('timeRequired', 0)
+                if last_time_required is None:
+                    last_time_required = 0
             except Exception:
-                lastChecked = datetime.now(tz=pytz.utc)
-                lastTimeRequired = 0
+                last_checked = datetime.now(tz=pytz.utc)
+                last_time_required = 0
 
-            try:
-                numInteractions = int(entry['numInteractions'])
-            except Exception:
-                numInteractions = 0
+            num_interactions = int(entry.get('numInteractions', 0))
 
-            if 'annotations' in entry and len(entry['annotations']):
+            if 'annotations' in entry and len(entry['annotations']) > 0:
                 for annotation in entry['annotations']:
                     # assemble annotation values
-                    annotationTokens = self.annoParser.parseAnnotation(annotation)
-                    annoValues = []
+                    anno_tokens = self.anno_parser.parseAnnotation(annotation)
+                    anno_vals = []
                     for cname in colnames:
                         if cname == 'id':
-                            if cname in annotationTokens:
+                            if cname in anno_tokens:
                                 # cast and only append id if the annotation is an existing one
-                                annoValues.append(UUID(annotationTokens[cname]))
-                                ids.append(UUID(annotationTokens[cname]))
+                                anno_vals.append(UUID(anno_tokens[cname]))
+                                ids.append(UUID(anno_tokens[cname]))
                         elif cname == 'image':
-                            annoValues.append(UUID(imageKey))
-                        elif cname == 'label' and annotationTokens[cname] is not None:
-                            annoValues.append(UUID(annotationTokens[cname]))
+                            anno_vals.append(UUID(image_key))
+                        elif cname == 'label' and anno_tokens[cname] is not None:
+                            anno_vals.append(UUID(anno_tokens[cname]))
                         elif cname == 'timeCreated':
                             try:
-                                annoValues.append(dateutil.parser.parse(annotationTokens[cname]))
+                                anno_vals.append(dateutil.parser.parse(anno_tokens[cname]))
                             except Exception:
-                                annoValues.append(datetime.now(tz=pytz.utc))
+                                anno_vals.append(datetime.now(tz=pytz.utc))
                         elif cname == 'timeRequired':
-                            timeReq = annotationTokens[cname]
-                            if timeReq is None: timeReq = 0
-                            annoValues.append(timeReq)
+                            time_required = anno_tokens[cname]
+                            if time_required is None:
+                                time_required = 0
+                            anno_vals.append(time_required)
                         elif cname == 'username':
-                            annoValues.append(username)
-                        elif cname in annotationTokens:
-                            annoValues.append(annotationTokens[cname])
+                            anno_vals.append(username)
+                        elif cname in anno_tokens:
+                            anno_vals.append(anno_tokens[cname])
                         elif cname == 'unsure':
-                            if 'unsure' in annotationTokens and annotationTokens['unsure'] is not None:
-                                annoValues.append(annotationTokens[cname])
+                            if 'unsure' in anno_tokens and anno_tokens['unsure'] is not None:
+                                anno_vals.append(anno_tokens[cname])
                             else:
-                                annoValues.append(False)
+                                anno_vals.append(False)
                         elif cname == 'meta':
-                            annoValues.append(meta)
+                            anno_vals.append(meta)
                         else:
-                            annoValues.append(None)
-                    if 'id' in annotationTokens:
+                            anno_vals.append(None)
+                    if 'id' in anno_tokens:
                         # existing annotation; update
-                        values_update.append(tuple(annoValues))
+                        values_update.append(tuple(anno_vals))
                     else:
                         # new annotation
-                        values_insert.append(tuple(annoValues))
-                    
-            viewcountValues.append((username, imageKey, 1, lastChecked, lastChecked, lastTimeRequired, lastTimeRequired, numInteractions, meta))
+                        values_insert.append(tuple(anno_vals))
+
+            viewcount_vals.append((username,
+                                   image_key,
+                                   1,
+                                   last_checked,
+                                   last_checked,
+                                   last_time_required,
+                                   last_time_required,
+                                   num_interactions,
+                                   meta))
 
 
         # delete all annotations that are not in submitted batch
-        imageKeys = list(UUID(k) for k in submissions['entries'])
-        if len(imageKeys):
-            if len(ids):
-                queryStr = sql.SQL('''
+        image_keys = list(UUID(key) for key in submissions['entries'])
+        if len(image_keys) > 0:
+            if len(ids) > 0:
+                query_str = sql.SQL('''
                     DELETE FROM {id_anno} WHERE username = %s AND id IN (
                         SELECT idQuery.id FROM (
                             SELECT * FROM {id_anno} WHERE id NOT IN %s
@@ -687,56 +758,56 @@ class DBMiddleware():
                         ) AS imageQuery ON idQuery.id = imageQuery.id);
                 ''').format(
                     id_anno=sql.Identifier(project, 'annotation'))
-                self.dbConnector.execute(queryStr, (username, tuple(ids), tuple(imageKeys),))
+                self.db_connector.execute(query_str, (username, tuple(ids), tuple(image_keys),))
             else:
                 # no annotations submitted; delete all annotations submitted before
-                queryStr = sql.SQL('''
+                query_str = sql.SQL('''
                     DELETE FROM {id_anno} WHERE username = %s AND image IN %s;
                 ''').format(
                     id_anno=sql.Identifier(project, 'annotation'))
-                self.dbConnector.execute(queryStr, (username, tuple(imageKeys),))
+                self.db_connector.execute(query_str, (username, tuple(image_keys),))
 
         # insert new annotations
-        if len(values_insert):
-            queryStr = sql.SQL('''
+        if len(values_insert) > 0:
+            query_str = sql.SQL('''
                 INSERT INTO {id_anno} ({cols})
                 VALUES %s ;
             ''').format(
                 id_anno=sql.Identifier(project, 'annotation'),
-                cols=sql.SQL(', ').join([sql.SQL(c) for c in colnames[1:]])     # skip 'id' column
+                cols=sql.SQL(', ').join([sql.SQL(col) for col in colnames[1:]])     # skip id col
             )
-            self.dbConnector.insert(queryStr, values_insert)
+            self.db_connector.insert(query_str, values_insert)
 
         # update existing annotations
-        if len(values_update):
-
-            updateCols = []
+        if len(values_update) > 0:
+            cols_update = []
             for col in colnames:
                 if col == 'label':
-                    updateCols.append(sql.SQL('label = UUID(e.label)'))
+                    cols_update.append(sql.SQL('label = UUID(e.label)'))
                 elif col == 'timeRequired':
                     # we sum the required times together
-                    updateCols.append(sql.SQL('timeRequired = COALESCE(a.timeRequired,0) + COALESCE(e.timeRequired,0)'))
+                    cols_update.append(sql.SQL('timeRequired = COALESCE(a.timeRequired,0) + ' + \
+                                               'COALESCE(e.timeRequired,0)'))
                 else:
-                    updateCols.append(sql.SQL('{col} = e.{col}').format(col=sql.SQL(col)))
+                    cols_update.append(sql.SQL('{col} = e.{col}').format(col=sql.SQL(col)))
 
-            queryStr = sql.SQL('''
+            query_str = sql.SQL('''
                 UPDATE {id_anno} AS a
                 SET {updateCols}
                 FROM (VALUES %s) AS e({colnames})
                 WHERE e.id = a.id
             ''').format(
                 id_anno=sql.Identifier(project, 'annotation'),
-                updateCols=sql.SQL(', ').join(updateCols),
-                colnames=sql.SQL(', ').join([sql.SQL(c) for c in colnames])
+                updateCols=sql.SQL(', ').join(cols_update),
+                colnames=sql.SQL(', ').join([sql.SQL(col) for col in colnames])
             )
 
-            self.dbConnector.insert(queryStr, values_update)
-
+            self.db_connector.insert(query_str, values_update)
 
         # viewcount table
-        queryStr = sql.SQL('''
-            INSERT INTO {id_iu} (username, image, viewcount, first_checked, last_checked, last_time_required, total_time_required, num_interactions, meta)
+        query_str = sql.SQL('''
+            INSERT INTO {id_iu} (username, image, viewcount, first_checked, last_checked,
+                last_time_required, total_time_required, num_interactions, meta)
             VALUES %s 
             ON CONFLICT (username, image) DO UPDATE SET viewcount = image_user.viewcount + 1,
                 last_checked = EXCLUDED.last_checked,
@@ -747,55 +818,57 @@ class DBMiddleware():
         ''').format(
             id_iu=sql.Identifier(project, 'image_user')
         )
-        self.dbConnector.insert(queryStr, viewcountValues)
+        self.db_connector.insert(query_str, viewcount_vals)
 
         return 0
 
 
-    def getGoldenQuestions(self, project):
+    def get_golden_questions(self, project: str) -> dict:
         '''
-            Returns a list of image UUIDs and their file names that have been flagged
-            as golden questions for a given project.
-            TODO: augment tables with who added the golden question and when it
-            happened...
+            Returns a list of image UUIDs and their file names that have been flagged as golden
+            questions for a given project. TODO: augment tables with who added the golden question
+            and when it happened...
         '''
-        queryStr = sql.SQL('SELECT id, filename FROM {id_img} WHERE isGoldenQuestion = true;').format(
-            id_img=sql.Identifier(project, 'image')
-        )
-        result = self.dbConnector.execute(queryStr, None, 'all')
-        result = [(str(r['id']), r['filename']) for r in result]
+        query_str = sql.SQL('SELECT id, filename FROM {id_img} ' + \
+                            'WHERE isGoldenQuestion = true;').format(
+                id_img=sql.Identifier(project, 'image')
+            )
+        result = self.db_connector.execute(query_str, None, 'all')
+        result = [(str(res['id']), res['filename']) for res in result]
         return {
             'status': 0,
             'images': result
         }
 
 
-    def setGoldenQuestions(self, project, submissions):
+    def set_golden_questions(self,
+                             project: str,
+                             submissions: tuple) -> dict:
         '''
-            Receives an iterable of tuples (uuid, bool) and updates the
-            property "isGoldenQuestion" of the images accordingly.
+            Receives an iterable of tuples (uuid, bool) and updates the property "isGoldenQuestion"
+            of the images accordingly.
         '''
-        if common.check_demo_mode(project, self.dbConnector):
+        if common.check_demo_mode(project, self.db_connector):
             return {
                 'status': 2,
                 'message': 'Not allowed in demo mode.'
             }
 
-        projImmutables = self.get_project_immutables(project)
-
-        queryStr = sql.SQL('''
-            UPDATE {id_img} AS img SET isGoldenQuestion = c.isGoldenQuestion
-            FROM (VALUES %s)
-            AS c (id, isGoldenQuestion)
-            WHERE c.id = img.id
-            RETURNING img.id, img.isGoldenQuestion;
-        ''').format(
-            id_img=sql.Identifier(project, 'image')
-        )
-        result = self.dbConnector.insert(queryStr, submissions, 'all')
+        query_str = sql.SQL('''
+                UPDATE {id_img} AS img SET isGoldenQuestion = c.isGoldenQuestion
+                FROM (VALUES %s)
+                AS c (id, isGoldenQuestion)
+                WHERE c.id = img.id
+                RETURNING img.id, img.isGoldenQuestion;
+            ''').format(
+                id_img=sql.Identifier(project, 'image')
+            )
+        result = self.db_connector.insert(query_str,
+                                          submissions,
+                                          'all')
         imgs_result = {}
-        for r in result:
-            imgs_result[str(r[0])] = r[1]
+        for res in result:
+            imgs_result[str(res[0])] = res[1]
 
         return {
             'status': 0,
@@ -803,34 +876,41 @@ class DBMiddleware():
         }
 
 
-    def getBookmarks(self, project, user):
+    def get_bookmarks(self,
+                      project: str,
+                      user: str) -> dict:
         '''
-            Returns a list of image UUIDs and file names that have been bookmarked by a
-            given user, along with the timestamp at which the bookmarks got created.
+            Returns a list of image UUIDs and file names that have been bookmarked by a given user,
+            along with the timestamp at which the bookmarks got created.
         '''
-        queryStr = sql.SQL('''SELECT image, filename, EXTRACT(epoch FROM timeCreated) AS timeCreated
-            FROM {id_bookmark} AS bm
-            JOIN {id_img} AS img
-            ON bm.image = img.id
-            WHERE username = %s
-            ORDER BY timeCreated DESC;
-        ''').format(
-            id_bookmark=sql.Identifier(project, 'bookmark'),
-            id_img=sql.Identifier(project, 'image')
-        )
-        result = self.dbConnector.execute(queryStr, (user,), 'all')
-        result = [(str(r['image']), r['filename'], r['timecreated']) for r in result]
+        query_str = sql.SQL('''SELECT image, filename,
+                EXTRACT(epoch FROM timeCreated) AS timeCreated
+                FROM {id_bookmark} AS bm
+                JOIN {id_img} AS img
+                ON bm.image = img.id
+                WHERE username = %s
+                ORDER BY timeCreated DESC;
+            ''').format(
+                id_bookmark=sql.Identifier(project, 'bookmark'),
+                id_img=sql.Identifier(project, 'image')
+            )
+        result = self.db_connector.execute(query_str,
+                                           (user,),
+                                           'all')
+        result = [(str(res['image']), res['filename'], res['timecreated']) for res in result]
         return {
             'status': 0,
             'bookmarks': result
         }
 
 
-    def setBookmark(self, project, user, bookmarks):
+    def set_bookmarks(self,
+                      project: str,
+                      user: str,
+                      bookmarks: dict) -> dict:
         '''
-            Receives a user name and a dict of image IDs (key)
-            and whether they should become bookmarks (True) or
-            be removed from the list (False).
+            Receives a user name and a dict of image IDs (key) and whether they should become
+            bookmarks (True) or be removed from the list (False).
         '''
         if bookmarks is None or not isinstance(bookmarks, dict) or len(bookmarks.keys()) == 0:
             return {
@@ -843,46 +923,48 @@ class DBMiddleware():
         imgs_error = []
         imgs_set, imgs_clear = [], []
 
-        for b in bookmarks:
+        for bookmark in bookmarks:
             try:
-                imageID = UUID(b)
-                if bool(bookmarks[b]):
-                    imgs_set.append(tuple((user, imageID)))
+                image_id = UUID(bookmark)
+                if bool(bookmarks[bookmark]):
+                    imgs_set.append(tuple((user, image_id)))
                 else:
-                    imgs_clear.append(imageID)
+                    imgs_clear.append(image_id)
             except Exception:
-                imgs_error.append(b)
+                imgs_error.append(bookmark)
         imgs_error = set(imgs_error)
 
         # insert new bookmarks
-        if len(imgs_set):
-            queryStr = sql.SQL('''
-                INSERT INTO {id_bookmark} (username, image)
-                SELECT val.username, val.imgID
-                FROM (
-                    VALUES %s
-                ) AS val (username, imgID)
-                JOIN (
-                    SELECT id AS imgID FROM {id_img}
-                ) AS img USING (imgID)
-                ON CONFLICT (username, image) DO NOTHING
-                RETURNING image;
-            ''').format(
-                id_bookmark=sql.Identifier(project, 'bookmark'),
-                id_img=sql.Identifier(project, 'image')
-            )
-            result = self.dbConnector.execute(queryStr, imgs_set, 'all')
-            imageIDs_set = set([str(i[1]) for i in imgs_set])
-            for r in result:
-                imageID = str(r['image'])
-                if imageID not in imageIDs_set:
-                    imgs_error.add(imageID)
+        if len(imgs_set) > 0:
+            query_str = sql.SQL('''
+                    INSERT INTO {id_bookmark} (username, image)
+                    SELECT val.username, val.imgID
+                    FROM (
+                        VALUES %s
+                    ) AS val (username, imgID)
+                    JOIN (
+                        SELECT id AS imgID FROM {id_img}
+                    ) AS img USING (imgID)
+                    ON CONFLICT (username, image) DO NOTHING
+                    RETURNING image;
+                ''').format(
+                    id_bookmark=sql.Identifier(project, 'bookmark'),
+                    id_img=sql.Identifier(project, 'image')
+                )
+            result = self.db_connector.execute(query_str,
+                                               imgs_set,
+                                               'all')
+            image_ids_set = set(str(img[1]) for img in imgs_set)
+            for res in result:
+                image_id = str(res['image'])
+                if image_id not in image_ids_set:
+                    imgs_error.add(image_id)
                 else:
-                    imgs_success.append(imageID)
-        
+                    imgs_success.append(image_id)
+
         # remove existing bookmarks
-        if len(imgs_clear):
-            queryStr = sql.SQL('''
+        if len(imgs_clear) > 0:
+            query_str = sql.SQL('''
                 DELETE FROM {id_bookmark}
                 WHERE username = %s
                 AND image IN %s
@@ -890,19 +972,21 @@ class DBMiddleware():
             ''').format(
                 id_bookmark=sql.Identifier(project, 'bookmark')
             )
-            result = self.dbConnector.execute(queryStr, (user, tuple(imgs_clear)), 'all')
-            for r in result:
-                imageID = str(r['image'])
-                imgs_success.append(imageID)
+            result = self.db_connector.execute(query_str,
+                                               (user, tuple(imgs_clear)),
+                                               'all')
+            for res in result:
+                image_id = str(res['image'])
+                imgs_success.append(image_id)
 
-            imgs_error.update(set(imgs_clear).difference(set([r['image'] for r in result])))
+            imgs_error.update(set(imgs_clear).difference(set(res['image'] for res in result)))
 
         response = {
             'status': 0,
             'bookmarks_success': imgs_success
         }
-        if len(imgs_error):
-            imgs_error = [str(i) for i in list(imgs_error)]
+        if len(imgs_error) > 0:
+            imgs_error = [str(img) for img in list(imgs_error)]
             response['bookmarks_error'] = imgs_error
-        
+
         return response
