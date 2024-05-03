@@ -1,6 +1,6 @@
 <img src="doc/figures/AIDE_banner.png" alt="AIDE banner" width="100%"/>
 
-[![Ubuntu build](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/ubuntu_build.yaml/badge.svg)](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/ubuntu_build.yaml) [![macOS build](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/macos_build.yaml/badge.svg)](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/macos_build.yaml) [![Docker build](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/build_docker-compose.yaml/badge.svg)](https://github.com/bkellenb/AIDE_githubactions_tests/actions/workflows/build_docker-compose.yaml)
+[![Ubuntu build](https://github.com/bkellenb/AIDE/actions/workflows/ubuntu_build.yaml/badge.svg)](https://github.com/bkellenb/AIDE/actions/workflows/ubuntu_build.yaml) [![macOS build](https://github.com/bkellenb/AIDE/actions/workflows/macos_build.yaml/badge.svg)](https://github.com/bkellenb/AIDE/actions/workflows/macos_build.yaml) [![Docker build](https://github.com/bkellenb/AIDE/actions/workflows/build_docker-compose.yaml/badge.svg)](https://github.com/bkellenb/AIDE/actions/workflows/build_docker-compose.yaml)
 
 **This is the new official repository for AIDE, superseding the [previous
 one](https://github.com/microsoft/aerial_wildlife_detection).**

@@ -57,303 +57,334 @@
         - Repeater nodes may also have the same id for "start_node" and "end_node,"
           which results in a single task being executed "num_repetitions" times.
 
-    2020-21 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
+from types import ModuleType
+from typing import Union
 import json
 from psycopg2 import sql
 import celery
 
-from .defaultOptions import DEFAULT_WORKFLOW_ARGS
 from modules.AIController.backend import celery_interface as aic_int
 from modules.AIWorker.backend import celery_interface as aiw_int
 from util.helpers import get_class_executable
+from .defaultOptions import DEFAULT_WORKFLOW_ARGS
 
 
 
-def expand_from_name(index, project, taskName, workflow, projDefaults):
+def expand_from_name(index: int,
+                     project: str,
+                     task_name: str,
+                     workflow: dict,
+                     project_defaults: dict) -> dict:
     '''
-        Creates and returns a task description dict from a task name.
-        Receives the workflow description for global arguments, but also
-        resorts to default arguments for auto-completion, if necessary.
+        Creates and returns a task description dict from a task name. Receives the workflow
+        description for global arguments, but also resorts to default arguments for auto-completion,
+        if necessary.
     '''
-    if not taskName in DEFAULT_WORKFLOW_ARGS:
-        raise Exception(f'Unknown task name provided ("{taskName}") for task at index {index}.')
+    if not task_name in DEFAULT_WORKFLOW_ARGS:
+        raise ValueError(f'Unknown task name provided ("{task_name}") for task at index {index}.')
 
     # default arguments
-    taskArgs = DEFAULT_WORKFLOW_ARGS[taskName]
+    task_args = DEFAULT_WORKFLOW_ARGS[task_name]
 
     # replace with global options if available
-    for key in taskArgs.keys():
+    for key in task_args.keys():
         if key in workflow['options']:
-            taskArgs[key] = workflow['options'][key]    #TODO: sanity checks (type, values, etc.)
-        elif key in projDefaults[taskName]:
-            taskArgs[key] = projDefaults[taskName][key]
+            task_args[key] = workflow['options'][key]    #TODO: sanity checks (type, values, etc.)
+        elif key in project_defaults[task_name]:
+            task_args[key] = project_defaults[task_name][key]
 
     return {
-        'type': taskName,
+        'type': task_name,
         'project': project,
-        'kwargs': taskArgs
+        'kwargs': task_args
     }
 
 
 
-def verify_model_options(modelClass, options):
-    if modelClass is None or not hasattr(modelClass, 'verifyOptions'):
+def verify_model_options(model_class: ModuleType, options: dict) -> bool:
+    '''
+        Receives an AI model class and a dict of options and calls the class' verification routine
+        to check whether options are valid or not. Returns True even if an exception occurs as the
+        problem then lies with the model, not the options.
+    '''
+    if model_class is None or not hasattr(model_class, 'verifyOptions'):
         return True
     try:
-        response = modelClass.verifyOptions(options)
+        response = model_class.verifyOptions(options)
         if isinstance(response, bool):
             return response
-        elif isinstance(response, dict) and 'valid' in response:
+        if isinstance(response, dict) and 'valid' in response:
             return bool(response['valid'])
-        else:
-            return True
+        return True
     except Exception:
         return True
 
 
 
-def get_training_signature(project, taskArgs, isFirstNode=False, modelClass=None):
-    epoch = taskArgs['epoch']
-    numEpochs = taskArgs['numEpochs']
-    numWorkers = taskArgs['max_num_workers']
-    aiModelSettings = (taskArgs['ai_model_settings'] if 'ai_model_settings' in taskArgs else None)
-    if not verify_model_options(modelClass, aiModelSettings):
-        aiModelSettings = None
+def get_training_signature(project: str,
+                           task_args: dict,
+                           is_first_node: bool=False,
+                           model_class: ModuleType=None) -> celery.chain:
+    '''
+        Creates a Celery.chain for model training.
+    '''
+    epoch = task_args['epoch']
+    num_epochs = task_args['numEpochs']
+    num_workers = task_args['max_num_workers']
+    ai_model_settings = task_args.get('ai_model_settings', None)
+    if not verify_model_options(model_class, ai_model_settings):
+        ai_model_settings = None
 
     # initialize list for Celery chain tasks
-    taskList = []
+    task_list = []
 
-    if not 'data' in taskArgs:
+    if not 'data' in task_args:
         # no list of images provided; prepend getting training images
-        minNumAnnoPerImage = taskArgs['min_anno_per_image']
-        if isinstance(minNumAnnoPerImage, str):
-            if len(minNumAnnoPerImage):
-                minNumAnnoPerImage = int(minNumAnnoPerImage)
+        min_num_anno_per_image = task_args['min_anno_per_image']
+        if isinstance(min_num_anno_per_image, str):
+            if len(min_num_anno_per_image) > 0:
+                min_num_anno_per_image = int(min_num_anno_per_image)
             else:
-                minNumAnnoPerImage = None
+                min_num_anno_per_image = None
 
-        maxNumImages = taskArgs['max_num_images']
-        if isinstance(maxNumImages, str):
-            if len(maxNumImages):
-                maxNumImages = int(maxNumImages)
+        max_num_images = task_args['max_num_images']
+        if isinstance(max_num_images, str):
+            if len(max_num_images) > 0:
+                max_num_images = int(max_num_images)
             else:
-                maxNumImages = None
+                max_num_images = None
 
         img_task_kwargs = {'project': project,
-                        'epoch': epoch,
-                        'numEpochs': numEpochs,
-                        'minTimestamp': taskArgs['min_timestamp'],
-                        'includeGoldenQuestions': taskArgs['include_golden_questions'],
-                        'minNumAnnoPerImage': minNumAnnoPerImage,
-                        'maxNumImages': maxNumImages,
-                        'numWorkers': numWorkers}
-        if isFirstNode:
+                           'epoch': epoch,
+                           'numEpochs': num_epochs,
+                           'minTimestamp': task_args['min_timestamp'],
+                           'includeGoldenQuestions': task_args['include_golden_questions'],
+                           'minNumAnnoPerImage': min_num_anno_per_image,
+                           'maxNumImages': max_num_images,
+                           'numWorkers': num_workers}
+        if is_first_node:
             # first node: prepend update model task and fill blank
             img_task_kwargs['blank'] = None
             update_model_kwargs = {'project': project,
-                                'numEpochs': numEpochs,
-                                'blank': None}
-            taskList.append(
+                                   'numEpochs': num_epochs,
+                                   'blank': None}
+            task_list.append(
                 celery.group([
                     aic_int.get_training_images.s(**img_task_kwargs).set(queue='AIController'),
                     aiw_int.call_update_model.s(**update_model_kwargs).set(queue='AIWorker')
                 ])
             )
         else:
-            taskList.append(
+            task_list.append(
                 aic_int.get_training_images.s(**img_task_kwargs).set(queue='AIController')
             )
 
-        trainArgs = {
+        train_args = {
             'epoch': epoch,
-            'numEpochs': numEpochs,
+            'numEpochs': num_epochs,
             'project': project,
-            'aiModelSettings': aiModelSettings
+            'aiModelSettings': ai_model_settings
         }
-    
-    else:
-        trainArgs = {
-            'data': taskArgs['data'],
-            'epoch': epoch,
-            'numEpochs': numEpochs,
-            'project': project,
-            'aiModelSettings': aiModelSettings
-        }
-    
 
-    if numWorkers > 1:
+    else:
+        train_args = {
+            'data': task_args['data'],
+            'epoch': epoch,
+            'numEpochs': num_epochs,
+            'project': project,
+            'aiModelSettings': ai_model_settings
+        }
+
+    if num_workers > 1:
         # distribute training; also need to call model state averaging
-        trainTasks = []
-        for w in range(numWorkers):
-            train_kwargs = {**trainArgs, **{'index':w}}
-            trainTasks.append(aiw_int.call_train.s(**train_kwargs).set(queue='AIWorker'))
-        taskList.append(
+        train_tasks = []
+        for w in range(num_workers):
+            train_kwargs = {**train_args, **{'index': w}}
+            train_tasks.append(aiw_int.call_train.s(**train_kwargs).set(queue='AIWorker'))
+        task_list.append(
             celery.chord(
-                trainTasks,
-                aiw_int.call_average_model_states.si(**{'epoch':epoch, 'numEpochs':numEpochs, 'project':project, 'aiModelSettings':aiModelSettings}).set(queue='AIWorker')
+                train_tasks,
+                aiw_int.call_average_model_states.si(**{'epoch': epoch,
+                            'numEpochs': num_epochs,
+                            'project': project,
+                            'aiModelSettings': ai_model_settings}).set(queue='AIWorker')
             )
         )
-    
     else:
         # training on single worker
-        train_kwargs = {**trainArgs, **{'index':0}}
-        taskList.append(
+        train_kwargs = {**train_args, **{'index': 0}}
+        task_list.append(
             aiw_int.call_train.s(**train_kwargs).set(queue='AIWorker')
         )
-    return celery.chain(taskList)
+    return celery.chain(task_list)
 
 
 
-def get_inference_signature(project, taskArgs, isFirstNode=False, modelClass=None):
-    epoch = taskArgs['epoch']
-    numEpochs = taskArgs['numEpochs']
-    numWorkers = taskArgs['max_num_workers']
-    maxNumImages = taskArgs['max_num_images']
-    if isinstance(maxNumImages, str):
-        if len(maxNumImages):
-            maxNumImages = int(maxNumImages)
+def get_inference_signature(project: str,
+                            task_args: dict,
+                            is_first_node: bool=False,
+                            model_class: ModuleType=None) -> celery.chain:
+    '''
+        Creates a Celery.chain for inference.
+    '''
+    epoch = task_args['epoch']
+    num_epochs = task_args['numEpochs']
+    num_workers = task_args['max_num_workers']
+    max_num_images = task_args['max_num_images']
+    if isinstance(max_num_images, str):
+        if len(max_num_images):
+            max_num_images = int(max_num_images)
         else:
-            maxNumImages = None
-    aiModelSettings = (taskArgs['ai_model_settings'] if 'ai_model_settings' in taskArgs else None)
-    if not verify_model_options(modelClass, aiModelSettings):
-        aiModelSettings = None
-    alCriterionSettings = (taskArgs['alcriterion_settings'] if 'alcriterion_settings' in taskArgs else None)
+            max_num_images = None
+    ai_model_settings = task_args.get('ai_model_settings', None)
+    if not verify_model_options(model_class, ai_model_settings):
+        ai_model_settings = None
+    al_criterion_settings = task_args.get('alcriterion_settings', None)
 
     # initialize list for Celery chain tasks
-    taskList = []
+    task_list = []
 
-    if not 'data' in taskArgs:
+    if not 'data' in task_args:
         # no list of images provided; prepend getting inference images
         img_task_kwargs = {'project': project,
-                        'epoch': epoch,
-                        'numEpochs': numEpochs,
-                        'goldenQuestionsOnly': taskArgs['golden_questions_only'],
-                        'maxNumImages': maxNumImages,
-                        'numWorkers': numWorkers}
-        if isFirstNode:
+                           'epoch': epoch,
+                           'numEpochs': num_epochs,
+                           'goldenQuestionsOnly': task_args['golden_questions_only'],
+                           'maxNumImages': max_num_images,
+                           'numWorkers': num_workers}
+        if is_first_node:
             # first task to be executed; prepend model update and fill blanks
             img_task_kwargs['blank'] = None
             update_model_kwargs = {'project': project,
-                                'numEpochs': numEpochs,
+                                'numEpochs': num_epochs,
                                 'blank': None}
-            taskList.append(
+            task_list.append(
                 celery.group([
                     aic_int.get_inference_images.s(**img_task_kwargs).set(queue='AIController'),
                     aiw_int.call_update_model.s(**update_model_kwargs).set(queue='AIWorker')
                 ])
             )
         else:
-            taskList.append(
+            task_list.append(
                 aic_int.get_inference_images.s(**img_task_kwargs).set(queue='AIController')
             )
 
-        inferenceArgs = {
+        inference_args = {
             'epoch': epoch,
-            'numEpochs': numEpochs,
+            'numEpochs': num_epochs,
             'project': project,
-            'aiModelSettings': aiModelSettings,
-            'alCriterionSettings': alCriterionSettings
-        }
-    
-    else:
-        inferenceArgs = {
-            'data': taskArgs['data'],
-            'epoch': epoch,
-            'numEpochs': numEpochs,
-            'project': project,
-            'aiModelSettings': aiModelSettings,
-            'alCriterionSettings': alCriterionSettings
+            'aiModelSettings': ai_model_settings,
+            'alCriterionSettings': al_criterion_settings
         }
 
-    if numWorkers > 1:
+    else:
+        inference_args = {
+            'data': task_args['data'],
+            'epoch': epoch,
+            'numEpochs': num_epochs,
+            'project': project,
+            'aiModelSettings': ai_model_settings,
+            'alCriterionSettings': al_criterion_settings
+        }
+
+    if num_workers > 1:
         # distribute inference
-        inferenceTasks = []
-        for w in range(numWorkers):
-            inference_kwargs = {**inferenceArgs, **{'index':w}}
-            inferenceTasks.append(aiw_int.call_inference.s(**inference_kwargs).set(queue='AIWorker'))
-        taskList.append(celery.group(inferenceTasks))
-    
+        inference_tasks = []
+        for w in range(num_workers):
+            inference_kwargs = {**inference_args, **{'index':w}}
+            inference_tasks.append(
+                aiw_int.call_inference.s(**inference_kwargs).set(queue='AIWorker'))
+        task_list.append(celery.group(inference_tasks))
+
     else:
         # training on single worker
-        inference_kwargs = {**inferenceArgs, **{'index':0}}
-        taskList.append(
+        inference_kwargs = {**inference_args, **{'index':0}}
+        task_list.append(
             aiw_int.call_inference.s(**inference_kwargs).set(queue='AIWorker')
         )
-    return celery.chain(taskList)
+    return celery.chain(task_list)
 
 
 
-def create_celery_task(project, taskDesc, isFirstTask, verifyOnly=False, modelClass=None):
+def create_celery_task(project: str,
+                       task_description: dict,
+                       is_first_task: bool,
+                       verify_only: bool=False,
+                       model_class: ModuleType=None) -> Union[celery.chain, bool]:
     '''
-        Receives a task description (full dict with name and kwargs)
-        and creates true Celery task routines from it.
-        If "verifyOnly" is set to True, it just returns a bool indi-
-        cating whether the task description is valid (True) or not
-        (False).
-        Accounts for special cases, such as:
+        Receives a task description (full dict with name and kwargs) and creates true Celery task
+        routines from it. If "verifyOnly" is set to True, it just returns a bool indi- cating
+        whether the task description is valid (True) or not (False). Accounts for special cases,
+        such as:
             - train: if more than one worker is specified, the task is
-                        a chain of distributed training and model state
-                        averaging.
+                        a chain of distributed training and model state averaging.
             - train and inference: if no list of image IDs is provided,
-                                    a job of retrieving the latest set of
-                                    images is prepended.
+                                    a job of retrieving the latest set of images is prepended.
             - etc.
         
-        Returns a Celery job that can be appended to a global chain.
+        Returns a Celery job that can be appended to a global chain, or else a bool indicating if
+        the task could be created or not (if "verify_only" is True).
     '''
     try:
-        taskName = taskDesc['type'].lower()
-        if taskName == 'train':
-            task = get_training_signature(project, taskDesc['kwargs'], isFirstTask, modelClass)
-        elif taskName == 'inference':
-            task = get_inference_signature(project, taskDesc['kwargs'], isFirstTask, modelClass)
+        task_name = task_description['type'].lower()
+        if task_name == 'train':
+            task = get_training_signature(project,
+                                          task_description['kwargs'],
+                                          is_first_task,
+                                          model_class)
+        elif task_name == 'inference':
+            task = get_inference_signature(project,
+                                           task_description['kwargs'],
+                                           is_first_task,
+                                           model_class)
         else:
             task = None
     except Exception:
         task = None
-    if verifyOnly:
-        return (task is not None)
-    else:
-        return task
+    if verify_only:
+        return task is not None
+    return task
 
 
 
 class WorkflowDesigner:
-
+    '''
+        Server backend class for parsing, saving, and launching workflow graph definitions.
+    '''
     def __init__(self, dbConnector, celeryApp):
         self.dbConnector = dbConnector
         self.celeryApp = celeryApp
 
 
-    def _get_num_available_workers(self):
+    def _get_num_available_workers(self) -> int:
         #TODO: improve...
-        numWorkers = 0
+        num_workers = 0
         i = self.celeryApp.control.inspect()
         if i is not None:
-            activeQueues = i.active_queues()
-            if activeQueues is not None:
-                for qName in activeQueues.keys():
-                    queue = activeQueues[qName]
+            queues_active = i.active_queues()
+            if queues_active is not None:
+                for queue_name in queues_active.keys():
+                    queue = queues_active[queue_name]
                     for subqueue in queue:
                         if 'name' in subqueue and subqueue['name'] == 'AIWorker':
-                            numWorkers += 1
-        return numWorkers
+                            num_workers += 1
+        return num_workers
 
 
-    def _get_project_defaults(self, project):
+    def _get_project_defaults(self, project: str) -> dict:
         '''
-            Queries and returns default values for some project-specific
-            parameters.
+            Queries and returns default values for some project-specific parameters.
         '''
-        queryStr = sql.SQL('''
+        query_str = sql.SQL('''
             SELECT minNumAnnoPerImage, maxNumImages_train, maxNumImages_inference,
             ai_model_library
             FROM aide_admin.project
             WHERE shortname = %s;
         ''')
-        result = self.dbConnector.execute(queryStr, (project,), 1)
+        result = self.dbConnector.execute(query_str, (project,), 1)
         result = result[0]
         return {
             'train': {
@@ -367,18 +398,17 @@ class WorkflowDesigner:
         }
 
 
-
-    def parseWorkflow(self, project, workflow, verifyOnly=False):
+    def parse_workflow(self,
+                       project: str, workflow: Union[dict,str],
+                       verify_only: bool=False) -> Union[celery.chain,bool]:
         '''
-            Parses a workflow as described in the header of this file. Auto-
-            completes missing arguments and provides appropriate function ex-
-            pansion wherever needed (e.g., "train" may become "get images" > 
-            "train across multiple workers" > "average model states").
+            Parses a workflow as described in the header of this file. Auto- completes missing
+            arguments and provides appropriate function ex- pansion wherever needed (e.g., "train"
+            may become "get images" > "train across multiple workers" > "average model states").
 
-            If "verifyOnly" is set to True, the function returns a bool indi-
-            cating whether the workflow is valid (True) or not (False).
-            Else, it returns a Celery chain that can be submitted to the task
-            queue via the AIController's middleware.
+            If "verify_only" is set to True, the function returns a bool indi- cating whether the
+            workflow is valid (True) or not (False). Else, it returns a Celery chain that can be
+            submitted to the task queue via the AIController's middleware.
         '''
 
         #TODO: sanity checks
@@ -388,137 +418,148 @@ class WorkflowDesigner:
             workflow['options'] = {}    # for compatibility
 
         # get number of available workers
-        numWorkersMax = self._get_num_available_workers()
+        num_workers_max = self._get_num_available_workers()
 
         # get default project settings for some of the parameters
-        projDefaults = self._get_project_defaults(project)
+        project_defaults = self._get_project_defaults(project)
 
         # initialize model instance to verify options if possible
         try:
-            modelClass = get_class_executable(projDefaults['ai_model_library'])
+            model_class = get_class_executable(project_defaults['ai_model_library'])
             # if hasattr(modelClass, 'verifyOptions'):
             #     response = modelClass.verifyOptions(modelOptions)
         except Exception:
-            modelClass = None
+            model_class = None
 
         # expand task specifications with repeaters
         workflow_expanded = workflow['tasks']
         if 'repeaters' in workflow:
             # get node order first
-            nodeOrder = []
-            nodeIndex = {}
+            node_order = []
+            node_index = {}
             for idx, node in enumerate(workflow_expanded):
                 if isinstance(node, dict) and 'id' in node:
-                    nodeOrder.append(node['id'])
-                    nodeIndex[node['id']] = idx
+                    node_order.append(node['id'])
+                    node_index[node['id']] = idx
 
             # get start node for repeaters
-            startNodeIDs = {}
+            start_node_ids = {}
             for key in workflow['repeaters']:
-                startNode = workflow['repeaters'][key]['start_node']
-                startNodeIDs[startNode] = key
-            
+                start_node = workflow['repeaters'][key]['start_node']
+                start_node_ids[start_node] = key
+
             # process repeaters front to back (start with first)
-            for nodeID in nodeOrder:
-                if nodeID in startNodeIDs:
+            for node_id in node_order:
+                if node_id in start_node_ids:
                     # find indices of start and end node
-                    startNodeIndex = nodeIndex[nodeID]
-                    repeaterID = startNodeIDs[nodeID]
-                    endNodeIndex = nodeIndex[workflow['repeaters'][repeaterID]['end_node']]
+                    start_node_idx = node_index[node_id]
+                    repeater_id = start_node_ids[node_id]
+                    end_node_idx = node_index[workflow['repeaters'][repeater_id]['end_node']]
 
                     # extract and expand sub-workflow
-                    subWorkflow = workflow['tasks'][endNodeIndex:startNodeIndex+1]
-                    targetSubWorkflow = []
-                    numRepetitions = workflow['repeaters'][repeaterID]['kwargs']['num_repetitions']
-                    for _ in range(numRepetitions):
-                        targetSubWorkflow.extend(subWorkflow.copy())
+                    sub_workflow = workflow['tasks'][end_node_idx:start_node_idx+1]
+                    target_sub_workflow = []
+                    num_reps = workflow['repeaters'][repeater_id]['kwargs']['num_repetitions']
+                    for _ in range(num_reps):
+                        target_sub_workflow.extend(sub_workflow.copy())
 
                     # insert after
-                    workflow_expanded = workflow_expanded[:startNodeIndex+1] + targetSubWorkflow + workflow_expanded[startNodeIndex+1:]
-        
+                    workflow_expanded = workflow_expanded[:start_node_idx+1] + \
+                                                target_sub_workflow + \
+                                                workflow_expanded[start_node_idx+1:]
+
         # epoch counter (only training jobs can increment it)
         epoch = 1
 
         # parse entries in workflow
-        taskDescriptions = []
-        for index, taskSpec in enumerate(workflow_expanded):
-            if isinstance(taskSpec, str):
+        task_descriptions = []
+        for tidx, task_spec in enumerate(workflow_expanded):
+            if isinstance(task_spec, str):
                 # task name provided
-                if taskSpec == 'repeater' or taskSpec == 'connector':
+                if task_spec in ('repeater', 'connector'):
                     continue
                 #auto-expand into dict first
-                taskDesc = expand_from_name(index, project, taskSpec, workflow, projDefaults)
-                taskName = taskDesc['type']
+                task_description = expand_from_name(tidx,
+                                                    project,
+                                                    task_spec,
+                                                    workflow,
+                                                    project_defaults)
+                task_name = task_description['type']
 
-            elif isinstance(taskSpec, dict):
+            elif isinstance(task_spec, dict):
                 # task dictionary provided; verify and auto-complete if necessary
-                taskDesc = taskSpec.copy()
-                if not 'type' in taskDesc:
-                    raise Exception(f'Task at index {index} is of unknown type.')
-                taskName = taskDesc['type']
-                if taskName == 'repeater' or taskName == 'connector':
+                task_description = task_spec.copy()
+                if 'type' not in task_description:
+                    raise ValueError(f'Task at index {tidx} is of unknown type.')
+                task_name = task_description['type']
+                if task_name in ('repeater', 'connector'):
                     continue
-                if not taskName in DEFAULT_WORKFLOW_ARGS:
-                    raise Exception(f'Unknown task type provided ("{taskName}") for task at index {index}.')
-                
-            defaultArgs = DEFAULT_WORKFLOW_ARGS[taskName].copy()
-            if not 'kwargs' in taskDesc:
+                if task_name not in DEFAULT_WORKFLOW_ARGS:
+                    raise ValueError(f'Unknown task type provided ("{task_name}") ' + \
+                                     f'for task at index {tidx}.')
+
+            default_args = DEFAULT_WORKFLOW_ARGS[task_name].copy()
+            if 'kwargs' not in task_description:
                 # no arguments provided; add defaults
-                taskDesc['kwargs'] = defaultArgs
+                task_description['kwargs'] = default_args
 
                 # replace with global arguments wherever possible
-                for key in taskDesc['kwargs'].keys():
+                for key in task_description['kwargs'].keys():
                     if key in workflow['options']:
-                        taskDesc['kwargs'][key] = workflow['options'][key]
-                    elif key in projDefaults[taskName]:
-                        taskDesc['kwargs'][key] = projDefaults[taskName][key]
-            
+                        task_description['kwargs'][key] = workflow['options'][key]
+                    elif key in project_defaults[task_name]:
+                        task_description['kwargs'][key] = project_defaults[task_name][key]
+
             else:
                 # arguments provided; auto-complete wherever needed
-                for key in defaultArgs.keys():
-                    if not key in taskDesc['kwargs']:
+                for key in default_args.keys():
+                    if not key in task_description['kwargs']:
                         if key in workflow['options']:
                             # global option available
-                            taskDesc['kwargs'][key] = workflow['options'][key]
-                        elif key in projDefaults[taskName]:
+                            task_description['kwargs'][key] = workflow['options'][key]
+                        elif key in project_defaults[task_name]:
                             # fallback 1: default project setting
-                            taskDesc['kwargs'][key] = projDefaults[taskName][key]
+                            task_description['kwargs'][key] = project_defaults[task_name][key]
                         else:
                             # fallback 2: default option
-                            taskDesc['kwargs'][key] = defaultArgs[key]
+                            task_description['kwargs'][key] = default_args[key]
 
-            if 'max_num_workers' in taskDesc['kwargs']:
-                if isinstance(taskDesc['kwargs']['max_num_workers'], str):
-                    if len(taskDesc['kwargs']['max_num_workers']):
-                        taskDesc['kwargs']['max_num_workers'] = int(taskDesc['kwargs']['max_num_workers'])
+            if 'max_num_workers' in task_description['kwargs']:
+                if isinstance(task_description['kwargs']['max_num_workers'], str):
+                    if len(task_description['kwargs']['max_num_workers']) > 0:
+                        task_description['kwargs']['max_num_workers'] = \
+                            int(task_description['kwargs']['max_num_workers'])
                     else:
-                        taskDesc['kwargs']['max_num_workers'] = defaultArgs['max_num_workers']
-                
-                taskDesc['kwargs']['max_num_workers'] = min(
-                    taskDesc['kwargs']['max_num_workers'],
-                    numWorkersMax
+                        task_description['kwargs']['max_num_workers'] = \
+                            default_args['max_num_workers']
+
+                task_description['kwargs']['max_num_workers'] = min(
+                    task_description['kwargs']['max_num_workers'],
+                    num_workers_max
                 )
             else:
-                taskDesc['kwargs']['max_num_workers'] = defaultArgs['max_num_workers']
+                task_description['kwargs']['max_num_workers'] = default_args['max_num_workers']
 
-            taskDesc['kwargs']['epoch'] = epoch
-            if taskName.lower() == 'train':
+            task_description['kwargs']['epoch'] = epoch
+            if task_name.lower() == 'train':
                 epoch += 1
 
-            taskDescriptions.append(taskDesc)
+            task_descriptions.append(task_description)
 
         # construct celery tasks out of descriptions
         tasklist = []
-        for index, taskDesc in enumerate(taskDescriptions):
+        for tidx, task_description in enumerate(task_descriptions):
             # add number of epochs as argument
-            taskDesc['kwargs']['numEpochs'] = epoch
-            task = create_celery_task(project, taskDesc, isFirstTask=(True if index==0 else False), verifyOnly=verifyOnly, modelClass=modelClass)
+            task_description['kwargs']['numEpochs'] = epoch
+            task = create_celery_task(project,
+                                      task_description,
+                                      is_first_task=tidx==0,
+                                      verify_only=verify_only,
+                                      model_class=model_class)
             tasklist.append(task)
 
-        if verifyOnly:
+        if verify_only:
             #TODO: detailed warnings and errors
             return all(tasklist)
-        
-        else:
-            chain = celery.chain(tasklist)
-            return chain
+
+        return celery.chain(tasklist)

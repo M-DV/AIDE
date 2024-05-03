@@ -34,34 +34,34 @@ class AIMiddleware():
         Interface for the AI model side of AIDE between the frontend, database, and AIWorker task
         orchestration.
     '''
-    def __init__(self, config, dbConnector, taskCoordinator, passiveMode=False):
+    def __init__(self, config, dbConnector, taskCoordinator, passiveMode=False) -> None:
         self.config = config
-        self.dbConn = dbConnector
-        self.taskCoordinator = taskCoordinator
-        self.sqlBuilder = SQLStringBuilder(config)
-        self.passiveMode = passiveMode
-        self.scriptPattern = re.compile(r'<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script\.?>')
+        self.db_connector = dbConnector
+        self.task_coordinator = taskCoordinator
+        self.sql_builder = SQLStringBuilder(config)
+        self.passive_mode = passiveMode
+        self.script_pattern = re.compile(r'<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script\.?>')
         self._init_available_ai_models()
 
         self.celery_app = current_app
         self.celery_app.set_current()
         self.celery_app.set_default()
 
-        if not self.passiveMode:
-            self.messageProcessor = MessageProcessor(self.celery_app)
+        if not self.passive_mode:
+            self.message_processor = MessageProcessor(self.celery_app)
 
             # one watchdog per project. Note: watchdog only created if users poll status (i.e., if
             # there's activity)
             self.watchdogs = {}
-            self.workflowDesigner = WorkflowDesigner(self.dbConn, self.celery_app)
-            self.workflowTracker = WorkflowTracker(self.dbConn, self.celery_app)
-            self.messageProcessor.start()
+            self.workflow_designer = WorkflowDesigner(self.db_connector, self.celery_app)
+            self.workflow_tracker = WorkflowTracker(self.db_connector, self.celery_app)
+            self.message_processor.start()
 
 
     def __del__(self):
-        if self.passiveMode:
+        if self.passive_mode:
             return
-        self.messageProcessor.stop()
+        self.message_processor.stop()
         for w in self.watchdogs.values():
             w.stop()
 
@@ -76,17 +76,17 @@ class AIMiddleware():
 
         # remove script tags and validate annotation and prediction types specified
         if 'name' in model and isinstance(model['name'], str):
-            model['name'] = re.sub(self.scriptPattern, '(script removed)', model['name'])
+            model['name'] = re.sub(self.script_pattern, '(script removed)', model['name'])
         else:
             model['name'] = model_key
         if 'description' in model and isinstance(model['description'], str):
-            model['description'] = re.sub(self.scriptPattern,
+            model['description'] = re.sub(self.script_pattern,
                                             '(script removed)',
                                             model['description'])
         else:
             model['description'] = '(no description available)'
         if 'author' in model and isinstance(model['author'], str):
-            model['author'] = re.sub(self.scriptPattern,
+            model['author'] = re.sub(self.script_pattern,
                                         '(script removed)',
                                         model['author'])
         else:
@@ -132,19 +132,19 @@ class AIMiddleware():
 
         #TODO: same problems as with prediction models
         if 'name' in ranker and isinstance(ranker['name'], str):
-            ranker['name'] = re.sub(self.scriptPattern,
+            ranker['name'] = re.sub(self.script_pattern,
                                     '(script removed)',
                                     ranker['name'])
         else:
             ranker['name'] = ranker_key
         if 'author' in ranker and isinstance(ranker['author'], str):
-            ranker['author'] = re.sub(self.scriptPattern,
+            ranker['author'] = re.sub(self.script_pattern,
                                         '(script removed)',
                                         ranker['author'])
         else:
             ranker['author'] = '(unknown)'
         if 'description' in ranker and isinstance(ranker['description'], str):
-            ranker['description'] = re.sub(self.scriptPattern,
+            ranker['description'] = re.sub(self.script_pattern,
                                             '(script removed)',
                                             ranker['description'])
         else:
@@ -209,8 +209,7 @@ class AIMiddleware():
         # check ranking models
         rankers_unavailable = []     # [(ranker, reason)]
         for ranker_key, ranker in models['ranking'].items():
-            ranker, messages = self._check_ranker_model_details(ranker_key,
-                                                                ranker)
+            ranker, messages = self._check_ranker_model_details(ranker_key, ranker)
 
             if ranker is None:
                 # pre-flight check failed
@@ -237,13 +236,13 @@ class AIMiddleware():
             process through the middleware. The thread will be terminated and destroyed; a new
             thread will only be re-created once the training process has finished.
         '''
-        if self.passiveMode:
+        if self.passive_mode:
             return
 
         if project not in self.watchdogs:
             self.watchdogs[project] = Watchdog(project,
                                                self.config,
-                                               self.dbConn,
+                                               self.db_connector,
                                                self)
             self.watchdogs[project].start()
 
@@ -270,7 +269,7 @@ class AIMiddleware():
         query_str = sql.SQL('''SELECT numImages_autoTrain,
             minNumAnnoPerImage, maxNumImages_train,maxNumImages_inference
             FROM aide_admin.project WHERE shortname = %s;''')
-        settings = self.dbConn.execute(query_str, (project,), 1)[0]
+        settings = self.db_connector.execute(query_str, (project,), 1)[0]
         return settings
 
 
@@ -288,7 +287,7 @@ class AIMiddleware():
         # pylint: disable=singleton-comparison
 
         # check whether project has an AI model configured
-        ai_model_library = self.dbConn.execute('''
+        ai_model_library = self.db_connector.execute('''
             SELECT ai_model_library
             FROM aide_admin.project
             WHERE shortname = %s;
@@ -352,7 +351,7 @@ class AIMiddleware():
                                                  'max_num_concurrent_tasks',
                                                  dtype=int,
                                                  fallback=2)
-        num_concurrent = self.dbConn.execute('''
+        num_concurrent = self.db_connector.execute('''
             SELECT max_num_concurrent_tasks
             FROM aide_admin.project
             WHERE shortname = %s;
@@ -374,7 +373,7 @@ class AIMiddleware():
             Used for AIDE administrative communication between AIController
             and AIWorker(s), e.g. for setting up queues.
         '''
-        if self.passiveMode:
+        if self.passive_mode:
             return
         #TODO: not required (yet)
 
@@ -492,7 +491,7 @@ class AIMiddleware():
                 conjunction=(sql.SQL('WHERE') if minTimestamp is None else sql.SQL('AND')),
                 limitStr=limit_str)
 
-        image_ids = self.dbConn.execute(query_str, tuple(query_vals), 'all')
+        image_ids = self.db_connector.execute(query_str, tuple(query_vals), 'all')
         image_ids = [i['image'] for i in image_ids]
 
         if maxNumWorkers > 1:
@@ -517,7 +516,7 @@ class AIMiddleware():
             available workers.
         '''
         if maxNumImages is None or maxNumImages == -1:
-            query_result = self.dbConn.execute('''
+            query_result = self.db_connector.execute('''
                 SELECT maxNumImages_inference
                 FROM aide_admin.project
                 WHERE shortname = %s;''', (project,), 1)
@@ -526,11 +525,11 @@ class AIMiddleware():
         query_vals = (maxNumImages,)
 
         # load the IDs of the images that are being subjected to inference
-        sql_str = self.sqlBuilder.get_inference_query_string(project,
+        sql_str = self.sql_builder.get_inference_query_string(project,
                                                           forceUnlabeled,
                                                           goldenQuestionsOnly,
                                                           maxNumImages)
-        image_ids = self.dbConn.execute(sql_str, query_vals, 'all')
+        image_ids = self.db_connector.execute(sql_str, query_vals, 'all')
         image_ids = [i['image'] for i in image_ids]
 
         # split for distribution across workers
@@ -594,11 +593,13 @@ class AIMiddleware():
             ],
             'options': {}
         }
-        process = self.workflowDesigner.parseWorkflow(project, workflow)
+        process = self.workflow_designer.parse_workflow(project, workflow)
 
-        
         # launch workflow
-        task_id = self.workflowTracker.launchWorkflow(project, process, workflow, author)
+        task_id = self.workflow_tracker.launchWorkflow(project,
+                                                       process,
+                                                       workflow,
+                                                       author)
 
         return {
             'status': 0,
@@ -640,7 +641,7 @@ class AIMiddleware():
                 ''').format(
                     id_workflow=sql.Identifier(project, 'workflow')
                 )
-                result = self.dbConn.execute(query_str, (project,), 1)
+                result = self.db_connector.execute(query_str, (project,), 1)
                 if result is None or len(result) == 0:
                     return {
                         'status': 2,
@@ -670,7 +671,7 @@ class AIMiddleware():
                 ''').format(
                     id_workflow=sql.Identifier(project, 'workflow')
                 )
-            result = self.dbConn.execute(query_str, (workflow,), 1)
+            result = self.db_connector.execute(query_str, (workflow,), 1)
             if result is None or len(result) == 0:
                 return {
                     'status': 2,
@@ -680,14 +681,19 @@ class AIMiddleware():
 
         # try to parse workflow
         try:
-            process = self.workflowDesigner.parseWorkflow(project, workflow, False)
+            process = self.workflow_designer.parse_workflow(project,
+                                                            workflow,
+                                                            False)
         except Exception as e:
             return {
                 'status': 4,
                 'message': f'Workflow could not be parsed (message: "{str(e)}")'
             }
 
-        task_id = self.workflowTracker.launchWorkflow(project, process, workflow, author)
+        task_id = self.workflow_tracker.launchWorkflow(project,
+                                                       process,
+                                                       workflow,
+                                                       author)
 
         return {
             'status': 0,
@@ -703,7 +709,9 @@ class AIMiddleware():
             Revokes (aborts) a task with given task ID for a given project, if it exists. Also sets
             an entry in the database (and notes who aborted the task).
         '''
-        self.workflowTracker.revokeTask(username, project, taskID)
+        self.workflow_tracker.revokeTask(username,
+                                         project,
+                                         taskID)
 
 
     def revoke_all_tasks(self,
@@ -746,11 +754,11 @@ class AIMiddleware():
 
         # running tasks status
         if checkTasks:
-            status['tasks'] = self.workflowTracker.pollAllTaskStatuses(project)
+            status['tasks'] = self.workflow_tracker.pollAllTaskStatuses(project)
 
         # get worker status (this is very expensive, as each worker needs to be pinged)
         if checkWorkers:
-            status['workers'] = self.messageProcessor.poll_worker_status()
+            status['workers'] = self.message_processor.poll_worker_status()
 
         return status
 
@@ -766,7 +774,7 @@ class AIMiddleware():
         }
 
         # identify models that are compatible with project's annotation and prediction type
-        proj_anno_type, proj_pred_type = get_project_immutables(project, self.dbConn)
+        proj_anno_type, proj_pred_type = get_project_immutables(project, self.db_connector)
         for key, model in self.ai_models['prediction'].items():
             if proj_anno_type in model['annotationType'] and \
                 proj_pred_type in model['predictionType']:
@@ -794,7 +802,7 @@ class AIMiddleware():
         '''
         # get AI model library if not specified
         if modelLibrary is None or modelLibrary not in self.ai_models['prediction']:
-            model_lib = self.dbConn.execute('''
+            model_lib = self.db_connector.execute('''
                 SELECT ai_model_library
                 FROM aide_admin.project
                 WHERE shortname = %s;
@@ -815,7 +823,7 @@ class AIMiddleware():
             try:
                 model_class(project=project,
                             config=self.config,
-                            dbConnector=self.dbConn,
+                            dbConnector=self.db_connector,
                             fileServer=FileServer(self.config).get_secure_instance(project),
                             options=modelOptions)
                 response = {
@@ -848,7 +856,7 @@ class AIMiddleware():
         models_available = self.getAvailableAImodels()['models']
 
         # project immutables
-        anno_type, pred_type = get_project_immutables(project, self.dbConn)
+        anno_type, pred_type = get_project_immutables(project, self.db_connector)
 
         # cross-check submitted tokens
         field_names = [
@@ -943,10 +951,10 @@ class AIMiddleware():
         ).format(
             sql.SQL(',').join([sql.SQL(f'{item} = %s') for item in settings_keys_new])
         )
-        self.dbConn.execute(query_str, tuple(settings_new), None)
+        self.db_connector.execute(query_str, tuple(settings_new), None)
 
         if add_background_class:
-            label_classes = self.dbConn.execute(sql.SQL('''
+            label_classes = self.db_connector.execute(sql.SQL('''
                     SELECT * FROM {id_lc}
                 ''').format(id_lc=sql.Identifier(project, 'labelclass')),
                 None, 'all')
@@ -963,7 +971,7 @@ class AIMiddleware():
                 while bg_name in lc_names:
                     bg_name = f'background ({counter})'
                     counter += 1
-                self.dbConn.execute(sql.SQL('''
+                self.db_connector.execute(sql.SQL('''
                     INSERT INTO {id_lc} (name, idx, hidden)
                     VALUES (%s, 0, true)
                 ''').format(id_lc=sql.Identifier(project, 'labelclass')),
@@ -996,7 +1004,7 @@ class AIMiddleware():
         model_libraries = self.getAvailableAImodels()
 
         # get meta data about models shared through model marketplace
-        result = self.dbConn.execute('''
+        result = self.db_connector.execute('''
             SELECT id, origin_uuid,
             author, anonymous, public,
             shared, tags, name, description,
@@ -1048,7 +1056,7 @@ class AIMiddleware():
             id_pred=sql.Identifier(project, 'prediction'),
             latestOnlyStr=latest_only_str
         )
-        result = self.dbConn.execute(query_str, None, 'all')
+        result = self.db_connector.execute(query_str, None, 'all')
         response = []
         if result is not None and len(result):
             for res in result:
@@ -1115,7 +1123,7 @@ class AIMiddleware():
             modelStateIDs = [modelStateIDs]
         modelStateIDs = [str(m) for m in modelStateIDs]
         process = aic_int.delete_model_states.s(project, modelStateIDs)
-        task_id = self.taskCoordinator.submit_task(project,
+        task_id = self.task_coordinator.submit_task(project,
                                                    username,
                                                    process,
                                                    'AIController')
@@ -1137,7 +1145,7 @@ class AIMiddleware():
             modelStateID = UUID(modelStateID)
 
         process = aic_int.duplicate_model_state.s(project, modelStateID)
-        task_id = self.taskCoordinator.submit_task(project,
+        task_id = self.task_coordinator.submit_task(project,
                                                    username,
                                                    process,
                                                    'AIController')
@@ -1164,7 +1172,7 @@ class AIMiddleware():
                 modelStateIDs = None
 
         process = aic_int.get_model_training_statistics.s(project, modelStateIDs)
-        task_id = self.taskCoordinator.submit_task(project,
+        task_id = self.task_coordinator.submit_task(project,
                                                    username,
                                                    process,
                                                    'AIController')
@@ -1175,7 +1183,7 @@ class AIMiddleware():
         '''
             Returns the AI and AL model properties for the given project, as stored in the database.
         '''
-        result = self.dbConn.execute('''SELECT ai_model_enabled,
+        result = self.db_connector.execute('''SELECT ai_model_enabled,
                 ai_model_library, ai_model_settings,
                 ai_alcriterion_library, ai_alcriterion_settings,
                 numImages_autoTrain, minNumAnnoPerImage,
@@ -1209,7 +1217,7 @@ class AIMiddleware():
             # save
             if isinstance(settings, dict):
                 settings = json.dumps(settings)
-            self.dbConn.execute('''
+            self.db_connector.execute('''
                 UPDATE aide_admin.project
                 SET ai_model_settings = %s
                 WHERE shortname = %s;
@@ -1240,7 +1248,7 @@ class AIMiddleware():
             ) AS defwf
             ON wf.id = defwf.default_workflow;
         ''').format(id_workflow=sql.Identifier(project, 'workflow'))
-        result = self.dbConn.execute(query_str, (project,), 'all')
+        result = self.db_connector.execute(query_str, (project,), 'all')
         response = {}
         for r in result:
             response[str(r['id'])] = {
@@ -1270,7 +1278,9 @@ class AIMiddleware():
         '''
         try:
             # check validity of workflow
-            valid = self.workflowDesigner.parseWorkflow(project, workflow, verifyOnly=True)
+            valid = self.workflow_designer.parse_workflow(project,
+                                                          workflow,
+                                                          True)
             if not valid:
                 raise Exception('Workflow is not valid.')   #TODO: detailed error message
             workflow = json.dumps(workflow)
@@ -1283,7 +1293,7 @@ class AIMiddleware():
             else:
                 id_str = sql.SQL('')
 
-            existing_workflow = self.dbConn.execute(
+            existing_workflow = self.db_connector.execute(
                 sql.SQL('''
                     SELECT id
                     FROM {id_workflow}
@@ -1301,7 +1311,7 @@ class AIMiddleware():
 
             # commit to database
             if existing_workflow is not None:
-                result = self.dbConn.execute(
+                result = self.db_connector.execute(
                     sql.SQL('''
                         UPDATE {id_workflow}
                         SET name = %s, workflow = %s
@@ -1312,7 +1322,7 @@ class AIMiddleware():
                     1
                 )
             else:
-                result = self.dbConn.execute(
+                result = self.db_connector.execute(
                     sql.SQL('''
                         INSERT INTO {id_workflow} (name, workflow, username)
                         VALUES (%s, %s, %s)
@@ -1325,7 +1335,7 @@ class AIMiddleware():
 
             # set as default if requested
             if setDefault:
-                self.dbConn.execute(
+                self.db_connector.execute(
                     '''
                         UPDATE aide_admin.project
                         SET default_workflow = %s
@@ -1371,7 +1381,7 @@ class AIMiddleware():
         ''').format(
             id_workflow=sql.Identifier(project, 'workflow')
         )
-        result = self.dbConn.execute(query_str, (workflowID, project,), 1)
+        result = self.db_connector.execute(query_str, (workflowID, project,), 1)
         if result is None \
             or len(result) == 0 \
                 or str(result[0]['default_workflow']) != str(workflowID):
@@ -1418,7 +1428,7 @@ class AIMiddleware():
         ''').format(
             id_workflow=sql.Identifier(project, 'workflow')
         )
-        result = self.dbConn.execute(query_str, (username, workflowID,), 'all')
+        result = self.db_connector.execute(query_str, (username, workflowID,), 'all')
         result = [str(r['id']) for r in result]
 
         return {
@@ -1439,7 +1449,7 @@ class AIMiddleware():
         '''
         if workflowID == 'all':
             # get all workflow IDs from DB
-            workflowID = self.dbConn.execute(
+            workflowID = self.db_connector.execute(
                 sql.SQL('''
                     SELECT id FROM {id_workflowhistory};
                 ''').format(
@@ -1486,7 +1496,7 @@ class AIMiddleware():
         ''').format(
             id_workflowhistory=sql.Identifier(project, 'workflowhistory')
         )
-        result = self.dbConn.execute(query_str, (tuple(workflowID),), 'all')
+        result = self.db_connector.execute(query_str, (tuple(workflowID),), 'all')
         result = [str(r['id']) for r in result]
 
         return {
@@ -1534,7 +1544,7 @@ class AIMiddleware():
             id_cnnstate=sql.Identifier(project, 'cnnstate'),
             modelIDstr=model_id_str
         )
-        result = self.dbConn.execute(query_str, query_args, 2)
+        result = self.db_connector.execute(query_str, query_args, 2)
         response = {
             'model': False,
             'model_lib': False,
@@ -1565,7 +1575,7 @@ class AIMiddleware():
                 # current model has adaptation enabled; abort
                 return False
 
-        result = self.dbConn.execute('''
+        result = self.db_connector.execute('''
             UPDATE "aide_admin".project
             SET labelclass_autoupdate = %s
             WHERE shortname = %s

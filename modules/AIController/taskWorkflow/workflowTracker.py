@@ -492,4 +492,3 @@ class WorkflowTracker:
         ).format(
             id_workflowhistory=sql.Identifier(project, 'workflowhistory'),
         ), tuple((w['id'],) for w in workflow_ids))
-
