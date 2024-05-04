@@ -18,24 +18,41 @@ class Reception:
     def __init__(self, config, app, dbConnector, verbose_start=False):
         self.config = config
         self.app = app
-        self.staticDir = 'modules/Reception/static'
+        self.static_dir = 'modules/Reception/static'
         self.middleware = ReceptionMiddleware(config, dbConnector)
-        self.login_check = None
+        self.login_check_fun = None
 
-        self._initBottle()
-
-
-    def loginCheck(self, project=None, admin=False, superuser=False, canCreateProjects=False, extend_session=False, return_all=False):
-        return self.login_check(project, admin, superuser, canCreateProjects, extend_session, return_all)
+        self._init_bottle()
 
 
-    def addLoginCheckFun(self, loginCheckFun):
-        self.login_check = loginCheckFun
+    def login_check(self,
+                    project: str=None,
+                    admin: bool=False,
+                    superuser: bool=False,
+                    can_create_projects: bool=False,
+                    extend_session: bool=False,
+                    return_all: bool=False) -> bool:
+        '''
+            Login check function wrapper.
+        '''
+        return self.login_check_fun(project,
+                                    admin,
+                                    superuser,
+                                    can_create_projects,
+                                    extend_session,
+                                    return_all)
 
 
-    def _initBottle(self):
+    def add_login_check_fun(self, login_check_fun: callable) -> None:
+        '''
+            Entry point during module assembly to provide login check function.
+        '''
+        self.login_check_fun = login_check_fun
 
-        with open(os.path.abspath(os.path.join(self.staticDir, 'templates/projects.html')), 'r', encoding='utf-8') as f:
+
+    def _init_bottle(self):
+
+        with open(os.path.abspath(os.path.join(self.static_dir, 'templates/projects.html')), 'r', encoding='utf-8') as f:
             self.proj_template = SimpleTemplate(f.read())
 
         @self.app.route('/')
@@ -69,13 +86,13 @@ class Reception:
         @self.app.get('/getProjects')
         def get_projects():
             try:
-                if self.loginCheck():
+                if self.login_check():
                     username = html.escape(request.get_cookie('username'))
                 else:
                     username = ''
             except Exception:
                 username = ''
-            is_super_user = self.loginCheck(superuser=True)
+            is_super_user = self.login_check(superuser=True)
             archived = helpers.parse_boolean(request.params.get('archived', None))
             project_info = self.middleware.get_project_info(
                                 username, is_super_user,
@@ -91,7 +108,7 @@ class Reception:
                 provided matches.
             '''
             try:
-                if not self.loginCheck():
+                if not self.login_check():
                     return redirect(f'/login?redirect={project}/enroll/{token}')
                 
                 username = html.escape(request.get_cookie('username'))
@@ -124,7 +141,7 @@ class Reception:
             '''
 
             # check visibility of project
-            permissions = self.loginCheck(project=project, return_all=True)
+            permissions = self.login_check(project=project, return_all=True)
 
             if not (permissions['project']['isPublic'] or \
                 permissions['project']['enrolled'] or \

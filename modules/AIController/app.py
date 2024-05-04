@@ -39,7 +39,7 @@ class AIController:
                                            dbConnector,
                                            taskCoordinator,
                                            passive_mode)
-            self.login_check = None
+            self.login_check_fun = None
             self._init_bottle()
         except Exception as exc:
             if verbose_start:
@@ -50,23 +50,27 @@ class AIController:
             LogDecorator.print_status('ok')
 
 
-    def loginCheck(self,
-                   project=None,
-                   admin=False,
-                   superuser=False,
-                   canCreateProjects=False,
-                   extend_session=False):
+    def login_check(self,
+                    project: str=None,
+                    admin: bool=False,
+                    superuser: bool=False,
+                    can_create_projects: bool=False,
+                    extend_session: bool=False) -> bool:
         '''
-            Login check wrapper.
+            Login check function wrapper.
         '''
-        return self.login_check(project, admin, superuser, canCreateProjects, extend_session)
+        return self.login_check_fun(project,
+                                    admin,
+                                    superuser,
+                                    can_create_projects,
+                                    extend_session)
 
 
-    def addLoginCheckFun(self, login_check_fun):
+    def add_login_check_fun(self, login_check_fun: callable) -> None:
         '''
-            Login check callable addition during launch.
+            Entry point during module assembly to provide login check function.
         '''
-        self.login_check = login_check_fun
+        self.login_check_fun = login_check_fun
 
 
     def _init_bottle(self):
@@ -79,7 +83,7 @@ class AIController:
             '''
             # pylint: disable=no-member
 
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             try:
@@ -95,7 +99,7 @@ class AIController:
             '''
                 Receives a list of model IDs and launches a background task to delete them.
             '''
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             try:
@@ -122,7 +126,7 @@ class AIController:
                 Receives a model state ID and creates a copy of it in this project. This copy
                 receives the current date, which makes it the most recent model state.
             '''
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             try:
@@ -150,7 +154,7 @@ class AIController:
                 Launches a background task to assemble training stats as (optionally) returned by
                 the model across all saved model states.
             '''
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             try:
@@ -177,7 +181,7 @@ class AIController:
                 New way of submitting jobs. This starts entire workflows, which can be a chain of
                 multiple training and inference jobs in a row.
             '''
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
             try:
                 username = html.escape(request.get_cookie('username'))
@@ -195,7 +199,7 @@ class AIController:
 
         @self.app.post('/<project>/abortWorkflow')
         def abort_workflow(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
             try:
                 username = html.escape(request.get_cookie('username'))
@@ -215,7 +219,7 @@ class AIController:
 
         @self.app.post('/<project>/abortAllWorkflows')
         def abort_all_workflows(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
             try:
                 username = html.escape(request.get_cookie('username'))
@@ -237,7 +241,7 @@ class AIController:
             '''
             # pylint: disable=unsupported-membership-test
 
-            if self.loginCheck(project=project):
+            if self.login_check(project=project):
                 try:
                     query_project = 'project' in request.query
                     query_tasks = 'tasks' in request.query
@@ -259,7 +263,7 @@ class AIController:
             '''
                 Returns all the model workflows saved for this project, also made by other users.
             '''
-            if not self.loginCheck(project, admin=True):
+            if not self.login_check(project, admin=True):
                 abort(401, 'unauthorized')
 
             try:
@@ -278,7 +282,7 @@ class AIController:
             '''
             # pylint: disable=no-member
 
-            if not self.loginCheck(project, admin=True):
+            if not self.login_check(project, admin=True):
                 abort(401, 'unauthorized')
 
             try:
@@ -307,7 +311,7 @@ class AIController:
             '''
                 Receives a string (ID) of a workflow and sets it as default for a given project.
             '''
-            if not self.loginCheck(project, admin=True):
+            if not self.login_check(project, admin=True):
                 abort(401, 'unauthorized')
 
             try:
@@ -326,7 +330,7 @@ class AIController:
                 Receives a string (ID) or list of strings (IDs) for work- flow(s) to be deleted.
                 They can only be deleted by the authors or else super users.
             '''
-            if not self.loginCheck(project, admin=True):
+            if not self.login_check(project, admin=True):
                 abort(401, 'unauthorized')
 
             try:
@@ -349,7 +353,7 @@ class AIController:
             '''
             # pylint: disable=no-member
 
-            if not self.loginCheck(project, admin=True):
+            if not self.login_check(project, admin=True):
                 abort(401, 'unauthorized')
 
             try:
@@ -374,7 +378,7 @@ class AIController:
                   available
             Returns a dict of this information accordingly.
         '''
-            if not self.loginCheck(project, admin=True):
+            if not self.login_check(project, admin=True):
                 abort(401, 'unauthorized')
 
             try:
@@ -392,7 +396,7 @@ class AIController:
                 Returns all available AI models (class, name) that are installed in this instance of
                 AIDE and compatible with the project's annotation and prediction types.
             '''
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'unauthorized')
 
             return self.middleware.getAvailableAImodels(project)
@@ -408,7 +412,7 @@ class AIController:
             '''
             # pylint: disable=no-member
 
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'unauthorized')
 
             try:
@@ -424,7 +428,7 @@ class AIController:
 
         @self.app.post('/<project>/saveAImodelSettings')
         def save_model_settings(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'unauthorized')
 
             try:
@@ -439,7 +443,7 @@ class AIController:
         def get_labelclass_autoadapt_info(project):
             # pylint: disable=no-member
 
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'unauthorized')
 
             try:
@@ -454,7 +458,7 @@ class AIController:
         def save_labelclass_autoadapt_info(project):
             # pylint: disable=no-member
 
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'unauthorized')
 
             try:

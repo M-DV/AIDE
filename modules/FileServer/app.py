@@ -35,7 +35,7 @@ class FileServer():
                 LogDecorator.print_status('fail')
             raise Exception('Not a valid FileServer instance.')
 
-        self.login_check = None
+        self.login_check_fun = None
         try:
             self.static_dir = self.config.get_property('FileServer', 'staticfiles_dir')
             self.static_address_suffix = self.config.get_property('FileServer',
@@ -55,12 +55,27 @@ class FileServer():
             LogDecorator.print_status('ok')
 
 
-    def loginCheck(self, project=None, admin=False, superuser=False, canCreateProjects=False, extend_session=False):
-        return self.login_check(project, admin, superuser, canCreateProjects, extend_session)
+    def login_check(self,
+                    project: str=None,
+                    admin: bool=False,
+                    superuser: bool=False,
+                    can_create_projects: bool=False,
+                    extend_session: bool=False) -> bool:
+        '''
+            Login check function wrapper.
+        '''
+        return self.login_check_fun(project,
+                                    admin,
+                                    superuser,
+                                    can_create_projects,
+                                    extend_session)
 
 
-    def addLoginCheckFun(self, loginCheckFun):
-        self.login_check = loginCheckFun
+    def add_login_check_fun(self, login_check_fun: callable) -> None:
+        '''
+            Entry point during module assembly to provide login check function.
+        '''
+        self.login_check_fun = login_check_fun
 
 
     def _initBottle(self):
@@ -120,7 +135,7 @@ class FileServer():
                 and address suffix.
                 User must be logged in to retrieve this information.
             '''
-            if not self.loginCheck(extend_session=True):
+            if not self.login_check(extend_session=True):
                 abort(401, 'forbidden')
 
             return {

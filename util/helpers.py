@@ -20,6 +20,7 @@ import socket
 from urllib.parse import urlsplit
 import html
 import base64
+import bcrypt
 import numpy as np
 import pytz
 import netifaces
@@ -278,6 +279,21 @@ def json_dumps(*args: list, **kwargs: dict) -> str:
         Custom JSON dump to string function that can auto-convert objects to strings.
     '''
     return json.dumps(*args, ensure_ascii=False, cls=CustomJSONEncoder, **kwargs).encode('utf8')
+
+
+
+def create_hash(password: bytes, salt_num_rounds: int=12) -> bytes:
+    '''
+        Receives a password as bytes and number of salt rounds and creates a salted password hash.
+
+        Args:
+            - "password":           bytes, encoded password string
+            - "salt_num_rounds":    int, number of salt rounds (default: 12)
+
+        Returns:
+            bytes, hashed and salted password
+    '''
+    return bcrypt.hashpw(password, bcrypt.gensalt(salt_num_rounds))
 
 
 

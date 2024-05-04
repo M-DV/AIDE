@@ -2,7 +2,7 @@
     Module responsible for Celery task status polling of various other modules that make use of the
     message queue system.
 
-    2020-22 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
 from bottle import request, abort
@@ -16,17 +16,33 @@ class TaskCoordinator:
         self.app = app
         self.middleware = TaskCoordinatorMiddleware(self.config, db_connector)
 
-        self.login_check = None
+        self.login_check_fun = None
         self._init_bottle()
 
 
-    def loginCheck(self, project=None, admin=False, superuser=False,
-                    can_create_projects=False, extend_session=False):
-        return self.login_check(project, admin, superuser, can_create_projects, extend_session)
+    def login_check(self,
+                    project: str=None,
+                    admin: bool=False,
+                    superuser: bool=False,
+                    can_create_projects: bool=False,
+                    extend_session: bool=False,
+                    return_all: bool=False) -> bool:
+        '''
+            Login check function wrapper.
+        '''
+        return self.login_check_fun(project,
+                                    admin,
+                                    superuser,
+                                    can_create_projects,
+                                    extend_session,
+                                    return_all)
 
 
-    def addLoginCheckFun(self, loginCheckFun):
-        self.login_check = loginCheckFun
+    def add_login_check_fun(self, login_check_fun: callable) -> None:
+        '''
+            Entry point during module assembly to provide login check function.
+        '''
+        self.login_check_fun = login_check_fun
 
 
     def _init_bottle(self):
@@ -41,7 +57,7 @@ class TaskCoordinator:
                 the Celery status type, result (if completed),
                 error message (if failed), etc.
             '''
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             try:

@@ -16,7 +16,7 @@ from util import helpers
 from util.logDecorator import LogDecorator
 from util.configDef import Config
 from util import drivers
-from setup.setupDB import add_update_superuser
+from setup.setup_database import add_update_superuser
 from setup.migrate_aide import migrate_aide
 from modules import REGISTERED_MODULES, Database
 from constants.version import AIDE_VERSION
@@ -52,20 +52,21 @@ def assemble_server(verbose_start=True,
 
     if verbose_start:
         config_path = os.environ['AIDE_CONFIG_PATH']
-        aide_modules = ', '.join(instance_args)
-
-        print(f'''\033[96m
-#################################       
-                                        version {AIDE_VERSION}
-   ###    #### ########  ########       
-  ## ##    ##  ##     ## ##             {platform.platform()}
- ##   ##   ##  ##     ## ##             
-##     ##  ##  ##     ## ######         [config]
-#########  ##  ##     ## ##             .> {config_path}
-##     ##  ##  ##     ## ##             
-##     ## #### ########  ########       [modules]
-                                        .> {aide_modules}
-#################################\033[0m
+        module_checks = [['', f'=> {mod}'][int(mod in instance_args)] \
+                         for mod in ['LabelUI','AIController','FileServer']]
+        print(f'''\033[0;34m\033[1m
+             ████████                   version {AIDE_VERSION}
+         ███████████████                {platform.platform()}
+        ██████████████████              Python {platform.python_version()}
+    ████████████████████████
+ ██████████████████████████████         [config]
+████████   ███  █     ███     ████      => {config_path}
+███████  █  ██  █  ███  █  ████████
+███████     ██  █  ███  █    ██████     [modules]
+██████  ███  █  █  ███  █  ████████     {module_checks[0]}
+ █████  ███  █  █     ███     ████      {module_checks[1]}
+  ███████████████████████████████       {module_checks[2]}
+    ███████████████████████████\033[0m
 ''')
 
     status_offset = LogDecorator.get_ljust_offset()
@@ -172,9 +173,10 @@ def assemble_server(verbose_start=True,
                 print('\tName:   ' + result['details']['name'])
                 print('\tE-mail: ' + result['details']['email'])
                 print('\tPassword: ****')
-            elif len(result['changes']):
-                print('Super user account details changed for account name "{}".'.format(
-                    result['details']['name']) + ' New credentials:')
+            elif len(result['changes']) > 0:
+                su_name = result['details']['name']
+                print(f'Super user account details changed for account name "{su_name}". ' + \
+                        'New credentials:')
                 print('\tName:   ' + result['details']['name'])
                 print('\tE-mail: ' + result['details']['email'] + \
                     (' (changed)' if result['changes'].get('adminEmail', False) else ''))
@@ -200,7 +202,7 @@ def assemble_server(verbose_start=True,
     db_connector = REGISTERED_MODULES['Database'](config, verbose_start)
     user_handler = REGISTERED_MODULES['UserHandler'](config, app, db_connector)
     task_coordinator = REGISTERED_MODULES['TaskCoordinator'](config, app, db_connector)
-    task_coordinator.addLoginCheckFun(user_handler.checkAuthenticated)
+    task_coordinator.add_login_check_fun(user_handler.check_authenticated)
 
     for inst_arg in instance_args:
 
@@ -223,21 +225,21 @@ def assemble_server(verbose_start=True,
 
         # add authentication functionality
         if hasattr(instance, 'addLoginCheckFun'):
-            instance.addLoginCheckFun(user_handler.checkAuthenticated)
+            instance.add_login_check_fun(user_handler.check_authenticated)
 
         # launch project meta modules
         if module_name == 'LabelUI':
             aide_admin = REGISTERED_MODULES['AIDEAdmin'](config, app, db_connector, verbose_start)
-            aide_admin.addLoginCheckFun(user_handler.checkAuthenticated)
+            aide_admin.add_login_check_fun(user_handler.check_authenticated)
             reception = REGISTERED_MODULES['Reception'](config, app, db_connector)
-            reception.addLoginCheckFun(user_handler.checkAuthenticated)
+            reception.add_login_check_fun(user_handler.check_authenticated)
             configurator = REGISTERED_MODULES['ProjectConfigurator'](config, app, db_connector)
-            configurator.addLoginCheckFun(user_handler.checkAuthenticated)
+            configurator.add_login_check_fun(user_handler.check_authenticated)
             statistics = REGISTERED_MODULES['ProjectStatistics'](config, app, db_connector)
-            statistics.addLoginCheckFun(user_handler.checkAuthenticated)
+            statistics.add_login_check_fun(user_handler.check_authenticated)
             #TODO: allow running ImageQuerier on FileServer too
             image_querier = REGISTERED_MODULES['ImageQuerier'](config, app, db_connector)
-            image_querier.addLoginCheckFun(user_handler.checkAuthenticated)
+            image_querier.add_login_check_fun(user_handler.check_authenticated)
             #TODO: ditto for Mapserver
             mapserver = REGISTERED_MODULES['Mapserver'](config, app, db_connector, user_handler)
 
@@ -250,7 +252,7 @@ def assemble_server(verbose_start=True,
             # launch model marketplace with AIController
             model_marketplace = REGISTERED_MODULES['ModelMarketplace'](config, app, db_connector,
                                                                                 task_coordinator)
-            model_marketplace.addLoginCheckFun(user_handler.checkAuthenticated)
+            model_marketplace.add_login_check_fun(user_handler.check_authenticated)
 
         elif module_name == 'AIWorker':
             from modules.AIWorker.backend import celery_interface #as aiw_int
@@ -259,10 +261,10 @@ def assemble_server(verbose_start=True,
         # launch globally required modules
         data_admin = REGISTERED_MODULES['DataAdministrator'](config, app, db_connector,
                                                                                 task_coordinator)
-        data_admin.addLoginCheckFun(user_handler.checkAuthenticated)
+        data_admin.add_login_check_fun(user_handler.check_authenticated)
 
         static_files = REGISTERED_MODULES['StaticFileServer'](config, app, db_connector)
-        static_files.addLoginCheckFun(user_handler.checkAuthenticated)
+        static_files.add_login_check_fun(user_handler.check_authenticated)
 
     if verbose_start:
         print('\n')

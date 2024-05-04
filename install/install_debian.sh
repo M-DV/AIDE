@@ -990,7 +990,7 @@ export PYTHONPATH=$aide_root;
 # SETTING UP FILESERVER
 # -----------------------------------------------------------------------------
 
-# note: needed prior to database setup due to imports in setupDB.py script
+# note: needed prior to database setup due to imports in setup_database.py script
 log "\e[1m[08/11] \e[36mFile server...\e[0m"
 if [[ $install_fileserver == true && $test_only == false ]]; then
     log "Creating file server directory..."
@@ -1103,7 +1103,7 @@ if [[ $install_database == true ]]; then
         sudo -u postgres psql -d $dbName -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"$dbUser\";" | tee -a $logFile
 
         log "Initializing AIDE database schema..."
-        $python_exec $aide_root/setup/setupDB.py | tee -a $logFile
+        $python_exec $aide_root/setup/setup_database.py | tee -a $logFile
     fi
 
 else

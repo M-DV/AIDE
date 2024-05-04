@@ -57,7 +57,7 @@ import argparse
 import json
 import secrets
 from psycopg2 import sql
-from setup.setupDB import setupDB
+from setup.setup_database import setup_db
 from setup.migrate_aide import MODIFICATIONS_sql
 from modules import UserHandling
 from util import helpers
@@ -101,7 +101,7 @@ if __name__ == '__main__':
         dbName = config.get_property('Database', 'name')
         print(f'WARNING: Target database "{dbName}" has not (yet) been upgraded to the ' + \
               'AIDE v2 schema; we will attempt to do this now...')
-        setupDB()
+        setup_db()
 
     # verify that project is unique
     uniqueQuery = dbConn.execute('''

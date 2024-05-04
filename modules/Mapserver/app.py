@@ -52,7 +52,7 @@ class Mapserver:
             Login check function wrapper. Map server access is governed by the same login mechanism
             as the rest of AIDE.
         '''
-        return self.user_handler.checkAuthenticated(project, admin, superuser, can_create_projects,
+        return self.user_handler.check_authenticated(project, admin, superuser, can_create_projects,
                 extend_session, return_all)
 
     @staticmethod

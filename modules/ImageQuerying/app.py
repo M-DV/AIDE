@@ -2,7 +2,7 @@
     Performs immediate image querying operations, such as area selection
     (GrabCut, etc.).
 
-    2021-23 Benjamin Kellenberger
+    2021-24 Benjamin Kellenberger
 '''
 
 from bottle import request, abort
@@ -15,18 +15,33 @@ class ImageQuerier:
         self.config = config
         self.app = app
 
-        self.login_check = None
+        self.login_check_fun = None
 
         self.middleware = ImageQueryingMiddleware(config, db_connector)
         self._initBottle()
 
 
-    def loginCheck(self, project=None, admin=False, superuser=False, canCreateProjects=False, extend_session=False):
-        return self.login_check(project, admin, superuser, canCreateProjects, extend_session)
+    def login_check(self,
+                    project: str=None,
+                    admin: bool=False,
+                    superuser: bool=False,
+                    can_create_projects: bool=False,
+                    extend_session: bool=False) -> bool:
+        '''
+            Login check function wrapper.
+        '''
+        return self.login_check_fun(project,
+                                    admin,
+                                    superuser,
+                                    can_create_projects,
+                                    extend_session)
 
 
-    def addLoginCheckFun(self, loginCheckFun):
-        self.login_check = loginCheckFun
+    def add_login_check_fun(self, login_check_fun: callable) -> None:
+        '''
+            Entry point during module assembly to provide login check function.
+        '''
+        self.login_check_fun = login_check_fun
 
 
     def _initBottle(self):
@@ -128,7 +143,7 @@ class ImageQuerier:
         #TODO: image metadata parsing; move to more suitable place than ImageQuerying
         @self.app.post('/getImageMetadata')
         def get_image_metadata():
-            if not self.loginCheck(canCreateProjects=True):
+            if not self.login_check(can_create_projects=True):
                 abort(401, 'forbidden')
 
             try:

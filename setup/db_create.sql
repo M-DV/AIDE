@@ -1,10 +1,10 @@
 /* 
-    Template for database setup, to be used by the "setup/setupDB.py" script only.
-    Unlike in previous versions of AIDE, this does not set up any project-specific
-    schemata, but only the administrative environment of the Postgres database.
-    For project creation, see modules.ProjectAdministration.static.sql.create_schema.sql.
+    Template for database setup, to be used by the "setup/setup_database.py" script only. Unlike in
+    previous versions of AIDE, this does not set up any project-specific schemata, but only the
+    administrative environment of the Postgres database. For project creation, see
+    modules.ProjectAdministration.static.sql.create_schema.sql.
 
-    2019-23 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 */
 
 

@@ -5,24 +5,29 @@
     2019-24 Benjamin Kellenberger
 '''
 
+from typing import Tuple, List
 import os
 import functools
 import hashlib
 import re
-from threading import Thread
-from psycopg2 import sql
 from datetime import timedelta
-from util.helpers import current_time
-from util.common import check_demo_mode
+from threading import Thread
 import secrets
 import bcrypt
 from bottle import request, response, abort
+from psycopg2 import sql
 
+from util.helpers import current_time
+from util.common import check_demo_mode
+from util import helpers
 from .exceptions import *
 
 
 
 class UserMiddleware():
+    '''
+        Handles user authentication and request approval/rejection for all modules.
+    '''
 
     TOKEN_NUM_BYTES = 64
     SALT_NUM_ROUNDS = 12
@@ -34,14 +39,14 @@ class UserMiddleware():
 
     def __init__(self, config, dbConnector):
         self.config = config
-        self.dbConnector = dbConnector      #Database(config)
+        self.db_connector = dbConnector
 
-        self.usersLoggedIn = {}    # username -> {timestamp, sessionToken}
+        self.users_logged_in = {}    # username -> {timestamp, sessionToken}
 
-        self.csrfSecret = self.config.get_property('UserHandler',
-                                                   'csrf_secret',
-                                                   dtype=str,
-                                                   fallback=self.CSRF_SECRET_FALLBACK)
+        self.csrf_secret = self.config.get_property('UserHandler',
+                                                    'csrf_secret',
+                                                    dtype=str,
+                                                    fallback=self.CSRF_SECRET_FALLBACK)
 
         self.account_name_test = re.compile('^[A-Za-z0-9_-]*')
         self.email_test = re.compile(
@@ -56,90 +61,87 @@ class UserMiddleware():
         return secrets.token_urlsafe(self.TOKEN_NUM_BYTES)
 
 
-    def _compare_tokens(self, tokenA, tokenB):
-        if tokenA is None or tokenB is None:
+    def _compare_tokens(self, token_a, token_b):
+        if token_a is None or token_b is None:
             return False
-        return secrets.compare_digest(tokenA, tokenB)
+        return secrets.compare_digest(token_a, token_b)
 
 
-    def _check_password(self, providedPass, hashedTargetPass):
-        return bcrypt.checkpw(providedPass, hashedTargetPass)
-    
-
-    @classmethod
-    def _create_hash(cls, password):
-        hash = bcrypt.hashpw(password, bcrypt.gensalt(cls.SALT_NUM_ROUNDS))
-        return hash
+    def _check_password(self, passwd_provided, passwd_target_hashed) -> bool:
+        return bcrypt.checkpw(passwd_provided, passwd_target_hashed)
 
 
-    def _get_user_data(self, username):
-        result = self.dbConnector.execute('SELECT last_login, session_token, secret_token FROM aide_admin.user WHERE name = %s;',
-                                (username,), numReturn=1)
-        if not len(result):
+    def _get_user_data(self, username: str) -> dict:
+        result = self.db_connector.execute('''
+                SELECT last_login, session_token, secret_token
+                FROM aide_admin.user WHERE name = %s;''',
+                                           (username,),
+                                           numReturn=1)
+        if len(result) == 0:
             return None
-        result = result[0]
-        return result
+        return result[0]
 
 
-    def _extend_session_database(self, username, sessionToken):
+    def _extend_session_database(self, username: str, session_token: str) -> None:
         '''
-            Updates the last login timestamp of the user to the current
-            time and commits the changes to the database.
-            Runs in a thread to be non-blocking.
+            Updates the last login timestamp of the user to the current time and commits the changes
+            to the database. Runs in a thread to be non-blocking.
         '''
         def _extend_session():
             now = self._current_time()
 
-            self.dbConnector.execute('''UPDATE aide_admin.user SET last_login = %s,
+            self.db_connector.execute('''UPDATE aide_admin.user SET last_login = %s,
                     session_token = %s
                     WHERE name = %s
                 ''',
-                (now, sessionToken, username,),
+                (now, session_token, username,),
                 numReturn=None)
-            
+
             # also update local cache
-            self.usersLoggedIn[username]['timestamp'] = now
-        
-        eT = Thread(target=_extend_session)
-        eT.start()
+            self.users_logged_in[username]['timestamp'] = now
+
+        extension_thread = Thread(target=_extend_session)
+        extension_thread.start()
 
 
-    def _init_or_extend_session(self, username, sessionToken=None):
+    def _init_or_extend_session(self,
+                                username: str,
+                                session_token: str=None) -> Tuple[str,float,float]:
         '''
-            Establishes a "session" for the user (i.e., sets 'time_login'
-            to now).
-            Also creates a new sessionToken if None provided.
+            Establishes a "session" for the user (i.e., sets 'time_login' to now). Also creates a
+            new sessionToken if None provided.
         '''
         now = self._current_time()
 
-        if sessionToken is None:
-            sessionToken = self._create_token()
+        if session_token is None:
+            session_token = self._create_token()
 
             # new session created; add to database
-            self.dbConnector.execute('''UPDATE aide_admin.user SET last_login = %s, session_token = %s
-                WHERE name = %s
+            self.db_connector.execute('''UPDATE aide_admin.user
+                SET last_login = %s, session_token = %s
+                WHERE name = %s;
             ''',
-            (now, sessionToken, username,),
+            (now, session_token, username,),
             numReturn=None)
-            
+
             # store locally
-            self.usersLoggedIn[username] = {
+            self.users_logged_in[username] = {
                 'timestamp': now,
-                'sessionToken': sessionToken
+                'sessionToken': session_token
             }
 
         # update local cache as well
-        if not username in self.usersLoggedIn:
-            self.usersLoggedIn[username] = {
+        if not username in self.users_logged_in:
+            self.users_logged_in[username] = {
                 'timestamp': now,
-                'sessionToken': sessionToken
+                'sessionToken': session_token
             }
         else:
-            self.usersLoggedIn[username]['timestamp'] = now
-            self.usersLoggedIn[username]['sessionToken'] = sessionToken
+            self.users_logged_in[username]['timestamp'] = now
+            self.users_logged_in[username]['sessionToken'] = session_token
 
             # also tell DB about updated tokens
-            self._extend_session_database(username, sessionToken)
+            self._extend_session_database(username, session_token)
 
         time_login = self.config.get_property('UserHandler',
                                               'time_login',
@@ -147,13 +149,13 @@ class UserMiddleware():
                                               fallback=31536000)  # fallback: add one year
         expires = now + timedelta(0, time_login)
 
-        return sessionToken, now, expires
+        return session_token, now, expires
 
 
-    def _invalidate_session(self, username):
-        if username in self.usersLoggedIn:
-            del self.usersLoggedIn[username]
-        self.dbConnector.execute(
+    def _invalidate_session(self, username: str) -> None:
+        if username in self.users_logged_in:
+            del self.users_logged_in[username]
+        self.db_connector.execute(
             'UPDATE aide_admin.user SET session_token = NULL WHERE name = %s',
             (username,),
             numReturn=None)
@@ -171,7 +173,7 @@ class UserMiddleware():
         if not username_available and not email_available:
             return username_available, email_available
 
-        result = self.dbConnector.execute('''
+        result = self.db_connector.execute('''
             SELECT COUNT(name) AS c FROM aide_admin.user
             WHERE name = %s UNION ALL
             SELECT COUNT(name) AS c FROM aide_admin.user WHERE email = %s''',
@@ -182,13 +184,13 @@ class UserMiddleware():
         return username_available, email_available
 
 
-    def _check_logged_in(self, username, sessionToken):
+    def _check_logged_in(self, username: str, session_token: str) -> bool:
         now = self._current_time()
         time_login = self.config.get_property('UserHandler',
                                               'time_login',
                                               dtype=int,
                                               fallback=-1)
-        if not username in self.usersLoggedIn:
+        if username not in self.users_logged_in:
             # check database
             result = self._get_user_data(username)
             if result is None:
@@ -196,7 +198,7 @@ class UserMiddleware():
                 return False
 
             # check for session token
-            if not self._compare_tokens(result['session_token'], sessionToken):
+            if not self._compare_tokens(result['session_token'], session_token):
                 # invalid session token provided
                 return False
 
@@ -204,262 +206,273 @@ class UserMiddleware():
             time_diff = (now - result['last_login']).total_seconds()
             if time_login <= 0 or time_diff <= time_login:
                 # user still logged in
-                if not username in self.usersLoggedIn:
-                    self.usersLoggedIn[username] = {
+                if not username in self.users_logged_in:
+                    self.users_logged_in[username] = {
                         'timestamp': now,
-                        'sessionToken': sessionToken
+                        'sessionToken': session_token
                     }
                 else:
-                    self.usersLoggedIn[username]['timestamp'] = now
+                    self.users_logged_in[username]['timestamp'] = now
 
                 # extend user session (commit to DB) if needed
                 if time_login > 0 and time_diff >= 0.75 * time_login:
-                    self._extend_session_database(username, sessionToken)
+                    self._extend_session_database(username, session_token)
 
                 return True
 
-            else:
-                # session time-out
+            # session time-out
+            return False
+
+        # check locally
+        if not self._compare_tokens(self.users_logged_in[username]['sessionToken'],
+                session_token):
+            # invalid session token provided; check database if token has updated
+            # (can happen if user logs in again from another machine)
+            result = self._get_user_data(username)
+            if not self._compare_tokens(result['session_token'],
+                        session_token):
                 return False
-            
-            # generic error
-            return False
-        
+
+            # update local cache
+            self.users_logged_in[username]['sessionToken'] = result['session_token']
+            self.users_logged_in[username]['timestamp'] = now
+
+        time_diff = (now - self.users_logged_in[username]['timestamp']).total_seconds()
+        if time_login <= 0 or time_diff <= time_login:
+            # user still logged in; extend user session (commit to DB) if needed
+            if time_login > 0 and time_diff >= 0.75 * time_login:
+                self._extend_session_database(username, session_token)
+            return True
+
+        # local cache session time-out; check if database holds more recent timestamp
+        result = self._get_user_data(username)
+        if time_login <= 0 or (now - result['last_login']).total_seconds() <= time_login:
+            # user still logged in; update
+            self._init_or_extend_session(username, session_token)
+
         else:
-            # check locally
-            if not self._compare_tokens(self.usersLoggedIn[username]['sessionToken'],
-                    sessionToken):
-                # invalid session token provided; check database if token has updated
-                # (can happen if user logs in again from another machine)
-                result = self._get_user_data(username)
-                if not self._compare_tokens(result['session_token'],
-                            sessionToken):
-                    return False
-                
-                else:
-                    # update local cache
-                    self.usersLoggedIn[username]['sessionToken'] = result['session_token']
-                    self.usersLoggedIn[username]['timestamp'] = now
-
-            time_diff = (now - self.usersLoggedIn[username]['timestamp']).total_seconds()
-            if time_login <= 0 or time_diff <= time_login:
-                # user still logged in; extend user session (commit to DB) if needed
-                if time_login > 0 and time_diff >= 0.75 * time_login:
-                    self._extend_session_database(username, sessionToken)
-                return True
-
-            else:
-                # local cache session time-out; check if database holds more recent timestamp
-                result = self._get_user_data(username)
-                if time_login <= 0 or (now - result['last_login']).total_seconds() <= time_login:
-                    # user still logged in; update
-                    self._init_or_extend_session(username, sessionToken)
-
-                else:
-                    # session time-out
-                    return False
-
-            # generic error
+            # session time-out
             return False
-        
+
         # generic error
         return False
 
 
-    def _check_authorized(self, project, username, admin, return_all=False):
+    def _check_authorized(self,
+                          project: str,
+                          username: str,
+                          admin: bool,
+                          return_all: bool=False) -> dict:
         '''
-            Verifies whether a user has access rights to a project.
-            If "return_all" is set to True, a dict with the following bools
-            is returned:
-            - enrolled: if the user is member of the project
-            - isAdmin: if the user is a project administrator
-            - isPublic: if the project is publicly visible (*)
-            - demoMode: if the project runs in demo mode (*)
+            Verifies whether a user has access rights to a project. If "return_all" is set to True,
+            a dict with the following bools is returned:
+                - enrolled: if the user is member of the project
+                - isAdmin: if the user is a project administrator
+                - isPublic: if the project is publicly visible (*)
+                - demoMode: if the project runs in demo mode (*)
 
-            (* note that these are here for convenience, but do not count
-            as authorization tokens)
+            (* note that these are here for convenience, but do not count as authorization tokens)
 
+            If "return_all" is False, only a single bool is returned, with criteria as follows:
+                - if "admin" is set to True, the user must be a project admini-
+                strator - else, the user must be enrolled, admitted, and not blocked for the current
+                date and time
 
-            If "return_all" is False, only a single bool is returned, with
-            criteria as follows:
-            - if "admin" is set to True, the user must be a project admini-
-              strator
-            - else, the user must be enrolled, admitted, and not blocked for
-              the current date and time
-
-            In this case, options like the demo mode and public flag are not
-            relevant for the decision.
+            In this case, options like the demo mode and public flag are not relevant for the
+            decision.
         '''
         now = current_time()
-        response = {
+        authentication = {
             'enrolled': False,
             'isAdmin': False,
             'isPublic': False
         }
 
-        queryStr = sql.SQL('''
+        query_str = sql.SQL('''
             SELECT * FROM aide_admin.authentication AS auth
             JOIN (SELECT shortname, demoMode, isPublic FROM aide_admin.project) AS proj
             ON auth.project = proj.shortname
             WHERE project = %s AND username = %s;
         ''')
         try:
-            result = self.dbConnector.execute(queryStr, (project, username,), 1)
+            result = self.db_connector.execute(query_str, (project, username,), 1)
             if len(result):
-                response['isAdmin'] = result[0]['isadmin']
-                response['isPublic'] = result[0]['ispublic']
+                authentication['isAdmin'] = result[0]['isadmin']
+                authentication['isPublic'] = result[0]['ispublic']
                 admitted_until = True
                 blocked_until = False
                 if result[0]['admitted_until'] is not None:
-                    admitted_until = (result[0]['admitted_until'] >= now)
+                    admitted_until = result[0]['admitted_until'] >= now
                 if result[0]['blocked_until'] is not None:
-                    blocked_until = (result[0]['blocked_until'] >= now)
-                response['enrolled'] = (admitted_until and not blocked_until)
+                    blocked_until = result[0]['blocked_until'] >= now
+                authentication['enrolled'] = (admitted_until and not blocked_until)
         except Exception:
             # no results to fetch: user is not authenticated
             pass
-    
+
         # check if super user
-        superUser = self._check_user_privileges(username, superuser=True)
-        if superUser:
-            response['enrolled'] = True
-            response['isAdmin'] = True
+        super_user = self._check_user_privileges(username, superuser=True)
+        if super_user:
+            authentication['enrolled'] = True
+            authentication['isAdmin'] = True
 
         if return_all:
-            return response
-        else:
-            if admin:
-                return response['isAdmin']
-            else:
-                return response['enrolled']
-            
-        # if admin:
-        #     queryStr = sql.SQL('''SELECT COUNT(*) AS cnt FROM aide_admin.authentication
-        #         WHERE project = %s AND username = %s AND isAdmin = %s''')
-        #     queryVals = (project,username,admin,)
-        # else:
-        #     queryStr = sql.SQL('''SELECT COUNT(*) AS cnt FROM aide_admin.authentication
-        #         WHERE project = %s AND username = %s
-        #         AND (
-        #             (admitted_until IS NULL OR admitted_until >= now())
-        #             AND
-        #             (blocked_until IS NULL OR blocked_until < now())
-        #         )''')
-        #     queryVals = (project,username,)
-        # result = self.dbConnector.execute(queryStr, queryVals, 1)
-        # return result[0]['cnt'] == 1
+            return authentication
+
+        if admin:
+            return authentication['isAdmin']
+        return authentication['enrolled']
 
 
-    def check_demo_mode(self, project):
-        return check_demo_mode(project, self.dbConnector)
+    def check_demo_mode(self, project: str) -> bool:
+        '''
+            Returns True if the project with given shortname is in demo mode, else False.
+        '''
+        return check_demo_mode(project, self.db_connector)
 
 
-    def decryptSessionToken(self, username, request):
+    def decrypt_session_token(self, username: str, request_obj: request) -> str:
+        '''
+            Decrypts and returns the current session token for given username and request (or None
+            if it is not present or else could not be decrypted).
+        '''
         try:
             userdata = self._get_user_data(username)
-            return request.get_cookie('session_token', secret=userdata['secret_token'])
+            return request_obj.get_cookie('session_token', secret=userdata['secret_token'])
         except Exception:
             return None
 
 
-    def encryptSessionToken(self, username, response):
+    def encrypt_session_token(self, username: str, response_obj: response) -> None:
+        '''
+            Retrieves the data for given user and sets the session token for the response.
+        '''
         userdata = self._get_user_data(username)
-        response.set_cookie('session_token', userdata['session_token'],
-                            httponly=True, path='/', secret=userdata['secret_token'])
+        response_obj.set_cookie('session_token',
+                                userdata['session_token'],
+                                httponly=True,
+                                path='/',
+                                secret=userdata['secret_token'])
 
 
-    def _check_user_privileges(self, username, superuser=False, canCreateProjects=False, return_all=False):
-        response = {
+    def _check_user_privileges(self,
+                               username: str,
+                               superuser: bool=False,
+                               can_create_projects: bool=False,
+                               return_all: bool=False) -> dict:
+        user_privileges = {
             'superuser': False,
             'can_create_projects': False
         }
-        result = self.dbConnector.execute('''SELECT isSuperUser, canCreateProjects
+        result = self.db_connector.execute('''SELECT isSuperUser, canCreateProjects
             FROM aide_admin.user WHERE name = %s;''',
             (username,),
             1)
-        
-        if len(result):
-            response['superuser'] = result[0]['issuperuser']
-            response['can_create_projects'] = result[0]['cancreateprojects']
+
+        if len(result) > 0:
+            user_privileges['superuser'] = result[0]['issuperuser']
+            user_privileges['can_create_projects'] = result[0]['cancreateprojects']
 
         if return_all:
-            return response
-        
-        else:
-            if superuser and not result[0]['issuperuser']:
-                return False
-            if canCreateProjects and not (
-                result[0]['cancreateprojects'] or result[0]['issuperuser']):
-                return False
-            return True
+            return user_privileges
+
+        if superuser and not result[0]['issuperuser']:
+            return False
+        if can_create_projects and not (
+            result[0]['cancreateprojects'] or result[0]['issuperuser']):
+            return False
+        return True
 
 
-    def isAuthenticated(self, username, sessionToken, project=None, admin=False, superuser=False, canCreateProjects=False, extend_session=False, return_all=False):
+    def is_authenticated(self,
+                         username: str,
+                         session_token: str,
+                         project: str=None,
+                         admin: bool=False,
+                         superuser: bool=False,
+                         can_create_projects: bool=False,
+                         extend_session: bool=False,
+                         return_all: bool=False) -> dict:
         '''
-            Checks if the user is authenticated to access a service.
-            Returns False if one or more of the following conditions holds:
-            - user is not logged in
-            - 'project' (shortname) is provided, project is configured to be private and user is not in the
-                authenticated users list
-            - 'admin' is True, 'project' (shortname) is provided and user is not an admin of the project
-            - 'superuser' is True and user is not a super user
-            - 'canCreateProjects' is True and user is not authenticated to create (or remove) projects
+            Checks if the user is authenticated to access a service. Returns False if one or more of
+            the following conditions holds:
 
-            If 'extend_session' is True, the user's session will automatically be prolonged by the max login time
-            specified in the configuration file.
-            If 'return_all' is True, all individual flags (instead of just a single bool) is returned.
+                - user is not logged in
+                - 'project' (shortname) is provided, project is configured to be private and user is
+                  not in the
+                    authenticated users list
+                - 'admin' is True, 'project' (shortname) is provided and user is not an admin of the
+                  project
+                - 'superuser' is True and user is not a super user
+                - 'can_create_projects' is True and user is not authenticated to create (or remove)
+                  projects
+
+            If 'extend_session' is True, the user's session will automatically be prolonged by the
+            max login time specified in the configuration file.
+            
+            If 'return_all' is True, all individual flags (instead of just a single bool) is
+            returned.
         '''
 
-        demoMode = check_demo_mode(project, self.dbConnector)
+        demo_mode = check_demo_mode(project, self.db_connector)
 
         if return_all:
-            returnVals = {}
-            returnVals['logged_in'] = self._check_logged_in(username, sessionToken)
-            if not returnVals['logged_in']:
+            return_vals = {}
+            return_vals['logged_in'] = self._check_logged_in(username, session_token)
+            if not return_vals['logged_in']:
                 username = None
             if project is not None:
-                returnVals['project'] = self._check_authorized(project, username, admin, return_all=True)
-                returnVals['project']['demoMode'] = demoMode
-            returnVals['privileges'] = self._check_user_privileges(username, superuser, canCreateProjects, return_all=True)
-            if returnVals['logged_in'] and extend_session:
-                self._init_or_extend_session(username, sessionToken)
-            return returnVals
+                return_vals['project'] = self._check_authorized(project,
+                                                                username,
+                                                                admin,
+                                                                return_all=True)
+                return_vals['project']['demoMode'] = demo_mode
+            return_vals['privileges'] = self._check_user_privileges(username,
+                                                                    superuser,
+                                                                    can_create_projects,
+                                                                    return_all=True)
+            if return_vals['logged_in'] and extend_session:
+                self._init_or_extend_session(username, session_token)
+            return return_vals
 
-        else:
+        if demo_mode is not None and demo_mode:
             # return True if project is in demo mode
-            if demoMode is not None and demoMode:
-                return True
-            if not self._check_logged_in(username, sessionToken):
-                return False
-            if project is not None and not self._check_authorized(project, username, admin):
-                return False
-            if not self._check_user_privileges(username, superuser, canCreateProjects):
-                return False
-            if extend_session:
-                self._init_or_extend_session(username, sessionToken)
             return True
+        if not self._check_logged_in(username, session_token):
+            return False
+        if project is not None and not self._check_authorized(project,
+                                                              username,
+                                                              admin):
+            return False
+        if not self._check_user_privileges(username,
+                                           superuser,
+                                           can_create_projects):
+            return False
+        if extend_session:
+            self._init_or_extend_session(username, session_token)
+        return True
 
 
-    def getAuthentication(self, username, project=None):
+    def get_authentication(self, username: str, project: str=None) -> dict:
         '''
             Returns general authentication properties of the user, regardless of whether
             they are logged in or not.
             If a project shortname is specified, this will also return the user access
             properties for the given project.
         '''
-        
-        response = {}
+
+        auth = {}
         if project is None:
-            result = self.dbConnector.execute(
+            result = self.db_connector.execute(
                 '''SELECT * FROM aide_admin.user AS u
                     WHERE name = %s;
                 ''',
                 (username,),
                 1)
-            response['canCreateProjects'] = result[0]['cancreateprojects']
-            response['isSuperUser'] = result[0]['issuperuser']
+            auth['canCreateProjects'] = result[0]['cancreateprojects']
+            auth['isSuperUser'] = result[0]['issuperuser']
         else:
-            result = self.dbConnector.execute(
+            result = self.db_connector.execute(
                 '''SELECT * FROM aide_admin.user AS u
                     JOIN aide_admin.authentication AS a
                     ON u.name = a.username
@@ -468,41 +481,37 @@ class UserMiddleware():
                 ''',
                 (username,project,),
                 1)
-            response['canCreateProjects'] = result[0]['cancreateprojects']
-            response['isSuperUser'] = result[0]['issuperuser']
-            response['isAdmin'] = result[0]['isadmin']
-            response['admittedUntil'] = result[0]['admitted_until']
-            response['blockedUntil'] = result[0]['blocked_until']
+            auth['canCreateProjects'] = result[0]['cancreateprojects']
+            auth['isSuperUser'] = result[0]['issuperuser']
+            auth['isAdmin'] = result[0]['isadmin']
+            auth['admittedUntil'] = result[0]['admitted_until']
+            auth['blockedUntil'] = result[0]['blocked_until']
 
-        return response
+        return auth
 
 
-    def getLoginData(self, username, sessionToken):
+    def get_login_data(self, username: str, session_token: str) -> Tuple[str, float, float]:
         '''
-            Performs a lookup on the login timestamp dict.
-            If the username cannot be found (also not in the database),
-            they are not logged in (False returned).
-            If the difference between the current time and the recorded
-            login timestamp exceeds a pre-defined threshold, the user is
-            removed from the dict and False is returned.
-            Otherwise returns True if and only if 'sessionToken' matches
-            the entry in the database.
+            Performs a lookup on the login timestamp dict. If the username cannot be found (also not
+            in the database), they are not logged in (False returned). If the difference between the
+            current time and the recorded login timestamp exceeds a pre-defined threshold, the user
+            is removed from the dict and False is returned. Otherwise returns True if and only if
+            'sessionToken' matches the entry in the database.
         '''
-        if self._check_logged_in(username, sessionToken):
+        if self._check_logged_in(username, session_token):
             # still logged in; extend session
-            sessionToken, now, expires = self._init_or_extend_session(username, sessionToken)
-            return sessionToken, now, expires
+            session_token, now, expires = self._init_or_extend_session(username, session_token)
+            return session_token, now, expires
 
-        else:
-            # not logged in or error
-            raise Exception('Not logged in.')
+        # not logged in or error
+        raise Exception('Not logged in.')
 
 
-    def getUserPermissions(self, project, username):
+    def get_user_permissions(self, project: str, username: str) -> dict:
         '''
             Returns the user-to-project relation (e.g., if user is admin).
         '''
-        response = {
+        permissions = {
             'demoMode': False,
             'isAdmin': False,
             'admittedUntil': None,
@@ -511,95 +520,129 @@ class UserMiddleware():
 
         try:
             # demo mode
-            response['demoMode'] = check_demo_mode(project, self.dbConnector)
+            permissions['demoMode'] = check_demo_mode(project, self.db_connector)
 
             # rest
-            queryStr = sql.SQL('SELECT * FROM {id_auth} WHERE project = %s AND username = %s').format(
+            query_str = sql.SQL('''SELECT * FROM {id_auth}
+                WHERE project = %s AND username = %s''').format(
                 id_auth=sql.Identifier('aide_admin', 'authentication'))
-            result = self.dbConnector.execute(queryStr, (project,username,), 1)
-            if len(result):
-                response['isAdmin'] = result[0]['isadmin']
-                response['admittedUntil'] = result[0]['admitted_until']
-                response['blockedUntil'] = result[0]['blocked_until']
+            result = self.db_connector.execute(query_str, (project,username,), 1)
+            if len(result) > 0:
+                permissions['isAdmin'] = result[0]['isadmin']
+                permissions['admittedUntil'] = result[0]['admitted_until']
+                permissions['blockedUntil'] = result[0]['blocked_until']
 
-        finally:
-            return response
+        except Exception:
+            pass
+
+        return permissions
 
 
-    def login(self, username, password, sessionToken):
+    def login(self,
+              username: str,
+              password: str,
+              session_token: str) -> Tuple[str,float,float]:
+        '''
+            Main log in routine. Performs checks as follows:
 
+                1. Whether username exists in database
+                2. Whether password is correct
+                3. Whether session token is correct
+
+            Returns the session token, current timestamp, and login expiration timestamp if checks
+            passed (else raises an exception).
+        '''
         # check if logged in
-        if self._check_logged_in(username, sessionToken):
+        if self._check_logged_in(username, session_token):
             # still logged in; extend session
-            sessionToken, now, expires = self._init_or_extend_session(username, sessionToken)
-            return sessionToken, now, expires
+            session_token, now, expires = self._init_or_extend_session(username, session_token)
+            return session_token, now, expires
 
         # get user info
-        userData = self.dbConnector.execute(
+        user_data = self.db_connector.execute(
             'SELECT hash FROM aide_admin.user WHERE name = %s;',
             (username,),
             numReturn=1
         )
-        if len(userData) == 0:
+        if len(user_data) == 0:
             # account does not exist
             raise InvalidRequestException()
-        userData = userData[0]
-        
+        user_data = user_data[0]
+
         # verify provided password
-        if self._check_password(password.encode('utf8'), bytes(userData['hash'])):
+        if self._check_password(password.encode('utf8'), bytes(user_data['hash'])):
             # correct
-            sessionToken, timestamp, expires = self._init_or_extend_session(username, None)
-            return sessionToken, timestamp, expires
+            session_token, timestamp, expires = self._init_or_extend_session(username, None)
+            return session_token, timestamp, expires
 
-        else:
-            # incorrect
-            self._invalidate_session(username)
-            raise InvalidPasswordException()
-    
+        # incorrect
+        self._invalidate_session(username)
+        raise InvalidPasswordException()
 
-    def logout(self, username, sessionToken):
+
+    def logout(self, username: str, session_token: str) -> None:
+        '''
+            Main log out routine. Checks whether user is logged in, invalidates session if True.
+        '''
         # check if logged in first
-        if self._check_logged_in(username, sessionToken):
+        if self._check_logged_in(username, session_token):
             self._invalidate_session(username)
 
 
-    def account_available(self, username, email):
+    def account_available(self, username: str, email: str) -> bool:
+        '''
+            Returns True if a given user name and E-mail address are available (False otherwise).
+        '''
         return self._check_account_available(username, email)
 
 
-    def createAccount(self, username, password, email):
+    def create_account(self,
+                       username: str,
+                       password: str,
+                       email: str) -> Tuple[str,float,float]:
+        '''
+            Main routine to create a new user account. Checks if username and E-mail address are
+            available (throws an exception if not); if they are, registers user details in database.
+            Returns the session token, current timestamp, and login expiration timestamp.
+        '''
         username_available, email_available = self._check_account_available(username, email)
         if not username_available or not email_available:
             raise AccountExistsException(username)
 
-        passwd_hash = self._create_hash(password.encode('utf8'))
+        passwd_hash = helpers.create_hash(password.encode('utf8'), self.SALT_NUM_ROUNDS)
 
         query_str = '''
             INSERT INTO aide_admin.user (name, email, hash)
             VALUES (%s, %s, %s);
         '''
-        self.dbConnector.execute(query_str,
+        self.db_connector.execute(query_str,
         (username, email, passwd_hash,),
         numReturn=None)
         session_token, timestamp, expires = self._init_or_extend_session(username)
         return session_token, timestamp, expires
 
 
-    def getUserNames(self, project=None):
-        if not project:
-            queryStr = 'SELECT name FROM aide_admin.user'
-            queryVals = None
+    def get_user_names(self, project=None) -> List[str]:
+        '''
+            Gets all user names in AIDE (if "project" is None) or else in a given project.
+        '''
+        if not isinstance(project, str):
+            query_str = 'SELECT name FROM aide_admin.user'
+            query_vals = None
         else:
-            queryStr = 'SELECT username AS name FROM aide_admin.authentication WHERE project = %s'
-            queryVals = (project,)
-        result = self.dbConnector.execute(queryStr, queryVals, 'all')
-        response = [r['name'] for r in result]
-        return response
+            query_str = 'SELECT username AS name FROM aide_admin.authentication WHERE project = %s'
+            query_vals = (project,)
+        result = self.db_connector.execute(query_str, query_vals, 'all')
+        return [r['name'] for r in result]
 
 
-    def setPassword(self, username, password):
-        hashVal = self._create_hash(password.encode('utf8'))
-        queryStr = '''
+    def set_password(self, username: str, password: str) -> dict:
+        '''
+            Sets a new password for given username. Does NOT perform any checks (login, integrity,
+            etc.).
+        '''
+        hash_val = helpers.create_hash(password.encode('utf8'), self.SALT_NUM_ROUNDS)
+        query_str = '''
             UPDATE aide_admin.user
             SET hash = %s
             WHERE name = %s;
@@ -607,22 +650,23 @@ class UserMiddleware():
             FROM aide_admin.user
             WHERE name = %s;
         '''
-        result = self.dbConnector.execute(queryStr, (hashVal, username, username), 1)
-        if len(result):
+        result = self.db_connector.execute(query_str,
+                                           (hash_val, username, username),
+                                           1)
+        if len(result) > 0:
             return {
                 'success': True
             }
-        else:
-            return {
-                'success': False,
-                'message': f'User with name "{username}" does not exist.'
-            }
-    
+        return {
+            'success': False,
+            'message': f'User with name "{username}" does not exist.'
+        }
 
-    # CSRF prevention functionality
-    # adapted from https://github.com/Othernet-Project/bottle-utils-csrf/blob/master/bottle_utils/csrf.py
 
-    def generate_csrf_token(self):
+    # CSRF prevention functionality, adapted from
+    # https://github.com/Othernet-Project/bottle-utils-csrf/blob/master/bottle_utils/csrf.py
+
+    def generate_csrf_token(self) -> None:
         '''
             Generate and set new CSRF token in cookie. The generated token is set to
             ``request.csrf_token`` attribute for easier access by other functions.
@@ -636,12 +680,15 @@ class UserMiddleware():
         sha256 = hashlib.sha256()
         sha256.update(os.urandom(8))
         token = sha256.hexdigest().encode('utf8')
-        response.set_cookie(self.CSRF_TOKEN_NAME, token, path='/',
-                            secret=self.csrfSecret, max_age=self.CSRF_TOKEN_AGE)
+        response.set_cookie(self.CSRF_TOKEN_NAME,
+                            token,
+                            path='/',
+                            secret=self.csrf_secret,
+                            max_age=self.CSRF_TOKEN_AGE)
         request.csrf_token = token.decode('utf8')
-    
 
-    def csrf_token(self, func):
+
+    def csrf_token(self, func: callable) -> None:
         '''
             Create and set CSRF token in preparation for subsequent POST request. This
             decorator is used to set the token. It also sets the ``'Cache-Control'``
@@ -666,35 +713,39 @@ class UserMiddleware():
         '''
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            token = request.get_cookie(self.CSRF_TOKEN_NAME, secret=self.csrfSecret)
+            token = request.get_cookie(self.CSRF_TOKEN_NAME, secret=self.csrf_secret)
             if token:
                 # We will reuse existing tokens
-                response.set_cookie(self.CSRF_TOKEN_NAME, token, path='/',
-                                    secret=self.csrfSecret, max_age=self.CSRF_TOKEN_AGE)
+                response.set_cookie(self.CSRF_TOKEN_NAME,
+                                    token,
+                                    path='/',
+                                    secret=self.csrf_secret,
+                                    max_age=self.CSRF_TOKEN_AGE)
                 request.csrf_token = token.decode('utf8')
             else:
                 self.generate_csrf_token()
             # Pages with CSRF tokens should not be cached
             response.headers[str('Cache-Control')] = ('no-cache, max-age=0, '
-                                                    'must-revalidate, no-store')
+                                                      'must-revalidate, no-store')
             return func(*args, **kwargs)
         return wrapper
 
 
-    def csrf_check(self, token, regenerate=True):
+    def csrf_check(self, token: str, regenerate: bool=True) -> None:
         '''
-            Perform CSRF protection checks. Performs checks to determine if
-            submitted token matches the token in the cookie.
-            If "regenerate" is False the current CSRF token will be reused.
+            Perform CSRF protection checks. Performs checks to determine if submitted token matches
+            the token in the cookie. If "regenerate" is False the current CSRF token will be reused.
         '''
         if isinstance(token, bytes):
             token = token.decode('utf8')
-        token_cookie = request.get_cookie(self.CSRF_TOKEN_NAME, secret=self.csrfSecret)
+        token_cookie = request.get_cookie(self.CSRF_TOKEN_NAME, secret=self.csrf_secret)
         if isinstance(token_cookie, bytes):
             token_cookie = token_cookie.decode('utf8')
         if token != token_cookie:
-            response.delete_cookie(self.CSRF_TOKEN_NAME, path='/', secret=self.csrfSecret,
-                                max_age=self.CSRF_TOKEN_AGE)
+            response.delete_cookie(self.CSRF_TOKEN_NAME,
+                                   path='/',
+                                   secret=self.csrf_secret,
+                                   max_age=self.CSRF_TOKEN_AGE)
             abort(403, 'Request is invalid or has expired.')
         if regenerate:
             self.generate_csrf_token()

@@ -38,7 +38,7 @@ def capture_worker_name(sender, instance, **kwargs):
 # parse AIDE modules and set up queues
 queues = []
 aideModules = os.environ['AIDE_MODULES'].split(',')
-aideModules = set([a.strip().lower() for a in aideModules])
+aideModules = set(a.strip().lower() for a in aideModules)
 for m in aideModules:
     module = m.strip().lower()
     if module == 'aicontroller':
@@ -48,7 +48,7 @@ for m in aideModules:
     elif module == 'aiworker':
         queues.append(Queue('AIWorker'))
     elif module == 'labelui':
-        queues.append(Queue('ModelMarketplace'))        #TODO: allow outsourcing? Move to FileServer?
+        queues.append(Queue('ModelMarketplace'))    #TODO: allow outsourcing? Move to FileServer?
 
 queues.extend([
     Broadcast('aide_broadcast'),
@@ -58,8 +58,8 @@ queues.extend([
 
 
 app = Celery('AIDE',
-            broker=config.get_property('AIController', 'broker_URL'),        #TODO
-            backend=config.get_property('AIController', 'result_backend'))   #TODO
+             broker=config.get_property('AIController', 'broker_URL'),        #TODO
+             backend=config.get_property('AIController', 'result_backend'))   #TODO
 app.conf.update(
     broker_connection_retry=False,          # deprecated with Celery 6 and above
     broker_connection_retry_on_startup=True,
@@ -73,7 +73,7 @@ app.conf.update(
     broker_pool_limit=None,                 # required to avoid peer connection resets
     broker_heartbeat = 0,                   # required to avoid peer connection resets
     worker_max_tasks_per_child = 1,         # required to free memory (also CUDA) after each process
-    # task_default_rate_limit = 3,            #TODO
+    # task_default_rate_limit = 3,          #TODO
     worker_prefetch_multiplier = 1,         #TODO
     task_acks_late = True,
     task_create_missing_queues = True,

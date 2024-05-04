@@ -3,7 +3,7 @@
     setup and monitoring of AIDE (i.e., super
     user functionality).
 
-    2020-21 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
 import os
@@ -19,7 +19,7 @@ class AIDEAdmin:
         self.config = config
         self.app = app
         self.staticDir = 'modules/AIDEAdmin/static'
-        self.login_check = None
+        self.login_check_fun = None
 
         self.middleware = AdminMiddleware(config, dbConnector)
 
@@ -28,12 +28,27 @@ class AIDEAdmin:
         self._initBottle()
     
 
-    def loginCheck(self, project=None, admin=False, superuser=False, canCreateProjects=False, extend_session=False):
-        return self.login_check(project, admin, superuser, canCreateProjects, extend_session)
+    def login_check(self,
+                    project: str=None,
+                    admin: bool=False,
+                    superuser: bool=False,
+                    can_create_projects: bool=False,
+                    extend_session: bool=False) -> bool:
+        '''
+            Login check function wrapper.
+        '''
+        return self.login_check_fun(project,
+                                    admin,
+                                    superuser,
+                                    can_create_projects,
+                                    extend_session)
 
 
-    def addLoginCheckFun(self, loginCheckFun):
-        self.login_check = loginCheckFun
+    def add_login_check_fun(self, login_check_fun: callable) -> None:
+        '''
+            Entry point during module assembly to provide login check function.
+        '''
+        self.login_check_fun = login_check_fun
 
 
     def _initBottle(self):
@@ -53,7 +68,7 @@ class AIDEAdmin:
 
         @self.app.route('/admin/config/panels/<panel>')
         def send_static_panel(panel):
-            if self.loginCheck(superuser=True):
+            if self.login_check(superuser=True):
                 try:
                     return self.panelTemplates[panel].render(
                         version=AIDE_VERSION
@@ -75,9 +90,9 @@ class AIDEAdmin:
 
         @self.app.route('/admin')
         def send_aide_admin_page():
-            if not self.loginCheck():
+            if not self.login_check():
                 return redirect('/login?redirect=/admin')
-            if not self.loginCheck(superuser=True):
+            if not self.login_check(superuser=True):
                 return redirect('/')
 
             # render configuration template
@@ -94,7 +109,7 @@ class AIDEAdmin:
         @self.app.get('/getServiceDetails')
         def get_service_details():
             try:
-                if not self.loginCheck(superuser=True):
+                if not self.login_check(superuser=True):
                     return redirect('/')
                 return {'details': self.middleware.getServiceDetails()}
             except Exception:
@@ -104,7 +119,7 @@ class AIDEAdmin:
         @self.app.get('/getCeleryWorkerDetails')
         def get_celery_worker_details():
             try:
-                if not self.loginCheck(superuser=True):
+                if not self.login_check(superuser=True):
                     return redirect('/')
                 return {'details': self.middleware.getCeleryWorkerDetails()}
             except Exception:
@@ -114,7 +129,7 @@ class AIDEAdmin:
         @self.app.get('/getProjectDetails')
         def get_project_details():
             try:
-                if not self.loginCheck(superuser=True):
+                if not self.login_check(superuser=True):
                     return redirect('/')
                 return {'details': self.middleware.getProjectDetails()}
             except Exception as e:
@@ -124,7 +139,7 @@ class AIDEAdmin:
         @self.app.get('/getUserDetails')
         def get_user_details():
             try:
-                if not self.loginCheck(superuser=True):
+                if not self.login_check(superuser=True):
                     return redirect('/')
                 return {'details': self.middleware.getUserDetails()}
             except Exception as e:
@@ -134,7 +149,7 @@ class AIDEAdmin:
         @self.app.post('/setCanCreateProjects')
         def set_can_create_projects():
             try:
-                if not self.loginCheck(superuser=True):
+                if not self.login_check(superuser=True):
                     return redirect('/')
                 
                 try:

@@ -28,23 +28,38 @@ class ModelMarketplace:
         self.middleware = ModelMarketplaceMiddleware(config, dbConnector, taskCoordinator)
         self.temp_dir = ModelMarketplaceWorker(self.config, dbConnector).temp_dir
 
-        self.login_check = None
-        self._initBottle()
+        self.login_check_fun = None
+        self._init_bottle()
 
 
-    def loginCheck(self, project=None, admin=False, superuser=False, canCreateProjects=False, extend_session=False):
-        return self.login_check(project, admin, superuser, canCreateProjects, extend_session)
+    def login_check(self,
+                    project: str=None,
+                    admin: bool=False,
+                    superuser: bool=False,
+                    can_create_projects: bool=False,
+                    extend_session: bool=False) -> bool:
+        '''
+            Login check function wrapper.
+        '''
+        return self.login_check_fun(project,
+                                    admin,
+                                    superuser,
+                                    can_create_projects,
+                                    extend_session)
 
 
-    def addLoginCheckFun(self, loginCheckFun):
-        self.login_check = loginCheckFun
+    def add_login_check_fun(self, login_check_fun: callable) -> None:
+        '''
+            Entry point during module assembly to provide login check function.
+        '''
+        self.login_check_fun = login_check_fun
 
 
-    def _initBottle(self):
+    def _init_bottle(self):
 
         @self.app.get('/<project>/getModelsMarketplace')
         def get_models_marketplace(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             try:
@@ -67,13 +82,13 @@ class ModelMarketplace:
 
         @self.app.get('/<project>/getModelMarketplaceNameAvailable')
         def get_model_marketplace_name_available(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             try:
                 model_name = request.params['name']
 
-                available = (self.middleware.getModelIdByName(model_name) is None)
+                available = self.middleware.getModelIdByName(model_name) is None
                 return {'status': 0, 'available': available}
             except Exception as exc:
                 return {'status': 1, 'message': str(exc)}
@@ -81,7 +96,7 @@ class ModelMarketplace:
 
         @self.app.post('/<project>/importModel')
         def import_model(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             # pylint: disable=no-member
@@ -140,7 +155,7 @@ class ModelMarketplace:
 
         @self.app.post('/<project>/requestModelDownload')
         def request_model_download(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             # pylint: disable=no-member
@@ -171,7 +186,7 @@ class ModelMarketplace:
 
         @self.app.post('/<project>/shareModel')
         def share_model(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             # pylint: disable=no-member
@@ -203,7 +218,7 @@ class ModelMarketplace:
 
         @self.app.post('/<project>/reshareModel')
         def reshare_model(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             try:
@@ -221,7 +236,7 @@ class ModelMarketplace:
 
         @self.app.post('/<project>/unshareModel')
         def unshare_model(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             try:
@@ -240,7 +255,7 @@ class ModelMarketplace:
         @enable_cors
         @self.app.route('/<project>/download/models/<filename:re:.*>')
         def download_model(project, filename):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
             if '..' in filename or filename.startswith('/') or filename.startswith('\\'):
                 abort(401, 'forbidden')

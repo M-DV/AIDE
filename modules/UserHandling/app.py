@@ -14,7 +14,11 @@ from .backend import exceptions
 
 class UserHandler():
 
-    def __init__(self, config, app, db_connector, verbose_start=False):
+    def __init__(self,
+                 config,
+                 app,
+                 db_connector,
+                 **_) -> None:
         self.config = config
         self.app = app
         self.static_dir = 'modules/UserHandling/static'
@@ -30,18 +34,7 @@ class UserHandler():
                                                         dtype=str,
                                                         fallback='')
         self.create_account_public = int(len(create_account_token.strip()) == 0)
-        self._init_bottle()
 
-
-    def _parse_parameter(self, request_instance, param):
-        if not param in request_instance:
-            raise exceptions.ValueMissingException(param)
-        return request_instance.get(param)
-
-
-    def _init_bottle(self):
-
-        # read templates
         with open(os.path.abspath(os.path.join(self.static_dir,
                                                'templates/loginScreen.html')),
                   'r',
@@ -54,6 +47,16 @@ class UserHandler():
                   encoding='utf-8') as f_newaccount:
             self.new_account_screen_template = SimpleTemplate(f_newaccount.read())
 
+        self._init_bottle()
+
+
+    def _parse_parameter(self, request_instance, param):
+        if not param in request_instance:
+            raise exceptions.ValueMissingException(param)
+        return request_instance.get(param)
+
+
+    def _init_bottle(self):
 
         @self.app.route('/login')
         @self.app.route('/loginScreen')
@@ -69,7 +72,8 @@ class UserHandler():
         @self.app.route('/doLogin', method='POST')
         @self.app.route('/<project>/doLogin', method='POST')
         def do_login(project=None):
-            self.middleware.csrf_check(request.forms.get('_csrf_token'))        #TODO: causes issues with Mapserver
+            #TODO: causes issues with Mapserver
+            self.middleware.csrf_check(request.forms['_csrf_token'])
 
             # check provided credentials
             try:
@@ -77,16 +81,18 @@ class UserHandler():
                 password = self._parse_parameter(request.forms, 'password')
 
                 # check if session token already provided; renew login if correct
-                session_token = self.middleware.decryptSessionToken(username, request)
+                session_token = self.middleware.decrypt_session_token(username, request)
                 #request.get_cookie('session_token', secret=self.config.get_property('Project',
                 #'secret_token'))
                 if session_token is not None:
                     session_token = html.escape(session_token)
 
-                session_token, _, expires = self.middleware.login(username, password, session_token)
+                session_token, _, expires = self.middleware.login(username,
+                                                                  password,
+                                                                  session_token)
 
                 response.set_cookie('username', username, path='/')     #, expires=expires, same_site='strict')
-                self.middleware.encryptSessionToken(username, response)
+                self.middleware.encrypt_session_token(username, response)
                 # response.set_cookie('session_token', session_token, httponly=True, path='/',
                 # secret=self.config.get_property('Project', 'secret_token'))    #, expires=expires,
                 # same_site='strict')
@@ -108,14 +114,14 @@ class UserHandler():
                     username = self._parse_parameter(request.forms, 'username')
                 username = html.escape(username)
 
-                session_token = self.middleware.decryptSessionToken(username, request)
+                session_token = self.middleware.decrypt_session_token(username, request)
                 # sessionToken = html.escape(request.get_cookie('session_token',
                 # secret=self.config.get_property('Project', 'secret_token')))
 
-                _, _, expires = self.middleware.getLoginData(username, session_token)
+                _, _, expires = self.middleware.get_login_data(username, session_token)
 
                 response.set_cookie('username', username, path='/')   #, expires=expires, same_site='strict')
-                self.middleware.encryptSessionToken(username, response)
+                self.middleware.encrypt_session_token(username, response)
                 # response.set_cookie('session_token', session_token, httponly=True, path='/',
                 # secret=self.config.get_property('Project', 'secret_token'))    #, expires=expires,
                 # same_site='strict')
@@ -127,14 +133,14 @@ class UserHandler():
                 abort(401, str(exc))
 
 
-        @self.app.route('/logout', method='GET')        
+        @self.app.route('/logout', method='GET')
         @self.app.route('/logout', method='POST')
-        @self.app.route('/<project>/logout', method='GET')        
+        @self.app.route('/<project>/logout', method='GET')
         @self.app.route('/<project>/logout', method='POST')
         def logout(project=None):
             try:
                 username = html.escape(request.get_cookie('username'))
-                session_token = self.middleware.decryptSessionToken(username, request)
+                session_token = self.middleware.decrypt_session_token(username, request)
                 self.middleware.logout(username, session_token)
                 response.set_cookie('username', '', path='/', expires=0)   #, expires=expires, same_site='strict')
                 response.set_cookie('session_token', '',
@@ -160,11 +166,11 @@ class UserHandler():
                     username = html.escape(request.get_cookie('username'))
                 except Exception:
                     username = None
-                if not self.checkAuthenticated(project=project):
+                if not self.check_authenticated(project=project):
                     abort(401, 'not permitted')
 
                 return {
-                    'permissions': self.middleware.getUserPermissions(project, username)
+                    'permissions': self.middleware.get_user_permissions(project, username)
                 }
             except Exception:
                 abort(400, 'bad request')
@@ -180,17 +186,17 @@ class UserHandler():
                     # no project specified (all users); need be superuser for this
                     project = None
 
-            if self.checkAuthenticated(project, admin=True, superuser=(project is None),
+            if self.check_authenticated(project, admin=True, superuser=(project is None),
                                             extend_session=True):
                 return {
-                    'users': self.middleware.getUserNames(project)
+                    'users': self.middleware.get_user_names(project)
                 }
             abort(401, 'forbidden')
 
 
         @self.app.route('/doCreateAccount', method='POST')
         def create_account():
-            self.middleware.csrf_check(request.forms.get('_csrf_token'), regenerate=False)
+            self.middleware.csrf_check(request.forms['_csrf_token'], regenerate=False)
 
             #TODO: make secret token match
             try:
@@ -198,12 +204,12 @@ class UserHandler():
                 password = self._parse_parameter(request.forms, 'password')
                 email = html.escape(self._parse_parameter(request.forms, 'email'))
 
-                _, _, expires = self.middleware.createAccount(
+                _, _, expires = self.middleware.create_account(
                     username, password, email
                 )
 
                 response.set_cookie('username', username, path='/')   #, expires=expires, same_site='strict')
-                self.middleware.encryptSessionToken(username, response)
+                self.middleware.encrypt_session_token(username, response)
                 # response.set_cookie('session_token', sessionToken, httponly=True, path='/',
                 # secret=self.config.get_property('Project', 'secret_token'))    #, expires=expires,
                 # same_site='strict')
@@ -235,9 +241,9 @@ class UserHandler():
                             _csrf_token=request.csrf_token
                         )
                     else:
-                        page = redirect('/login')
+                        redirect('/login')
                 except Exception:
-                    page = redirect('/login')
+                    redirect('/login')
             else:
                 # no token required
                 page = self.new_account_screen_template.render(
@@ -248,10 +254,9 @@ class UserHandler():
             return page
 
 
-
         @self.app.route('/accountExists', method='POST')
         def check_account_exists():
-            self.middleware.csrf_check(request.forms.get('_csrf_token'), regenerate=False)
+            self.middleware.csrf_check(request.forms['_csrf_token'], regenerate=False)
             username = ''
             email = ''
             try:
@@ -277,7 +282,7 @@ class UserHandler():
         @self.app.get('/getAuthentication')
         @self.app.post('/getAuthentication')
         def get_authentication():
-            if not self.checkAuthenticated():
+            if not self.check_authenticated():
                 return { 'authentication': {
                         'canCreateProjects': False,
                         'isSuperUser': False
@@ -287,12 +292,12 @@ class UserHandler():
                 username = html.escape(request.get_cookie('username'))
 
                 # optional: project
-                if 'project' in request.query:
-                    project = html.escape(request.query['project'])
-                else:
-                    project = None
+                # pylint: disable=no-member
+                project = request.query.get('project', None)
+                if project is not None:
+                    project = html.escape(project)
 
-                return { 'authentication': self.middleware.getAuthentication(username, project) }
+                return { 'authentication': self.middleware.get_authentication(username, project) }
 
             except Exception:
                 return { 'authentication': {
@@ -305,15 +310,14 @@ class UserHandler():
         @self.app.post('/setPassword')
         def set_password():
             '''
-                Routine for super users to set the password of
-                a user.
+                Routine for super users to set the password of a user.
             '''
-            if self.checkAuthenticated(superuser=True):
+            if self.check_authenticated(superuser=True):
                 try:
                     data = request.json
                     username = data['username']
                     password = data['password']
-                    result = self.middleware.setPassword(username, password)
+                    result = self.middleware.set_password(username, password)
                     return result
 
                 except Exception as exc:
@@ -334,8 +338,17 @@ class UserHandler():
             abort(404, 'not found')
 
 
-    def checkAuthenticated(self, project=None, admin=False, superuser=False,
-                                canCreateProjects=False, extend_session=False, return_all=False):
+    def check_authenticated(self,
+                            project: str=None,
+                            admin: bool=False,
+                            superuser: bool=False,
+                            can_create_projects: bool=False,
+                            extend_session: bool=False,
+                            return_all: bool=False) -> dict:
+        '''
+            Main entry point for all modules to check if a requestor is authenticated to get, post,
+            put, etc. data.
+        '''
         username = None
         session_token = None
         try:
@@ -345,16 +358,22 @@ class UserHandler():
             elif hasattr(request, 'auth') and len(request.auth) > 0:
                 # fallback: request.auth
                 username = request.auth[0]
-            session_token = self.middleware.decryptSessionToken(username, request)
+            session_token = self.middleware.decrypt_session_token(username, request)
         except Exception:
             pass
 
         try:
-            return self.middleware.isAuthenticated(username, session_token, project, admin,
-                                        superuser, canCreateProjects, extend_session, return_all)
+            return self.middleware.is_authenticated(username,
+                                                    session_token,
+                                                    project,
+                                                    admin,
+                                                    superuser,
+                                                    can_create_projects,
+                                                    extend_session,
+                                                    return_all)
         except Exception:
             return False
 
 
-    def getLoginCheckFun(self):
-        return self.checkAuthenticated
+    def get_login_check_fun(self) -> callable:
+        return self.check_authenticated

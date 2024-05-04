@@ -2,13 +2,14 @@
     Bottle routings for labeling statistics of project,
     including per-user analyses and progress.
 
-    2019-21 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import html
 from bottle import request, static_file, abort
 from .backend.middleware import ProjectStatisticsMiddleware
 from util.helpers import parse_boolean
+
 
 
 class ProjectStatistics:
@@ -19,19 +20,36 @@ class ProjectStatistics:
         self.staticDir = 'modules/ProjectStatistics/static'
         self.middleware = ProjectStatisticsMiddleware(config, dbConnector)
 
-        self.login_check = None
-        self._initBottle()
+        self.login_check_fun = None
+        self._init_bottle()
 
 
-    def loginCheck(self, project=None, admin=False, superuser=False, canCreateProjects=False, extend_session=False):
-        return self.login_check(project, admin, superuser, canCreateProjects, extend_session)
+    def login_check(self,
+                    project: str=None,
+                    admin: bool=False,
+                    superuser: bool=False,
+                    can_create_projects: bool=False,
+                    extend_session: bool=False,
+                    return_all: bool=False) -> bool:
+        '''
+            Login check function wrapper.
+        '''
+        return self.login_check_fun(project,
+                                    admin,
+                                    superuser,
+                                    can_create_projects,
+                                    extend_session,
+                                    return_all)
 
 
-    def addLoginCheckFun(self, loginCheckFun):
-        self.login_check = loginCheckFun
+    def add_login_check_fun(self, login_check_fun: callable) -> None:
+        '''
+            Entry point during module assembly to provide login check function.
+        '''
+        self.login_check_fun = login_check_fun
 
 
-    def _initBottle(self):
+    def _init_bottle(self):
 
         @self.app.route('/statistics/<filename:re:.*>') #TODO: /statistics/static/ is ignored by Bottle...
         def send_static(filename):
@@ -40,7 +58,7 @@ class ProjectStatistics:
 
         @self.app.get('/<project>/getProjectStatistics')
         def get_project_statistics(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
             
             stats = self.middleware.getProjectStatistics(project)
@@ -49,7 +67,7 @@ class ProjectStatistics:
 
         @self.app.get('/<project>/getLabelclassStatistics')
         def get_labelclass_statistics(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
             
             stats = self.middleware.getLabelclassStatistics(project)
@@ -58,7 +76,7 @@ class ProjectStatistics:
 
         @self.app.post('/<project>/getPerformanceStatistics')
         def get_user_statistics(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             try:
@@ -92,7 +110,7 @@ class ProjectStatistics:
         
         @self.app.post('/<project>/getUserAnnotationSpeeds')
         def get_user_annotation_speeds(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
             
             userList = request.json['users']
@@ -108,7 +126,7 @@ class ProjectStatistics:
 
         @self.app.get('/<project>/getUserFinished')
         def get_user_finished(project):
-            if not self.loginCheck(project=project):
+            if not self.login_check(project=project):
                 abort(401, 'forbidden')
             
             try:
@@ -121,7 +139,7 @@ class ProjectStatistics:
 
         @self.app.get('/<project>/getTimeActivity')
         def get_time_activity(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
             
             try:

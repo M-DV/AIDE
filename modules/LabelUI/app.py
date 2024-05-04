@@ -58,7 +58,7 @@ class LabelUI():
                                     extend_session)
 
 
-    def addLoginCheckFun(self, loginCheckFun):
+    def add_login_check_fun(self, loginCheckFun):
         self.login_check_fun = loginCheckFun
 
 

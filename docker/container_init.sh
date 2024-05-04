@@ -34,7 +34,7 @@ sudo -u postgres psql -p $dbPort -d $dbName -c "GRANT ALL PRIVILEGES ON ALL TABL
 sudo -u postgres psql -p $dbPort -d $dbName -c "CREATE EXTENSION IF NOT EXISTS postgis;"
 
 # Create DB schema
-python setup/setupDB.py
+python setup/setup_database.py
 sudo systemctl enable postgresql.service
 sudo service postgresql start
 

@@ -23,17 +23,34 @@ class ProjectConfigurator:
         self.static_dir = 'modules/ProjectAdministration/static'
         self.middleware = ProjectConfigMiddleware(config, dbConnector)
 
-        self.login_check = None
+        self.login_check_fun = None
 
         self._init_bottle()
 
 
-    def loginCheck(self, project=None, admin=False, superuser=False, canCreateProjects=False, extend_session=False, return_all=False):
-        return self.login_check(project, admin, superuser, canCreateProjects, extend_session, return_all)
+    def login_check(self,
+                    project: str=None,
+                    admin: bool=False,
+                    superuser: bool=False,
+                    can_create_projects: bool=False,
+                    extend_session: bool=False,
+                    return_all: bool=False) -> bool:
+        '''
+            Login check function wrapper.
+        '''
+        return self.login_check_fun(project,
+                                    admin,
+                                    superuser,
+                                    can_create_projects,
+                                    extend_session,
+                                    return_all)
 
 
-    def addLoginCheckFun(self, loginCheckFun):
-        self.login_check = loginCheckFun
+    def add_login_check_fun(self, login_check_fun: callable) -> None:
+        '''
+            Entry point during module assembly to provide login check function.
+        '''
+        self.login_check_fun = login_check_fun
 
 
     def __redirect(self, loginPage=False, redirect=None):
@@ -81,9 +98,9 @@ class ProjectConfigurator:
 
         @self.app.route('/<project>/config/panels/<panel>')
         def send_static_panel(project, panel):
-            if not self.loginCheck(project=project):
+            if not self.login_check(project=project):
                 abort(401, 'forbidden')
-            if self.loginCheck(project=project, admin=True):
+            if self.login_check(project=project, admin=True):
                 try:
                     return self.panel_templates[panel].render(
                         version=AIDE_VERSION,
@@ -101,7 +118,7 @@ class ProjectConfigurator:
 
             # get project data (and check if project exists)
             try:
-                is_admin = self.loginCheck(project=project, admin=True)
+                is_admin = self.login_check(project=project, admin=True)
                 project_data = self.middleware.get_project_info(project,
                                     ['name', 'description', 'interface_enabled', 'demomode'],
                                     is_admin)
@@ -110,7 +127,7 @@ class ProjectConfigurator:
             except Exception:
                 return self.__redirect()
 
-            if not self.loginCheck(project=project, extend_session=True):
+            if not self.login_check(project=project, extend_session=True):
                 return self.__redirect(True, project)
 
             # render overview template
@@ -131,7 +148,7 @@ class ProjectConfigurator:
         def send_project_setup_page(project):
 
             #TODO
-            if not self.loginCheck(canCreateProjects=True):
+            if not self.login_check(can_create_projects=True):
                 return self.__redirect(loginPage=True, redirect='/' + project + '/setup')
 
             # get project data (and check if project exists)
@@ -141,10 +158,10 @@ class ProjectConfigurator:
             if project_data is None:
                 return self.__redirect()
 
-            if not self.loginCheck(project=project, extend_session=True):
+            if not self.login_check(project=project, extend_session=True):
                 return redirect('/')
 
-            if not self.loginCheck(project=project, admin=True, extend_session=True):
+            if not self.login_check(project=project, admin=True, extend_session=True):
                 return redirect('/' + project + '/interface')
 
             # render configuration template
@@ -163,15 +180,15 @@ class ProjectConfigurator:
         @self.app.route('/<project>/configuration/<panel>')
         def send_project_config_panel(project, panel=None):
             #TODO
-            if not self.loginCheck():
+            if not self.login_check():
                 if panel is None:
                     panel = 'overview'
                 return self.__redirect(loginPage=True, redirect=f'/{project}/configuration/{panel}')
 
-            if not self.loginCheck(project=project, extend_session=True):
+            if not self.login_check(project=project, extend_session=True):
                 return redirect('/')
 
-            if not self.loginCheck(project=project, admin=True, extend_session=True):
+            if not self.login_check(project=project, admin=True, extend_session=True):
                 return redirect('/' + project + '/interface')
 
             # get project data (and check if project exists)
@@ -205,7 +222,7 @@ class ProjectConfigurator:
         @self.app.get('/<project>/getPlatformInfo')
         @self.app.post('/<project>/getPlatformInfo')
         def get_platform_info(project):
-            if not self.loginCheck(project, admin=True):
+            if not self.login_check(project, admin=True):
                 abort(401, 'forbidden')
             try:
                 # parse subset of configuration parameters (if provided)
@@ -221,21 +238,21 @@ class ProjectConfigurator:
         @self.app.get('/<project>/getProjectImmutables')
         @self.app.post('/<project>/getProjectImmutables')
         def get_project_immutables(project):
-            if not self.loginCheck(project, admin=True):
+            if not self.login_check(project, admin=True):
                 abort(401, 'forbidden')
             return {'immutables': self.middleware.get_project_immutables(project)}
 
 
         @self.app.post('/<project>/getConfig')
         def get_project_configuration(project):
-            if not self.loginCheck(project=project):
+            if not self.login_check(project=project):
                 abort(401, 'forbidden')
             try:
                 # parse subset of configuration parameters (if provided)
                 # pylint: disable=no-member
                 params = request.json.get('parameters', None)
 
-                is_admin = self.loginCheck(project=project, admin=True)
+                is_admin = self.login_check(project=project, admin=True)
                 proj_data = self.middleware.get_project_info(project,
                                                              params,
                                                              is_admin)
@@ -246,7 +263,7 @@ class ProjectConfigurator:
 
         @self.app.post('/<project>/saveProjectConfiguration')
         def save_project_configuration(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
             try:
                 settings = request.json
@@ -260,7 +277,7 @@ class ProjectConfigurator:
 
         @self.app.post('/<project>/saveClassDefinitions')
         def save_class_definitions(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
             try:
                 classdef = request.json['classes']
@@ -280,7 +297,7 @@ class ProjectConfigurator:
 
         @self.app.get('/<project>/getModelClassMapping')
         def get_model_to_project_class_mapping(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
             try:
                 # parse AI model state ID if provided
@@ -298,7 +315,7 @@ class ProjectConfigurator:
 
         @self.app.post('/<project>/saveModelClassMapping')
         def save_model_to_project_class_mapping(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
             try:
                 params = request.json
@@ -314,7 +331,7 @@ class ProjectConfigurator:
 
         @self.app.post('/<project>/renewSecretToken')
         def renew_secret_token(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
             try:
                 new_token = self.middleware.renew_secret_token(project)
@@ -325,7 +342,7 @@ class ProjectConfigurator:
 
         @self.app.get('/<project>/getUsers')
         def get_project_users(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             users = self.middleware.get_project_users(project)
@@ -340,7 +357,7 @@ class ProjectConfigurator:
                 'is_admin': False
             }
 
-            is_admin = self.loginCheck(project=project, admin=True)
+            is_admin = self.login_check(project=project, admin=True)
 
             # project-specific permissions
             config = self.middleware.get_project_info(project, None, is_admin)
@@ -348,13 +365,13 @@ class ProjectConfigurator:
                 permissions['can_view'] = True
                 permissions['can_label'] = config['interface_enabled'] and not config['archived']
             is_public = config['ispublic']
-            if not is_public and not self.loginCheck(project=project):
+            if not is_public and not self.login_check(project=project):
                 # pretend project does not exist (TODO: suboptimal solution; does not properly hide
                 # project from view)
                 abort(404, 'not found')
 
             # user-specific permissions
-            user_privileges = self.loginCheck(project=project, return_all=True)
+            user_privileges = self.login_check(project=project, return_all=True)
             if user_privileges is None or user_privileges is False:
                 # user not logged in; only demo mode projects allowed
                 permissions['can_view'] = config['demomode']
@@ -374,7 +391,7 @@ class ProjectConfigurator:
 
         @self.app.post('/<project>/setPermissions')
         def set_permissions(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             try:
@@ -398,9 +415,9 @@ class ProjectConfigurator:
 
         @self.app.route('/newProject')
         def new_project_page():
-            if not self.loginCheck():
+            if not self.login_check():
                 return redirect('/')
-            if not self.loginCheck(canCreateProjects=True):
+            if not self.login_check(can_create_projects=True):
                 abort(401, 'forbidden')
 
             username = html.escape(request.get_cookie('username'))
@@ -415,7 +432,7 @@ class ProjectConfigurator:
 
         @self.app.post('/createProject')
         def create_project():
-            if not self.loginCheck(canCreateProjects=True):
+            if not self.login_check(can_create_projects=True):
                 abort(401, 'forbidden')
 
             success = False
@@ -437,7 +454,7 @@ class ProjectConfigurator:
 
         @self.app.get('/verifyProjectName')
         def check_project_name_valid():
-            if not self.loginCheck(canCreateProjects=True):
+            if not self.login_check(can_create_projects=True):
                 abort(401, 'forbidden')
 
             try:
@@ -454,7 +471,7 @@ class ProjectConfigurator:
 
         @self.app.get('/verifyProjectShort')
         def check_project_shortname_valid():
-            if not self.loginCheck(canCreateProjects=True):
+            if not self.login_check(can_create_projects=True):
                 abort(401, 'forbidden')
 
             try:
@@ -471,7 +488,7 @@ class ProjectConfigurator:
 
         @self.app.get('/suggestShortname')
         def suggest_shortname():
-            if not self.loginCheck(canCreateProjects=True):
+            if not self.login_check(can_create_projects=True):
                 abort(401, 'forbidden')
             try:
                 proj_name = html.escape(request.query['name'])
@@ -488,7 +505,7 @@ class ProjectConfigurator:
 
         @self.app.get('/<project>/isArchived')
         def is_archived(project):
-            if not self.loginCheck(project=project):
+            if not self.login_check(project=project):
                 abort(401, 'forbidden')
 
             try:
@@ -502,7 +519,7 @@ class ProjectConfigurator:
 
         @self.app.post('/<project>/setArchived')
         def set_project_archived(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             try:
@@ -517,7 +534,7 @@ class ProjectConfigurator:
 
         @self.app.post('/<project>/deleteProject')
         def delete_project(project):
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             try:

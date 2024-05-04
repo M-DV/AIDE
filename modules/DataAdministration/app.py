@@ -44,27 +44,31 @@ class DataAdministrator:
                                                  dtype=str,
                                                  fallback=tempfile.gettempdir())
 
-        self.login_check = None
+        self.login_check_fun = None
         self._init_bottle()
 
 
-    def loginCheck(self,
-                   project: str=None,
-                   admin: bool=False,
-                   superuser: bool=False,
-                   canCreateProjects: bool=False,
-                   extend_session: bool=False) -> bool:
+    def login_check(self,
+                    project: str=None,
+                    admin: bool=False,
+                    superuser: bool=False,
+                    can_create_projects: bool=False,
+                    extend_session: bool=False) -> bool:
         '''
-            Main login check function.
+            Login check function wrapper.
         '''
-        return self.login_check(project, admin, superuser, canCreateProjects, extend_session)
+        return self.login_check_fun(project,
+                                    admin,
+                                    superuser,
+                                    can_create_projects,
+                                    extend_session)
 
 
-    def addLoginCheckFun(self, loginCheckFun: callable) -> None:
+    def add_login_check_fun(self, login_check_fun: callable) -> None:
         '''
-            Handle to add login check function during module assembly.
+            Entry point during module assembly to provide login check function.
         '''
-        self.login_check = loginCheckFun
+        self.login_check_fun = login_check_fun
 
 
     @staticmethod
@@ -137,7 +141,7 @@ class DataAdministrator:
                 Launches a background task that verifies image integrity and entries in the database
                 for a project. Only one such job can be run at a time for a particular project.
             '''
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
             try:
                 username = html.escape(request.get_cookie('username'))
@@ -162,7 +166,7 @@ class DataAdministrator:
                 are stored in this project. This tree is obtained from the database itself, resp. a
                 view that is generated from the image file names.
             '''
-            if not self.loginCheck(project=project):
+            if not self.login_check(project=project):
                 abort(401, 'forbidden')
 
             try:
@@ -186,7 +190,7 @@ class DataAdministrator:
                 Returns a list of images and various properties and statistics (id, filename,
                 viewcount, etc.), all filterable by date and value ranges.
             '''
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             # parse parameters
@@ -260,7 +264,7 @@ class DataAdministrator:
 
                 Returns the session ID as a response.
             '''
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
             if not self.is_file_server:
                 return self.relay_request(project, 'initiateUploadSession', 'post')
@@ -334,7 +338,7 @@ class DataAdministrator:
                 parameter, that process will be started. Once this is done, all temporary files get
                 removed.
             '''
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             if not self.is_file_server:
@@ -360,7 +364,7 @@ class DataAdministrator:
                 Search project file directory on disk for images that are not registered in
                 database.
             '''
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             username = html.escape(request.get_cookie('username'))
@@ -379,7 +383,7 @@ class DataAdministrator:
                 Add images that exist in project file directory on disk, but are not yet registered
                 in database.
             '''
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             try:
@@ -425,7 +429,7 @@ class DataAdministrator:
                 Remove images from database, including predictions and annotations (if flag is set).
                 Also remove images from disk (if flag is set).
             '''
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             try:
@@ -476,7 +480,7 @@ class DataAdministrator:
                 for custom parser options to be set during annotation im- and export. See
                 util.parsers.PARSERS for more infos.
             '''
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             method = request.params.get('method', 'download')
@@ -493,7 +497,7 @@ class DataAdministrator:
                 predictions for download on the file server in a temporary directory (in a Zip
                 file). Returns the Celery task ID accordingly.
             '''
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
             # parse parameters
             try:
@@ -535,7 +539,7 @@ class DataAdministrator:
                 Returns the download links to those temporary files.
             '''
             #TODO: allow download for non-admins?
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
             # parse parameters
@@ -588,7 +592,7 @@ class DataAdministrator:
         @self.app.route('/<project>/downloadData/<filename:re:.*>')
         def download_data(project: str, filename: str) -> response:
             #TODO: allow download for non-admins?
-            if not self.loginCheck(project=project, admin=True):
+            if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
             if '..' in filename or filename.startswith('/') or filename.startswith('\\'):
                 abort(401, 'forbidden')
