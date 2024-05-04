@@ -44,12 +44,12 @@ class ModelMarketplaceWorker:
         self.config = config
         self.dbConnector = dbConnector  #Database(config)
         self.labelUImiddleware = DBMiddleware(config, dbConnector)
-        self.tempDir = self.config.get_property('LabelUI',
-                                                'tempfiles_dir',
-                                                dtype=str,
-                                                fallback=tempfile.gettempdir())   #TODO
-        self.tempDir = os.path.join(self.tempDir, 'aide/modelDownloads')
-        os.makedirs(self.tempDir, exist_ok=True)
+        self.temp_dir = self.config.get_property('LabelUI',
+                                                 'tempfiles_dir',
+                                                 dtype=str,
+                                                 fallback=tempfile.gettempdir())   #TODO
+        self.temp_dir = os.path.join(self.temp_dir, 'aide/modelDownloads')
+        os.makedirs(self.temp_dir, exist_ok=True)
         self._init_available_ai_models()
 
 
@@ -459,7 +459,7 @@ class ModelMarketplaceWorker:
                 netPath = uriTokens.path
                 if netPath.startswith('/') or netPath.startswith(os.sep):
                     netPath = netPath[1:]
-                tempFile = os.path.join(self.tempDir, netLoc, netPath)
+                tempFile = os.path.join(self.temp_dir, netLoc, netPath)
                 
                 if os.path.exists(tempFile):
                     os.remove(tempFile)
@@ -796,11 +796,11 @@ class ModelMarketplaceWorker:
             # write contents
             if stateDict is None:
                 destName += '.json'
-                json.dump(modelDefinition, open(os.path.join(self.tempDir, destName), 'w'))
+                json.dump(modelDefinition, open(os.path.join(self.temp_dir, destName), 'w'))
 
             else:
                 destName += '.zip'
-                with zipfile.ZipFile(os.path.join(self.tempDir, destName), 'w', zipfile.ZIP_DEFLATED) as f:
+                with zipfile.ZipFile(os.path.join(self.temp_dir, destName), 'w', zipfile.ZIP_DEFLATED) as f:
                     f.writestr('modelDefinition.json', json.dumps(modelDefinition))
                     bio = io.BytesIO(stateDict)
                     f.writestr('modelState.bin', bio.getvalue())
@@ -814,7 +814,7 @@ class ModelMarketplaceWorker:
                 raise Exception(f'Model file "{sourcePath}" could not be found.')
 
             _, fileName = os.path.split(sourcePath)
-            destPath = os.path.join(self.tempDir, fileName)
+            destPath = os.path.join(self.temp_dir, fileName)
             if not os.path.exists(destPath):
                 shutil.copyfile(sourcePath, destPath)
 

@@ -25,7 +25,7 @@ class ProjectConfigurator:
 
         self.login_check = None
 
-        self._initBottle()
+        self._init_bottle()
 
 
     def loginCheck(self, project=None, admin=False, superuser=False, canCreateProjects=False, extend_session=False, return_all=False):
@@ -46,20 +46,27 @@ class ProjectConfigurator:
         return response
 
 
-    def _initBottle(self):
+    def _init_bottle(self):
+        # pylint: disable=inconsistent-return-statements
 
         # read project configuration templates
         with open(os.path.abspath(os.path.join(self.static_dir,
-                'templates/projectLandingPage.html')), 'r', encoding='utf-8') as f_template:
-            self.projLandPage_template = SimpleTemplate(f_template.read())
+                                               'templates/projectLandingPage.html')),
+                  'r',
+                  encoding='utf-8') as f_template:
+            self.proj_land_page_template = SimpleTemplate(f_template.read())
 
         with open(os.path.abspath(os.path.join(self.static_dir,
-                'templates/projectConfiguration.html')), 'r', encoding='utf-8') as f_template:
-            self.projConf_template = SimpleTemplate(f_template.read())
+                                               'templates/projectConfiguration.html')),
+                  'r',
+                  encoding='utf-8') as f_template:
+            self.proj_conf_template = SimpleTemplate(f_template.read())
 
         with open(os.path.abspath(os.path.join(self.static_dir,
-                'templates/projectConfigWizard.html')), 'r', encoding='utf-8') as f_template:
-            self.projSetup_template = SimpleTemplate(f_template.read())
+                                               'templates/projectConfigWizard.html')),
+                  'r',
+                  encoding='utf-8') as f_template:
+            self.proj_setup_template = SimpleTemplate(f_template.read())
 
 
         self.panel_templates = {}
@@ -95,7 +102,7 @@ class ProjectConfigurator:
             # get project data (and check if project exists)
             try:
                 is_admin = self.loginCheck(project=project, admin=True)
-                project_data = self.middleware.getProjectInfo(project,
+                project_data = self.middleware.get_project_info(project,
                                     ['name', 'description', 'interface_enabled', 'demomode'],
                                     is_admin)
                 if project_data is None:
@@ -112,7 +119,7 @@ class ProjectConfigurator:
             except Exception:
                 username = ''
 
-            return self.projLandPage_template.render(
+            return self.proj_land_page_template.render(
                 version=AIDE_VERSION,
                 projectShortname=project,
                 projectTitle=project_data['name'],
@@ -128,7 +135,7 @@ class ProjectConfigurator:
                 return self.__redirect(loginPage=True, redirect='/' + project + '/setup')
 
             # get project data (and check if project exists)
-            project_data = self.middleware.getProjectInfo(project,
+            project_data = self.middleware.get_project_info(project,
                                         ['name', 'description', 'interface_enabled', 'demomode'],
                                         True)
             if project_data is None:
@@ -146,7 +153,7 @@ class ProjectConfigurator:
             except Exception:
                 username = ''
 
-            return self.projSetup_template.render(
+            return self.proj_setup_template.render(
                     version=AIDE_VERSION,
                     projectShortname=project,
                     projectTitle=project_data['name'],
@@ -168,7 +175,7 @@ class ProjectConfigurator:
                 return redirect('/' + project + '/interface')
 
             # get project data (and check if project exists)
-            project_data = self.middleware.getProjectInfo(project, ['name'], True)
+            project_data = self.middleware.get_project_info(project, ['name'], True)
             if project_data is None or 'name' not in project_data:
                 return self.__redirect()
 
@@ -181,7 +188,7 @@ class ProjectConfigurator:
             if panel is None:
                 panel = ''
 
-            return self.projConf_template.render(
+            return self.proj_conf_template.render(
                     version=AIDE_VERSION,
                     panel=panel,
                     projectShortname=project,
@@ -202,9 +209,10 @@ class ProjectConfigurator:
                 abort(401, 'forbidden')
             try:
                 # parse subset of configuration parameters (if provided)
+                # pylint: disable=no-member
                 params = None if request.json is None else request.json.get('parameters', None)
 
-                proj_data = self.middleware.getPlatformInfo(project, params)
+                proj_data = self.middleware.get_platform_info(project, params)
                 return { 'settings': proj_data }
             except Exception:
                 abort(400, 'bad request')
@@ -215,24 +223,22 @@ class ProjectConfigurator:
         def get_project_immutables(project):
             if not self.loginCheck(project, admin=True):
                 abort(401, 'forbidden')
-            return {'immutables': self.middleware.getProjectImmutables(project)}
+            return {'immutables': self.middleware.get_project_immutables(project)}
 
 
-        @self.app.get('/<project>/getConfig')
         @self.app.post('/<project>/getConfig')
         def get_project_configuration(project):
             if not self.loginCheck(project=project):
                 abort(401, 'forbidden')
             try:
                 # parse subset of configuration parameters (if provided)
-                try:
-                    data = request.json
-                    params = data['parameters']
-                except Exception:
-                    params = None
+                # pylint: disable=no-member
+                params = request.json.get('parameters', None)
 
                 is_admin = self.loginCheck(project=project, admin=True)
-                proj_data = self.middleware.getProjectInfo(project, params, is_admin)
+                proj_data = self.middleware.get_project_info(project,
+                                                             params,
+                                                             is_admin)
                 return { 'settings': proj_data }
             except Exception:
                 abort(400, 'bad request')
@@ -244,11 +250,10 @@ class ProjectConfigurator:
                 abort(401, 'forbidden')
             try:
                 settings = request.json
-                is_valid = self.middleware.updateProjectSettings(project, settings)
+                is_valid = self.middleware.update_project_settings(project, settings)
                 if is_valid:
                     return {'success': is_valid}
-                else:
-                    abort(400, 'bad request')
+                abort(400, 'bad request')
             except Exception:
                 abort(400, 'bad request')
 
@@ -258,13 +263,16 @@ class ProjectConfigurator:
             if not self.loginCheck(project=project, admin=True):
                 abort(401, 'forbidden')
             try:
-                params = request.json
-                classdef = params['classes']
-                remove_missing = params.get('remove_missing', False)
+                classdef = request.json['classes']
+
+                # pylint: disable=no-member
+                remove_missing = request.json.get('remove_missing', False)
                 if isinstance(classdef, str):
                     # re-parse JSON (might happen in case of single quotes)
                     classdef = json.loads(classdef)
-                warnings = self.middleware.updateClassDefinitions(project, classdef, remove_missing)
+                warnings = self.middleware.update_class_definitions(project,
+                                                                    classdef,
+                                                                    remove_missing)
                 return {'status': 0, 'warnings': warnings}
             except Exception as exc:
                 abort(400, str(exc))
@@ -276,8 +284,9 @@ class ProjectConfigurator:
                 abort(401, 'forbidden')
             try:
                 # parse AI model state ID if provided
+                # pylint: disable=no-member
                 ai_model_id = request.params.get('modelID', None)
-                response = self.middleware.getModelToProjectClassMapping(project, ai_model_id)
+                response = self.middleware.get_model_to_proj_class_mapping(project, ai_model_id)
                 return {
                     'status': 0,
                     'response': response
@@ -294,7 +303,7 @@ class ProjectConfigurator:
             try:
                 params = request.json
                 mapping = params['mapping']
-                status = self.middleware.saveModelToProjectClassMapping(project, mapping)
+                status = self.middleware.save_model_to_proj_class_mapping(project, mapping)
                 return {
                     'status': status
                 }
@@ -308,7 +317,7 @@ class ProjectConfigurator:
             if not self.loginCheck(project=project, admin=True):
                 abort(401, 'forbidden')
             try:
-                new_token = self.middleware.renewSecretToken(project)
+                new_token = self.middleware.renew_secret_token(project)
                 return {'secret_token': new_token}
             except Exception:
                 abort(400, 'bad request')
@@ -319,7 +328,7 @@ class ProjectConfigurator:
             if not self.loginCheck(project=project, admin=True):
                 abort(401, 'forbidden')
 
-            users = self.middleware.getProjectUsers(project)
+            users = self.middleware.get_project_users(project)
             return {'users':users}
 
 
@@ -334,7 +343,7 @@ class ProjectConfigurator:
             is_admin = self.loginCheck(project=project, admin=True)
 
             # project-specific permissions
-            config = self.middleware.getProjectInfo(project, None, is_admin)
+            config = self.middleware.get_project_info(project, None, is_admin)
             if config['demomode']:
                 permissions['can_view'] = True
                 permissions['can_label'] = config['interface_enabled'] and not config['archived']
@@ -372,7 +381,7 @@ class ProjectConfigurator:
                 user_list = request.json['users']
                 privileges = request.json['privileges']
 
-                return self.middleware.setPermissions(project, user_list, privileges)
+                return self.middleware.set_permissions(project, user_list, privileges)
 
             except Exception as exc:
                 return {
@@ -415,7 +424,7 @@ class ProjectConfigurator:
 
                 # check provided properties
                 proj_settings = request.json
-                success = self.middleware.createProject(username, proj_settings)
+                success = self.middleware.create_project(username, proj_settings)
 
             except Exception as exc:
                 abort(400, str(exc))
@@ -434,7 +443,7 @@ class ProjectConfigurator:
             try:
                 proj_name = html.escape(request.query['name'])
                 if len(proj_name) > 0:
-                    available = self.middleware.getProjectNameAvailable(proj_name)
+                    available = self.middleware.get_project_name_available(proj_name)
                 else:
                     available = False
                 return { 'available': available }
@@ -451,7 +460,7 @@ class ProjectConfigurator:
             try:
                 proj_name = html.escape(request.query['shorthand'])
                 if len(proj_name) > 0:
-                    available = self.middleware.getProjectShortNameAvailable(proj_name)
+                    available = self.middleware.get_project_shortname_available(proj_name)
                 else:
                     available = False
                 return { 'available': available }
@@ -484,7 +493,7 @@ class ProjectConfigurator:
 
             try:
                 username = html.escape(request.get_cookie('username'))
-                result = self.middleware.getProjectArchived(project, username)
+                result = self.middleware.get_project_archived(project, username)
                 return result
 
             except Exception:
@@ -499,7 +508,7 @@ class ProjectConfigurator:
             try:
                 username = html.escape(request.get_cookie('username'))
                 archived = request.json['archived']
-                result = self.middleware.setProjectArchived(project, username, archived)
+                result = self.middleware.set_project_archived(project, username, archived)
                 return result
 
             except Exception:
@@ -523,7 +532,7 @@ class ProjectConfigurator:
                     }
                 delete_files = request.json['deleteFiles']
 
-                result = self.middleware.deleteProject(project, username, delete_files)
+                result = self.middleware.delete_project(project, username, delete_files)
                 return result
 
             except Exception:

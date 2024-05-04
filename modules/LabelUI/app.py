@@ -139,10 +139,9 @@ class LabelUI():
         def get_class_definitions(project: str) -> response:
             if not self.login_check(project=project):
                 abort(401, 'not logged in')
-            try:
-                show_hidden = parse_boolean(request.params['show_hidden'])
-            except Exception:
-                show_hidden = False
+
+            # pylint: disable=no-member
+            show_hidden = parse_boolean(request.params.get('show_hidden', False))
             class_defs = {
                 'classes': self.middleware.get_class_definitions(project, show_hidden)
             }

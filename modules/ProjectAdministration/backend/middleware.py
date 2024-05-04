@@ -160,9 +160,9 @@ class ProjectConfigMiddleware:
                     dict_obj[key] = target[key]
 
 
-    def getPlatformInfo(self,
-                        project: str,
-                        parameters: Union[Iterable[str],str]=None) -> dict:
+    def get_platform_info(self,
+                          project: str,
+                          parameters: Union[Iterable[str],str]=None) -> dict:
         '''
             AIDE setup-specific platform metadata.
         '''
@@ -232,7 +232,7 @@ class ProjectConfigMiddleware:
         return response
 
 
-    def getProjectImmutables(self, project: str) -> dict:
+    def get_project_immutables(self, project: str) -> dict:
         '''
             Compatibility wrapper for main app.
         '''
@@ -245,10 +245,10 @@ class ProjectConfigMiddleware:
         }
 
 
-    def getProjectInfo(self,
-                       project: str,
-                       parameters: Union[Iterable[str],str]=None,
-                       is_admin: bool=False) -> dict:
+    def get_project_info(self,
+                         project: str,
+                         parameters: Union[Iterable[str],str]=None,
+                         is_admin: bool=False) -> dict:
         '''
             Returns configuration metadata for a given project.
 
@@ -345,7 +345,7 @@ class ProjectConfigMiddleware:
         return response
 
 
-    def renewSecretToken(self, project: str) -> str:
+    def renew_secret_token(self, project: str) -> str:
         '''
             Creates a new secret token, invalidating the old one.
         '''
@@ -363,10 +363,10 @@ class ProjectConfigMiddleware:
             return None
 
 
-    def setPermissions(self,
-                       project: str,
-                       userList: str,
-                       privileges: dict) -> dict:
+    def set_permissions(self,
+                         project: str,
+                         user_list: str,
+                         privileges: dict) -> dict:
         '''
             Sets project permissions for a given list of user names. Permissions may be set through
             a dict of "privileges" with values and include the following privilege keywords and
@@ -377,34 +377,34 @@ class ProjectConfigMiddleware:
                 - "admitted_until": datetime or anything else for no limit
                 - "remove": bool        # removes users from project
         '''
-        userList = [(u,) for u in userList]
+        user_list = [(u,) for u in user_list]
 
-        for p in privileges.keys():
+        for priv_key in privileges.keys():
             query_type = 'update'
-            if p.lower() == 'isadmin':
-                query_val = bool(privileges[p])
-            elif p.lower() in ('admitted_until', 'blocked_until'):
+            if priv_key.lower() == 'isadmin':
+                query_val = bool(privileges[priv_key])
+            elif priv_key.lower() in ('admitted_until', 'blocked_until'):
                 try:
-                    query_val = datetime.fromtimestamp(privileges[p])
+                    query_val = datetime.fromtimestamp(privileges[priv_key])
                 except Exception:
                     query_val = None
-            elif p.lower() == 'remove':
+            elif priv_key.lower() == 'remove':
                 query_val = None
                 query_type = 'remove'
             else:
-                raise ValueError(f'"{p}" is not a recognized privilege type.')
+                raise ValueError(f'"{priv_key}" is not a recognized privilege type.')
 
             if query_type == 'update':
                 query_str = f'''
                     UPDATE aide_admin.authentication
-                    SET {p} = %s
+                    SET {priv_key} = %s
                     WHERE username IN %s
                     AND project = %s
                     RETURNING username;
                 '''
                 result = self.db_connector.execute(query_str,
-                                                  (query_val, tuple(userList), project),
-                                                  'all')
+                                                   (query_val, tuple(user_list), project),
+                                                   'all')
             else:
                 query_str = '''
                     DELETE FROM aide_admin.authentication
@@ -412,13 +412,15 @@ class ProjectConfigMiddleware:
                     AND project = %s
                     RETURNING username;
                 '''
-                result = self.db_connector.execute(query_str, (tuple(userList), project), 'all')
+                result = self.db_connector.execute(query_str,
+                                                   (tuple(user_list), project),
+                                                   'all')
 
             if result is None or len(result) == 0:
                 #TODO: provide more sophisticated error response
                 return {
                     'status': 2,
-                    'message': f'An error occurred while trying to set permission type "{p}"'
+                    'message': f'An error occurred while trying to set permission type "{priv_key}"'
                 }
 
         return {
@@ -426,7 +428,7 @@ class ProjectConfigMiddleware:
         }
 
 
-    def getProjectUsers(self, project: str) -> List[dict]:
+    def get_project_users(self, project: str) -> List[dict]:
         '''
             Returns a list of users that are enrolled in the project, as well as their roles within
             the project.
@@ -443,9 +445,9 @@ class ProjectConfigMiddleware:
         return response
 
 
-    def createProject(self,
-                      username: str,
-                      properties: dict) -> bool:
+    def create_project(self,
+                       username: str,
+                       properties: dict) -> bool:
         '''
             Receives the most basic, mostly non-changeable settings for a new project ("properties")
             with the following entries:
@@ -469,9 +471,9 @@ class ProjectConfigMiddleware:
         name, shortname = properties['name'], properties['shortname']
 
         # verify availability of the project name and shortname
-        if not self.getProjectNameAvailable(name):
+        if not self.get_project_name_available(name):
             raise ValueError(f'Project name "{name}" unavailable.')
-        if not self.getProjectShortNameAvailable(shortname):
+        if not self.get_project_shortname_available(shortname):
             raise ValueError(f'Project shortname "{shortname}" unavailable.')
 
         # load base SQL
@@ -606,17 +608,28 @@ class ProjectConfigMiddleware:
         return True
 
 
-    def updateProjectSettings(self,
-                              project: str,
-                              projectSettings: dict) -> bool:
+    def update_project_settings(self,
+                                project: str,
+                                project_settings: dict) -> bool:
         '''
-            TODO
+            Receives a project shortname and dict of settings to update, performs integrity checks
+            and type conversions, and updates settings in the database accordingly. Returns True if
+            update has succeeded.
+
+            Args:
+                - "project":            str, project shortname
+                - "project_settings":   dict, settings to update. Settings are typecast individually
+                                        (e.g., "ui_settings" usually come from frontend as a JSON
+                                        string and get parsed into a dict for checking).
+    
+            Returns:
+                bool, True if update succeeded (else will raise an exception)
         '''
 
         # check UI settings first
-        if 'ui_settings' in projectSettings:
-            if isinstance(projectSettings['ui_settings'], str):
-                projectSettings['ui_settings'] = json.loads(projectSettings['ui_settings'])
+        if 'ui_settings' in project_settings:
+            if isinstance(project_settings['ui_settings'], str):
+                project_settings['ui_settings'] = json.loads(project_settings['ui_settings'])
             field_names = [
                 ('welcomeMessage', str),
                 ('numImagesPerBatch', int),
@@ -639,7 +652,7 @@ class ProjectConfigMiddleware:
                 ('showImageURIs', bool)
             ]
             ui_settings_new, ui_s_keys_new = helpers.parse_parameters(
-                                                                projectSettings['ui_settings'],
+                                                                project_settings['ui_settings'],
                                                                 field_names,
                                                                 absent_ok=True,
                                                                 escape=True)
@@ -663,7 +676,7 @@ class ProjectConfigMiddleware:
             # auto-complete with defaults where missing
             ui_settings = helpers.check_args(ui_settings, self.default_ui_settings)
 
-            projectSettings['ui_settings'] = json.dumps(ui_settings)
+            project_settings['ui_settings'] = json.dumps(ui_settings)
 
 
         # parse remaining parameters
@@ -679,12 +692,11 @@ class ProjectConfigMiddleware:
             ('mapserver_settings', str)
         ]
 
-        #TODO: kind of a dirty hack
-        if 'mapserver_settings' in projectSettings:
-            projectSettings['mapserver_settings'] = \
-                json.dumps(projectSettings['mapserver_settings'])
+        if 'mapserver_settings' in project_settings:
+            project_settings['mapserver_settings'] = \
+                json.dumps(project_settings['mapserver_settings'])
 
-        vals, params = helpers.parse_parameters(projectSettings,
+        vals, params = helpers.parse_parameters(project_settings,
                                                 field_names,
                                                 absent_ok=True,
                                                 escape=False)
@@ -692,8 +704,7 @@ class ProjectConfigMiddleware:
 
         # commit to DB
         query_str = sql.SQL('''UPDATE aide_admin.project
-            SET
-            {}
+            SET {}
             WHERE shortname = %s;
             '''
         ).format(
@@ -701,18 +712,18 @@ class ProjectConfigMiddleware:
         )
 
         self.db_connector.execute(query_str,
-                                 tuple(vals),
-                                 None)
+                                  tuple(vals),
+                                  None)
 
         return True
 
 
-    def updateClassDefinitions(self,
-                               project: str,
-                               classdef: Iterable[dict],
-                               removeMissing: bool=False) -> List[str]:
+    def update_class_definitions(self,
+                                 project: str,
+                                 classdef: Iterable[dict],
+                                 remove_missing: bool=False) -> List[str]:
         '''
-            Updates the project's class definitions. if "removeMissing" is set to True, label
+            Updates the project's class definitions. if "remove_missing" is set to True, label
             classes that are present in the database, but not in "classdef," will be removed. Label
             class groups will only be removed if they do not reference any label class present in
             "classdef." This functionality is disallowed in the case of segmentation masks.
@@ -730,9 +741,9 @@ class ProjectConfigMiddleware:
         is_segmentation = any('segmentationmasks' in m.lower() for m in meta_type.values())
         if is_segmentation:
             # segmentation: we disallow deletion and serial idx > 255
-            if removeMissing:
+            if remove_missing:
                 warnings.append('Pixel-wise segmentation projects disallow removing label classes.')
-            removeMissing = False
+            remove_missing = False
             lc_query = self.db_connector.execute(sql.SQL('''
                 SELECT id, idx, color FROM {};
             ''').format(sql.Identifier(project, 'labelclass')), None, 'all')
@@ -829,7 +840,7 @@ class ProjectConfigMiddleware:
             _parse_item(item, None)
 
         # apply changes
-        if removeMissing:
+        if remove_missing:
             query_args = []
             if len(classes_update) > 0:
                 # remove all missing label classes
@@ -915,11 +926,11 @@ class ProjectConfigMiddleware:
         return warnings
 
 
-    def getModelToProjectClassMapping(self,
-                                      project: str,
-                                      aiModelID: Union[UUID,
-                                                       str,
-                                                       Iterable[Union[UUID,str]]]=None) -> dict:
+    def get_model_to_proj_class_mapping(self,
+                                        project: str,
+                                        model_id: Union[UUID,
+                                                        str,
+                                                        Iterable[Union[UUID,str]]]=None) -> dict:
         '''
             Returns a dict of tuples of tuples (AI model label class name, project label class ID),
             organized by AI model library. These label class mappings are used to translate from AI
@@ -927,29 +938,21 @@ class ProjectConfigMiddleware:
             the current project. If "aiModelID" is provided (str or Iterable of str), only
             definitions for the provided AI model libraries are returned.
         '''
-        if aiModelID is None or not isinstance(aiModelID, Iterable):
-            lib_str = sql.SQL('')
-        else:
-            if isinstance(aiModelID, str):
-                try:
-                    aiModelID = (UUID(aiModelID),)
-                except Exception:
-                    # no UUID, hence no mapping to be returned
-                    return {}
-            elif isinstance(aiModelID, UUID):
-                aiModelID = (aiModelID,)
-            elif isinstance(aiModelID, Iterable):
-                aiModelID = list(aiModelID)
-                for a_idx, sub_id in enumerate(aiModelID):
-                    if not isinstance(sub_id, UUID):
-                        try:
-                            aiModelID[a_idx] = UUID(sub_id)
-                        except Exception:
-                            # no UUID
-                            continue
-            if len(aiModelID) == 0:
-                return {}
+        model_ids = []
+        lib_str = sql.SQL('')
+
+        if isinstance(model_id, (UUID, str)):
+            model_id = [model_id]
+        for mid in model_id:
+            try:
+                model_ids.append(UUID(mid))
+            except (TypeError, AttributeError, ValueError):
+                continue
+        model_ids = tuple(model_ids)
+        if len(model_ids) > 0:
             lib_str = sql.SQL('WHERE marketplace_origin_id IN (%s)')
+        else:
+            model_ids = None
 
         response = {}
         result = self.db_connector.execute(sql.SQL(
@@ -957,21 +960,21 @@ class ProjectConfigMiddleware:
         ).format(
             id_modellc=sql.Identifier(project, 'model_labelclass'),
             libStr=lib_str
-        ), aiModelID, 'all')
+        ), model_id, 'all')
         if result is not None and len(result):
-            for r in result:
-                model_id = str(r['marketplace_origin_id'])
-                if model_id not in response:
-                    response[model_id] = []
-                lc_proj = (str(r['labelclass_id_project']) \
-                            if r['labelclass_id_project'] is not None else None)
-                response[model_id].append((r['labelclass_id_model'],
-                                           r['labelclass_name_model'],
-                                           lc_proj))
+            for res in result:
+                model_origin_id = str(res['marketplace_origin_id'])
+                if model_origin_id not in response:
+                    response[model_origin_id] = []
+                lc_proj = (str(res['labelclass_id_project']) \
+                            if res['labelclass_id_project'] is not None else None)
+                response[model_origin_id].append((res['labelclass_id_model'],
+                                                  res['labelclass_name_model'],
+                                                  lc_proj))
         return response
 
 
-    def saveModelToProjectClassMapping(self, project: str, mapping: dict) -> int:
+    def save_model_to_proj_class_mapping(self, project: str, mapping: dict) -> int:
         '''
             Receives a dict of tuples of tuples, organized by AI model library, and saves the
             information in the database. NOTE: all previous rows in the database for the given AI
@@ -981,10 +984,9 @@ class ProjectConfigMiddleware:
         ai_model_ids = set()
         values = []
         labelclasses_new = {}       # label classes in model to add new to project
-        for key in mapping.keys():
+        for key, next_map in mapping.items():
             ai_model_id = UUID(key)
             ai_model_ids.add(ai_model_id)
-            next_map = mapping[ai_model_id]
             for row in next_map:
                 # tuple order in map: (source class ID, source class name, target class ID)
                 source_id = row[0]
@@ -1008,7 +1010,7 @@ class ProjectConfigMiddleware:
                                target_id))
 
         # add any newly added label classes to project
-        if len(labelclasses_new):
+        if len(labelclasses_new) > 0:
             lc_added = self.db_connector.insert(sql.SQL('''
                     INSERT INTO {id_lc} (name, color)
                     VALUES %s
@@ -1043,13 +1045,13 @@ class ProjectConfigMiddleware:
 
 
 
-    def getProjectNameAvailable(self, projectName: str) -> bool:
+    def get_project_name_available(self, project_name: str) -> bool:
         '''
             Returns True if the provided project (long) name is available.
         '''
-        if not isinstance(projectName, str):
+        if not isinstance(project_name, str):
             return False
-        project_name_stripped = projectName.strip().lower()
+        project_name_stripped = project_name.strip().lower()
         if len(project_name_stripped) == 0:
             return False
 
@@ -1067,7 +1069,7 @@ class ProjectConfigMiddleware:
             FROM aide_admin.project
             WHERE name = %s;
             ''',
-            (projectName,),
+            (project_name,),
             1)
 
         if result is None or len(result) == 0:
@@ -1075,7 +1077,7 @@ class ProjectConfigMiddleware:
         return result[0]['result'] != 1
 
 
-    def getProjectShortNameAvailable(self, project_name: str) -> bool:
+    def get_project_shortname_available(self, project_name: str) -> bool:
         '''
             Returns True if the provided project shortname is available. In essence, "available"
             means that a database schema with the given name can be created (this includes Postgres
@@ -1172,13 +1174,12 @@ class ProjectConfigMiddleware:
         return short_name
 
 
-    def getProjectArchived(self,
-                           project: str,
-                           username: str) -> dict:
+    def get_project_archived(self,
+                             project: str,
+                             username: str) -> dict:
         '''
-            Returns the "archived" flag of a project.
-            Throws an error if user is not registered in project,
-            or if the project is not in demo mode.
+            Returns the "archived" flag of a project. Throws an error if user is not registered in
+            project, or if the project is not in demo mode.
         '''
 
         # check if user is authenticated
@@ -1221,18 +1222,18 @@ class ProjectConfigMiddleware:
         }
 
 
-    def setProjectArchived(self,
-                           project: str,
-                           username: str,
-                           archived: bool) -> dict:
+    def set_project_archived(self,
+                             project: str,
+                             username: str,
+                             archived: bool) -> dict:
         '''
-            Archives or unarchives a project by setting the "archived" flag in the database
-            to the value in "archived".
-            An archived project is simply hidden from the list and unchangeable, but stays
-            intact as-is and can be unarchived if needed. No data is deleted.
+            Archives or unarchives a project by setting the "archived" flag in the database to the
+            value in "archived". An archived project is simply hidden from the list and
+            unchangeable, but stays intact as-is and can be unarchived if needed. No data is
+            deleted.
 
-            Only project owners and super users can archive projects (i.e., even being a
-            project administrator is not enough).
+            Only project owners and super users can archive projects (i.e., even being a project
+            administrator is not enough).
         '''
 
         # check if user is authenticated
@@ -1266,10 +1267,10 @@ class ProjectConfigMiddleware:
         }
 
 
-    def deleteProject(self,
-                      project: str,
-                      username: str,
-                      deleteFiles: bool=False) -> dict:
+    def delete_project(self,
+                       project: str,
+                       username: str,
+                       delete_files: bool=False) -> dict:
         '''
             Removes a project from the database, including all metadata. Also dispatches a Celery
             task to the FileServer to delete images (and other project-specific data on disk) if
@@ -1329,7 +1330,7 @@ class ProjectConfigMiddleware:
         ''', (project, project,), None)
 
         # dispatch Celery task to remove DB schema and files (if requested)
-        process = fileServer_interface.deleteProject.si(project, deleteFiles)
+        process = fileServer_interface.deleteProject.si(project, delete_files)
         process.apply_async(queue='FileServer')       #TODO: task ID; progress monitoring
 
         #TODO: return Celery task ID?

@@ -392,8 +392,8 @@ class WorkflowTracker:
         '''
         tasks_active = self.getTasks(project, runningOrFinished='both')
 
-        for tidx, task_id in enumerate(tasks_active):
-            chain_status = self.pollTaskStatus(project, task_id)
+        for tidx, task_meta in enumerate(tasks_active):
+            chain_status = self.pollTaskStatus(project, task_meta['id'])
             if chain_status is not None:
                 tasks_active[tidx]['children'] = chain_status
 

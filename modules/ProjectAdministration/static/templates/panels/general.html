@@ -45,7 +45,17 @@
     function loadValues() {
         var promise = $.ajax({
             url: window.baseURL + 'getConfig',
-            method: 'GET',
+            method: 'POST',
+            data: JSON.stringify({
+                'parameters': [
+                    'description',
+                    'ui_settings',
+                    'watch_folder_enabled',
+                    'watch_folder_remove_missing_enabled',
+                ]
+            }),
+            contentType: 'application/json; charset=utf-8',
+            dataType: 'json',
             success: function(data) {
                 data = data['settings'];
                 $('#field-project-description').val(data['description']);

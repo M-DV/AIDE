@@ -1,33 +1,32 @@
 '''
-    Bottle routings for the model marketplace.
-    Handles I/O for sharing a model state (either
-    publicly or only within the author's projects)
-    and selecting shared states from neighboring
-    projects.
-    Also supports model state import and export
-    to and from the disk, as well as the web.
+    Bottle routings for the model marketplace. Handles I/O for sharing a model state (either
+    publicly or only within the author's projects) and selecting shared states from neighboring
+    projects. Also supports model state import and export to and from the disk, as well as the web.
 
-    2020-21 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
-from util.helpers import parse_boolean
 import uuid
 import html
 from bottle import static_file, request, abort
-from .backend.middleware import ModelMarketplaceMiddleware
-from .backend.marketplaceWorker import ModelMarketplaceWorker
+
 from util.cors import enable_cors
 from util.helpers import parse_boolean
+from .backend.middleware import ModelMarketplaceMiddleware
+from .backend.marketplaceWorker import ModelMarketplaceWorker
+
 
 
 class ModelMarketplace:
-
+    '''
+        Frontend entry point for Model Marketplace.
+    '''
     def __init__(self, config, app, dbConnector, taskCoordinator, verbose_start=False):
         self.config = config
         self.app = app
 
         self.middleware = ModelMarketplaceMiddleware(config, dbConnector, taskCoordinator)
-        self.tempDir = ModelMarketplaceWorker(self.config, dbConnector).tempDir
+        self.temp_dir = ModelMarketplaceWorker(self.config, dbConnector).temp_dir
 
         self.login_check = None
         self._initBottle()
@@ -51,28 +50,28 @@ class ModelMarketplace:
             try:
                 username = html.escape(request.get_cookie('username'))
 
-                try:
-                    modelIDs = request.params.get('model_ids')
-                    if isinstance(modelIDs, str) and len(modelIDs):
-                        modelIDs = modelIDs.split(',')
-                    else:
-                        modelIDs = None
-                except Exception:
-                    modelIDs = None
+                # pylint: disable=no-member
+                model_ids = request.params.get('model_ids', None)
+                if isinstance(model_ids, str) and len(model_ids) > 0:
+                    model_ids = model_ids.split(',')
+                else:
+                    model_ids = None
 
-                modelStates = self.middleware.getModelsMarketplace(project, username, modelIDs)
-                return {'modelStates': modelStates}
-            except Exception as e:
-                return {'status': 1, 'message': str(e)}
+                model_states = self.middleware.getModelsMarketplace(project,
+                                                                    username,
+                                                                    model_ids)
+                return {'modelStates': model_states}
+            except Exception as exc:
+                return {'status': 1, 'message': str(exc)}
 
-        
+
         @self.app.get('/<project>/getModelMarketplaceNameAvailable')
         def get_model_marketplace_name_available(project):
             if not self.loginCheck(project=project, admin=True):
                 abort(401, 'forbidden')
-            
+
             try:
-                model_name = request.params.get('name')
+                model_name = request.params['name']
 
                 available = (self.middleware.getModelIdByName(model_name) is None)
                 return {'status': 0, 'available': available}
@@ -85,6 +84,7 @@ class ModelMarketplace:
             if not self.loginCheck(project=project, admin=True):
                 abort(401, 'forbidden')
 
+            # pylint: disable=no-member
             try:
                 # get data
                 username = html.escape(request.get_cookie('username'))
@@ -108,9 +108,14 @@ class ModelMarketplace:
 
                         force_reimport = not model_id.strip().lower().startswith('aide://')
 
-                        return self.middleware.importModelURI(project, username, model_id, public,
-                                                                anonymous, force_reimport,
-                                                                name_policy, custom_name)
+                        return self.middleware.importModelURI(project,
+                                                                username,
+                                                                model_id,
+                                                                public,
+                                                                anonymous,
+                                                                force_reimport,
+                                                                name_policy,
+                                                                custom_name)
 
                 else:
                     # file upload
@@ -121,8 +126,13 @@ class ModelMarketplace:
                     name_policy = request.params.get('name_policy', 'skip')
                     custom_name = request.params.get('custom_name', None)
 
-                    return self.middleware.importModelFile(project, username, file, public,
-                                                                anonymous, name_policy, custom_name)
+                    return self.middleware.importModelFile(project,
+                                                            username,
+                                                            file,
+                                                            public,
+                                                            anonymous,
+                                                            name_policy,
+                                                            custom_name)
 
             except Exception as exc:
                 return {'status': 1, 'message': str(exc)}
@@ -132,67 +142,81 @@ class ModelMarketplace:
         def request_model_download(project):
             if not self.loginCheck(project=project, admin=True):
                 abort(401, 'forbidden')
-            
+
+            # pylint: disable=no-member
             try:
                 # get data
                 username = html.escape(request.get_cookie('username'))
-                modelID = request.json['model_id']
+                model_id = request.json['model_id']
                 source = request.json['source']
                 assert source in ('marketplace', 'project'), 'invalid download source provided'
 
                 # optional values (for project-specific model download)
-                modelName = (request.json['model_name'] if 'model_name' in request.json else None)
-                modelDescription = (request.json['model_description'] if 'model_description' in request.json else '')
-                modelTags = (request.json['model_tags'] if 'model_tags' in request.json else [])
+                model_name = request.json.get('model_name', None)
+                model_description = request.json.get('model_description', '')
+                model_tags = request.json.get('model_tags', [])
 
-                result = self.middleware.requestModelDownload(project, username,
-                                                            modelID, source,
-                                                            modelName, modelDescription, modelTags)
+                result = self.middleware.requestModelDownload(project,
+                                                                username,
+                                                                model_id,
+                                                                source,
+                                                                model_name,
+                                                                model_description,
+                                                                model_tags)
                 return result
 
-            except Exception as e:
-                return {'status': 1, 'message': str(e)}
+            except Exception as exc:
+                return {'status': 1, 'message': str(exc)}
 
 
         @self.app.post('/<project>/shareModel')
         def share_model(project):
             if not self.loginCheck(project=project, admin=True):
                 abort(401, 'forbidden')
-            
+
+            # pylint: disable=no-member
             try:
                 # get data
                 username = html.escape(request.get_cookie('username'))
-                modelID = request.json['model_id']
-                modelName = request.json['model_name']
-                modelDescription = request.json.get('model_description', '')
+                model_id = request.json['model_id']
+                model_name = request.json['model_name']
+                model_description = request.json.get('model_description', '')
                 tags = request.json.get('tags', [])
-                citationInfo = request.json.get('citation_info', None)
-                license = request.json.get('license', None)
+                citation_info = request.json.get('citation_info', None)
+                license_str = request.json.get('license', None)
                 public = request.json.get('public', True)
                 anonymous = request.json.get('anonymous', False)
-                result = self.middleware.shareModel(project, username,
-                                                    modelID, modelName, modelDescription, tags,
-                                                    citationInfo, license,
-                                                    public, anonymous)
+                result = self.middleware.shareModel(project,
+                                                    username,
+                                                    model_id,
+                                                    model_name,
+                                                    model_description,
+                                                    tags,
+                                                    citation_info,
+                                                    license_str,
+                                                    public,
+                                                    anonymous)
                 return result
-            except Exception as e:
-                return {'status': 1, 'message': str(e)}
+            except Exception as exc:
+                return {'status': 1, 'message': str(exc)}
 
 
         @self.app.post('/<project>/reshareModel')
         def reshare_model(project):
             if not self.loginCheck(project=project, admin=True):
                 abort(401, 'forbidden')
-            
+
             try:
                 # get data
                 username = html.escape(request.get_cookie('username'))
-                modelID = request.json['model_id']
+                model_id = request.json['model_id']
 
-                result = self.middleware.reshareModel(project, username, modelID)
+                result = self.middleware.reshareModel(project,
+                                                       username,
+                                                       model_id)
                 return result
-            except Exception as e:
-                return {'status': 1, 'message': str(e)}
+            except Exception as exc:
+                return {'status': 1, 'message': str(exc)}
 
 
         @self.app.post('/<project>/unshareModel')
@@ -203,12 +227,14 @@ class ModelMarketplace:
             try:
                 # get data
                 username = html.escape(request.get_cookie('username'))
-                modelID = request.json['model_id']
+                model_id = request.json['model_id']
 
-                result = self.middleware.unshareModel(project, username, modelID)
+                result = self.middleware.unshareModel(project,
+                                                       username,
+                                                       model_id)
                 return result
-            except Exception as e:
-                return {'status': 1, 'message': str(e)}
+            except Exception as exc:
+                return {'status': 1, 'message': str(exc)}
 
 
         @enable_cors
@@ -219,4 +245,6 @@ class ModelMarketplace:
             if '..' in filename or filename.startswith('/') or filename.startswith('\\'):
                 abort(401, 'forbidden')
 
-            return static_file(filename, root=self.tempDir, download=True)
+            return static_file(filename,
+                               root=self.temp_dir,
+                               download=True)
