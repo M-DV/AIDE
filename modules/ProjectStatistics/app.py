@@ -1,59 +1,49 @@
 '''
-    Bottle routings for labeling statistics of project,
-    including per-user analyses and progress.
+    Bottle routings for labeling statistics of project, including per-user analyses and progress.
 
     2019-24 Benjamin Kellenberger
 '''
 
 import html
 from bottle import request, static_file, abort
-from .backend.middleware import ProjectStatisticsMiddleware
+
 from util.helpers import parse_boolean
+from .backend.middleware import ProjectStatisticsMiddleware
+from ..module import Module
 
 
 
-class ProjectStatistics:
+class ProjectStatistics(Module):
+    '''
+        Entry point for statistics about a project (user progress, performance, etc.).
+    '''
+    def __init__(self,
+                 config,
+                 app,
+                 db_connector,
+                 user_handler,
+                 task_coordinator,
+                 verbose_start=False,
+                 passive_mode=False) -> None:
+        super().__init__(config,
+                         app,
+                         db_connector,
+                         user_handler,
+                         task_coordinator,
+                         verbose_start,
+                         passive_mode)
 
-    def __init__(self, config, app, dbConnector, verbose_start=False):
-        self.config = config
-        self.app = app
-        self.staticDir = 'modules/ProjectStatistics/static'
-        self.middleware = ProjectStatisticsMiddleware(config, dbConnector)
+        self.static_dir = 'modules/ProjectStatistics/static'
+        self.middleware = ProjectStatisticsMiddleware(config, db_connector)
 
-        self.login_check_fun = None
         self._init_bottle()
-
-
-    def login_check(self,
-                    project: str=None,
-                    admin: bool=False,
-                    superuser: bool=False,
-                    can_create_projects: bool=False,
-                    extend_session: bool=False,
-                    return_all: bool=False) -> bool:
-        '''
-            Login check function wrapper.
-        '''
-        return self.login_check_fun(project,
-                                    admin,
-                                    superuser,
-                                    can_create_projects,
-                                    extend_session,
-                                    return_all)
-
-
-    def add_login_check_fun(self, login_check_fun: callable) -> None:
-        '''
-            Entry point during module assembly to provide login check function.
-        '''
-        self.login_check_fun = login_check_fun
 
 
     def _init_bottle(self):
 
         @self.app.route('/statistics/<filename:re:.*>') #TODO: /statistics/static/ is ignored by Bottle...
         def send_static(filename):
-            return static_file(filename, root=self.staticDir)
+            return static_file(filename, root=self.static_dir)
 
 
         @self.app.get('/<project>/getProjectStatistics')
@@ -76,6 +66,8 @@ class ProjectStatistics:
 
         @self.app.post('/<project>/getPerformanceStatistics')
         def get_user_statistics(project):
+            # pylint: disable=no-member
+
             if not self.login_check(project=project, admin=True):
                 abort(401, 'forbidden')
 
@@ -84,14 +76,8 @@ class ProjectStatistics:
                 entities_eval = params['entities_eval']
                 entity_target = params['entity_target']
                 entityType = params['entity_type']
-                if 'threshold' in params:
-                    threshold = params['threshold']
-                else:
-                    threshold = None
-                if 'goldenQuestionsOnly' in params:
-                    goldenQuestionsOnly = params['goldenQuestionsOnly']
-                else:
-                    goldenQuestionsOnly = False
+                threshold = params.get('threshold', None)
+                goldenQuestionsOnly = params.get('goldenQuestionsOnly', False)
 
                 stats = self.middleware.getPerformanceStatistics(project, entities_eval, entity_target, entityType, threshold, goldenQuestionsOnly)
 

@@ -195,19 +195,35 @@ def assemble_server(verbose_start=True,
     # monkey-patch JSON encoder
     app.plugins[0].json_dumps = helpers.json_dumps
 
+    # initialize "singletons"
+    db_connector = REGISTERED_MODULES['Database'](config, verbose_start)
+    user_handler = REGISTERED_MODULES['UserHandler'](config,
+                                                     app,
+                                                     db_connector)
+    task_coordinator = REGISTERED_MODULES['TaskCoordinator'](config,
+                                                             app,
+                                                             db_connector,
+                                                             user_handler)
+
+    # add helper modules to definition
+    instance_args.extend(['DataAdministrator', 'StaticFileServer'])
+    if 'LabelUI' in instance_args:
+        instance_args.extend(['AIDEAdmin',
+                              'Reception',
+                              'ProjectConfigurator',
+                              'ProjectStatistics',
+                              'ImageQuerier',           #TODO: allow running on FileServer
+                              'Mapserver'])             #TODO: ditto
+    if 'AIController' in instance_args:
+        instance_args.append('ModelMarketplace')
+
     # parse requested instances
     instances = {}
-
-    # "singletons"
-    db_connector = REGISTERED_MODULES['Database'](config, verbose_start)
-    user_handler = REGISTERED_MODULES['UserHandler'](config, app, db_connector)
-    task_coordinator = REGISTERED_MODULES['TaskCoordinator'](config, app, db_connector)
-    task_coordinator.add_login_check_fun(user_handler.check_authenticated)
-
     for inst_arg in instance_args:
 
         module_name = inst_arg.strip()
-        if module_name == 'UserHandler':
+        if module_name in ('Database', 'UserHandler', 'TaskCoordinator', 'AIWorker') or \
+            module_name in instances:
             continue
 
         module_class = REGISTERED_MODULES[module_name]
@@ -216,59 +232,31 @@ def assemble_server(verbose_start=True,
         _verify_unique(instances, module_class)
 
         # create instance
-        if module_name == 'AIController':
-            instance = module_class(config, app, db_connector, task_coordinator, verbose_start,
-                                                                                    passive_mode)
-        else:
-            instance = module_class(config, app, db_connector, verbose_start)
+        instance = module_class(config,
+                                app,
+                                db_connector,
+                                user_handler,
+                                task_coordinator,
+                                verbose_start,
+                                passive_mode)
         instances[module_name] = instance
 
         # add authentication functionality
-        if hasattr(instance, 'addLoginCheckFun'):
+        if hasattr(instance, 'add_login_check_fun'):
             instance.add_login_check_fun(user_handler.check_authenticated)
 
-        # launch project meta modules
-        if module_name == 'LabelUI':
-            aide_admin = REGISTERED_MODULES['AIDEAdmin'](config, app, db_connector, verbose_start)
-            aide_admin.add_login_check_fun(user_handler.check_authenticated)
-            reception = REGISTERED_MODULES['Reception'](config, app, db_connector)
-            reception.add_login_check_fun(user_handler.check_authenticated)
-            configurator = REGISTERED_MODULES['ProjectConfigurator'](config, app, db_connector)
-            configurator.add_login_check_fun(user_handler.check_authenticated)
-            statistics = REGISTERED_MODULES['ProjectStatistics'](config, app, db_connector)
-            statistics.add_login_check_fun(user_handler.check_authenticated)
-            #TODO: allow running ImageQuerier on FileServer too
-            image_querier = REGISTERED_MODULES['ImageQuerier'](config, app, db_connector)
-            image_querier.add_login_check_fun(user_handler.check_authenticated)
-            #TODO: ditto for Mapserver
-            mapserver = REGISTERED_MODULES['Mapserver'](config, app, db_connector, user_handler)
-
-        elif module_name == 'FileServer':
-            from modules.DataAdministration.backend import celery_interface #as daa_int
+        # register Celery tasks where needed
+        if module_name == 'FileServer':
+            from modules.DataAdministration.backend import celery_interface
 
         elif module_name == 'AIController':
-            from modules.AIController.backend import celery_interface #as aic_int
-
-            # launch model marketplace with AIController
-            model_marketplace = REGISTERED_MODULES['ModelMarketplace'](config, app, db_connector,
-                                                                                task_coordinator)
-            model_marketplace.add_login_check_fun(user_handler.check_authenticated)
+            from modules.AIController.backend import celery_interface
 
         elif module_name == 'AIWorker':
-            from modules.AIWorker.backend import celery_interface #as aiw_int
-
-
-        # launch globally required modules
-        data_admin = REGISTERED_MODULES['DataAdministrator'](config, app, db_connector,
-                                                                                task_coordinator)
-        data_admin.add_login_check_fun(user_handler.check_authenticated)
-
-        static_files = REGISTERED_MODULES['StaticFileServer'](config, app, db_connector)
-        static_files.add_login_check_fun(user_handler.check_authenticated)
+            from modules.AIWorker.backend import celery_interface
 
     if verbose_start:
         print('\n')
-
     return app
 
 

@@ -1,8 +1,8 @@
 '''
-    Register modules here. Module-specific parameters in the config .ini file
-    can be added under a section with the same name as the module.
+    Modules are registeredhere. Module-specific parameters in the config .ini file can be added
+    under a section with the same name as the module.
 
-    2019-2023 Benjamin Kellenberger
+    2019-2024 Benjamin Kellenberger
 '''
 
 # set up Celery configuration

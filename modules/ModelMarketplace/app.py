@@ -14,45 +14,36 @@ from util.cors import enable_cors
 from util.helpers import parse_boolean
 from .backend.middleware import ModelMarketplaceMiddleware
 from .backend.marketplaceWorker import ModelMarketplaceWorker
+from ..module import Module
 
 
 
-class ModelMarketplace:
+class ModelMarketplace(Module):
     '''
         Frontend entry point for Model Marketplace.
     '''
-    def __init__(self, config, app, dbConnector, taskCoordinator, verbose_start=False):
-        self.config = config
-        self.app = app
+    def __init__(self,
+                 config,
+                 app,
+                 db_connector,
+                 user_handler,
+                 task_coordinator,
+                 verbose_start=False,
+                 passive_mode=False) -> None:
+        super().__init__(config,
+                         app,
+                         db_connector,
+                         user_handler,
+                         task_coordinator,
+                         verbose_start,
+                         passive_mode)
 
-        self.middleware = ModelMarketplaceMiddleware(config, dbConnector, taskCoordinator)
-        self.temp_dir = ModelMarketplaceWorker(self.config, dbConnector).temp_dir
+        self.middleware = ModelMarketplaceMiddleware(config,
+                                                     db_connector,
+                                                     task_coordinator)
+        self.temp_dir = ModelMarketplaceWorker(self.config, db_connector).temp_dir  #TODO
 
-        self.login_check_fun = None
         self._init_bottle()
-
-
-    def login_check(self,
-                    project: str=None,
-                    admin: bool=False,
-                    superuser: bool=False,
-                    can_create_projects: bool=False,
-                    extend_session: bool=False) -> bool:
-        '''
-            Login check function wrapper.
-        '''
-        return self.login_check_fun(project,
-                                    admin,
-                                    superuser,
-                                    can_create_projects,
-                                    extend_session)
-
-
-    def add_login_check_fun(self, login_check_fun: callable) -> None:
-        '''
-            Entry point during module assembly to provide login check function.
-        '''
-        self.login_check_fun = login_check_fun
 
 
     def _init_bottle(self):

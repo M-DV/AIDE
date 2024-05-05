@@ -9,14 +9,20 @@ from bottle import request, abort
 from .backend.middleware import TaskCoordinatorMiddleware
 
 
-class TaskCoordinator:
 
-    def __init__(self, config, app, db_connector):
+class TaskCoordinator:
+    '''
+        Entry point for both modules and frontend to submit tasks and query their status. Unlike
+        other modules, this is one of the shared core classes and therefore does not inherit from
+        the base class.
+    '''
+
+    def __init__(self, config, app, db_connector, user_handler):
         self.config = config
         self.app = app
+        self.user_handler = user_handler
         self.middleware = TaskCoordinatorMiddleware(self.config, db_connector)
 
-        self.login_check_fun = None
         self._init_bottle()
 
 
@@ -30,19 +36,12 @@ class TaskCoordinator:
         '''
             Login check function wrapper.
         '''
-        return self.login_check_fun(project,
-                                    admin,
-                                    superuser,
-                                    can_create_projects,
-                                    extend_session,
-                                    return_all)
-
-
-    def add_login_check_fun(self, login_check_fun: callable) -> None:
-        '''
-            Entry point during module assembly to provide login check function.
-        '''
-        self.login_check_fun = login_check_fun
+        return self.user_handler.check_authenticated(project,
+                                                     admin,
+                                                     superuser,
+                                                     can_create_projects,
+                                                     extend_session,
+                                                     return_all)
 
 
     def _init_bottle(self):
@@ -61,6 +60,7 @@ class TaskCoordinator:
                 abort(401, 'forbidden')
 
             try:
+                # pylint: disable=no-member
                 task_id = request.json.get('taskID', None)
                 status = self.middleware.poll_task_status(project, task_id)
                 return {'response': status}

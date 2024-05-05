@@ -63,6 +63,9 @@ def get_map_images(db_connector: Database,
 
     # pylint: disable=c-extension-no-member
 
+    if bbox[2] - bbox[0] == 0 or bbox[3] - bbox[1] == 0:
+        return bytes()
+
     # determine bands to extract (in case of multi-band images)
     bands = None
     if not raw:

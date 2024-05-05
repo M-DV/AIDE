@@ -15,6 +15,7 @@ if not 'AIDE_MODULES' in os.environ:
 # pylint: disable=wrong-import-position
 import argparse
 import bcrypt
+
 from constants.version import AIDE_VERSION
 from util.configDef import Config
 from util import helpers

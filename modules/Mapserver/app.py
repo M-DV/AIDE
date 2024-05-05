@@ -15,21 +15,33 @@ from modules.Mapserver.backend.middleware import MapserverMiddleware
 from constants.version import AIDE_VERSION
 from util.cors import enable_cors
 from util import helpers, logDecorator
+from ..module import Module
 
 
 
 # pylint: disable=too-few-public-methods
-class Mapserver:
+class Mapserver(Module):
     '''
         Map server Web frontend entry point.
     '''
-    def __init__(self, config, app, db_connector, user_handler, verbose_start=False):
-        self.config = config
-        self.app = app
-        self.db_connector = db_connector
+    def __init__(self,
+                 config,
+                 app,
+                 db_connector,
+                 user_handler,
+                 task_coordinator,
+                 verbose_start=False,
+                 passive_mode=False) -> None:
+        super().__init__(config,
+                         app,
+                         db_connector,
+                         user_handler,
+                         task_coordinator,
+                         verbose_start,
+                         passive_mode)
+
         self.middleware = MapserverMiddleware(self.config, self.db_connector)
 
-        self.user_handler = user_handler
         self.is_file_server = helpers.is_file_server(config)
 
         if verbose_start:
@@ -46,14 +58,6 @@ class Mapserver:
             logDecorator.LogDecorator.print_status('warn')
             print('PostGIS not configured in database. Mapserver has been disabled.')
 
-    def login_check(self, project=None, admin=False, superuser=False,
-            can_create_projects=False, extend_session=False, return_all=False):
-        '''
-            Login check function wrapper. Map server access is governed by the same login mechanism
-            as the rest of AIDE.
-        '''
-        return self.user_handler.check_authenticated(project, admin, superuser, can_create_projects,
-                extend_session, return_all)
 
     @staticmethod
     def _get_base_url(url):
@@ -179,7 +183,7 @@ class Mapserver:
                 try:
                     self.user_handler.middleware.login(username, password, None)
                     response.set_cookie('username', username, path='/')
-                    self.user_handler.middleware.encryptSessionToken(username, response)
+                    self.user_handler.middleware.encrypt_session_token(username, response)
                 except Exception:
                     # login data provided, but login failed
                     abort(401, 'forbidden')     #TODO: send proper WMS exception?

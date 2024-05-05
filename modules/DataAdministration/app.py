@@ -14,13 +14,15 @@ import json
 import html
 from bottle import static_file, request, response, abort
 import requests
+
 from util.cors import enable_cors
 from util import helpers, drivers
 from .backend.middleware import DataAdministrationMiddleware
+from ..module import Module
 
 
 
-class DataAdministrator:
+class DataAdministrator(Module):
     '''
         Frontend interface for data administration (file up-/download).
     '''
@@ -31,44 +33,33 @@ class DataAdministrator:
         'virtualSplit': True
     }
 
-    def __init__(self, config, app, dbConnector, taskCoordinator, verbose_start=False):
-        self.config = config
-        self.app = app
+    def __init__(self,
+                 config,
+                 app,
+                 db_connector,
+                 user_handler,
+                 task_coordinator,
+                 verbose_start=False,
+                 passive_mode=False) -> None:
+        super().__init__(config,
+                         app,
+                         db_connector,
+                         user_handler,
+                         task_coordinator,
+                         verbose_start,
+                         passive_mode)
 
         # set up either direct methods (if is FileServer) or relaying
         self.is_file_server = helpers.is_file_server(config)
-        self.middleware = DataAdministrationMiddleware(config, dbConnector, taskCoordinator)
+        self.middleware = DataAdministrationMiddleware(config,
+                                                       db_connector,
+                                                       task_coordinator)
 
         self.temp_dir = self.config.get_property('FileServer',
                                                  'tempfiles_dir',
                                                  dtype=str,
                                                  fallback=tempfile.gettempdir())
-
-        self.login_check_fun = None
         self._init_bottle()
-
-
-    def login_check(self,
-                    project: str=None,
-                    admin: bool=False,
-                    superuser: bool=False,
-                    can_create_projects: bool=False,
-                    extend_session: bool=False) -> bool:
-        '''
-            Login check function wrapper.
-        '''
-        return self.login_check_fun(project,
-                                    admin,
-                                    superuser,
-                                    can_create_projects,
-                                    extend_session)
-
-
-    def add_login_check_fun(self, login_check_fun: callable) -> None:
-        '''
-            Entry point during module assembly to provide login check function.
-        '''
-        self.login_check_fun = login_check_fun
 
 
     @staticmethod
@@ -606,7 +597,7 @@ class DataAdministrator:
                                           os.path.join('downloadData', filename),
                                           'get',
                                           headers)
-            
+
             return static_file(filename,
                                root=os.path.join(self.temp_dir, 'aide/downloadRequests', project),
                                download=True)

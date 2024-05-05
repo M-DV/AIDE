@@ -1642,7 +1642,10 @@ class DataWorker:
         if query is None or len(query) == 0:
             return []
         image_ids = [str(row['id']) for row in query]
-        filenames = [os.path.join(self.files_dir, project, row['filename']) for row in query]
+        filenames = frozenset([os.path.join(self.files_dir,
+                                            project,
+                                            row['filename'])
+                               for row in query])
         geospatial.create_image_overviews(filenames, scale_factors, method, True)
         return image_ids
 

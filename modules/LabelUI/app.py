@@ -13,53 +13,45 @@ from bottle import request, response, abort, SimpleTemplate
 from constants.version import AIDE_VERSION
 from util.logDecorator import LogDecorator
 from util.helpers import parse_boolean
+from ..module import Module
 from .backend.middleware import DBMiddleware
 
 
 
-class LabelUI():
+class LabelUI(Module):
     '''
         Label UI frontend main entry point.
     '''
-    def __init__(self, config, app, dbConnector, verbose_start=False):
-        self.config = config
-        self.app = app
+    def __init__(self,
+                 config,
+                 app,
+                 db_connector,
+                 user_handler,
+                 task_coordinator,
+                 verbose_start=False,
+                 passive_mode=False) -> None:
+        super().__init__(config,
+                         app,
+                         db_connector,
+                         user_handler,
+                         task_coordinator,
+                         verbose_start,
+                         passive_mode)
 
-        if verbose_start:
+        if self.verbose_start:
             print('LabelUI'.ljust(LogDecorator.get_ljust_offset()), end='')
 
         try:
-            self.middleware = DBMiddleware(config, dbConnector)
-            self.login_check_fun = None
+            self.middleware = DBMiddleware(config, db_connector)
 
             self._init_bottle()
         except Exception as exc:
-            if verbose_start:
+            if self.verbose_start:
                 LogDecorator.print_status('fail')
             raise Exception(f'Could not launch LabelUI (message: "{str(exc)}").') from exc
 
-        if verbose_start:
+        if self.verbose_start:
             LogDecorator.print_status('ok')
-
-
-    def login_check(self,
-                    project: str=None,
-                    admin: bool=False,
-                    superuser: bool=False,
-                    can_create_projects: bool=False,
-                    extend_session: bool=False) -> bool:
-        '''
-            Login check function wrapper.
-        '''
-        return self.login_check_fun(project,
-                                    admin,
-                                    superuser,
-                                    can_create_projects,
-                                    extend_session)
-
-
-    def add_login_check_fun(self, loginCheckFun):
-        self.login_check_fun = loginCheckFun
 
 
     def __redirect_login_page(self, redirect: str=None) -> response:
@@ -108,10 +100,7 @@ class LabelUI():
                 return self.__redirect_project_page(project)
 
             # render interface template
-            try:
-                username = html.escape(request.get_cookie('username'))
-            except Exception:
-                username = ''
+            username = html.escape(request.get_cookie('username', ''))
             return self.interface_template.render(username=username,
                                                   version=AIDE_VERSION,
                                                   projectShortname=project,
@@ -154,10 +143,7 @@ class LabelUI():
                 abort(401, 'not logged in')
             hide_golden_question_info = not self.login_check(project=project, admin=True)
 
-            try:
-                username = html.escape(request.get_cookie('username'))
-            except Exception:
-                username = ''
+            username = html.escape(request.get_cookie('username', ''))
             data_ids = request.json['imageIDs']
             json = self.middleware.get_batch_fixed(project,
                                                    username,
@@ -172,10 +158,7 @@ class LabelUI():
                 abort(401, 'not logged in')
             hide_golden_questions = not self.login_check(project=project, admin=True)
 
-            try:
-                username = html.escape(request.get_cookie('username'))
-            except Exception:
-                username = ''
+            username = html.escape(request.get_cookie('username', ''))
             try:
                 limit = int(request.query['limit'])
             except Exception:
@@ -357,8 +340,8 @@ class LabelUI():
             if not self.login_check(project=project):
                 abort(403, 'forbidden')
             try:
-                username = html.escape(request.get_cookie('username'))
-                if username is None:
+                username = html.escape(request.get_cookie('username', ''))
+                if len(username.strip()) == 0:
                     # 100% failsafety for projects in demo mode
                     raise ValueError('no username provided')
 
@@ -366,8 +349,8 @@ class LabelUI():
                 return self.middleware.set_bookmarks(project,
                                                      username,
                                                      bookmarks)
-            except Exception as e:
+            except Exception as exc:
                 return {
                     'status': 1,
-                    'message': str(e)
+                    'message': str(exc)
                 }

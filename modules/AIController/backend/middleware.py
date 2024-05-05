@@ -4,6 +4,7 @@
     2019-24 Benjamin Kellenberger
 '''
 
+import os
 from typing import Tuple, List, Union, Iterable
 from datetime import datetime
 from uuid import UUID
@@ -34,12 +35,11 @@ class AIMiddleware():
         Interface for the AI model side of AIDE between the frontend, database, and AIWorker task
         orchestration.
     '''
-    def __init__(self, config, dbConnector, taskCoordinator, passiveMode=False) -> None:
+    def __init__(self, config, dbConnector, taskCoordinator, passive_mode: bool=False) -> None:
         self.config = config
         self.db_connector = dbConnector
         self.task_coordinator = taskCoordinator
         self.sql_builder = SQLStringBuilder(config)
-        self.passive_mode = passiveMode
         self.script_pattern = re.compile(r'<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script\.?>')
         self._init_available_ai_models()
 
@@ -47,6 +47,8 @@ class AIMiddleware():
         self.celery_app.set_current()
         self.celery_app.set_default()
 
+        # passive mode: be unresponsive about tasks and messages
+        self.passive_mode = passive_mode
         if not self.passive_mode:
             self.message_processor = MessageProcessor(self.celery_app)
 

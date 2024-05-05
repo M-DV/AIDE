@@ -1,7 +1,6 @@
 '''
-    This module handles everything about the
-    setup and monitoring of AIDE (i.e., super
-    user functionality).
+    This module handles everything about the setup and monitoring of AIDE (i.e., super user
+    functionality).
 
     2020-24 Benjamin Kellenberger
 '''
@@ -9,68 +8,69 @@
 import os
 import html
 from bottle import SimpleTemplate, request, redirect, abort
+
 from constants.version import AIDE_VERSION
 from .backend.middleware import AdminMiddleware
+from ..module import Module
 
 
-class AIDEAdmin:
 
-    def __init__(self, config, app, dbConnector, verbose_start=False):
-        self.config = config
-        self.app = app
-        self.staticDir = 'modules/AIDEAdmin/static'
-        self.login_check_fun = None
+class AIDEAdmin(Module):
+    '''
+        Frontend entry point for administration (super user) details of AIDE.
+    '''
+    def __init__(self,
+                 config,
+                 app,
+                 db_connector,
+                 user_handler,
+                 task_coordinator,
+                 verbose_start=False,
+                 passive_mode=False) -> None:
+        super().__init__(config,
+                         app,
+                         db_connector,
+                         user_handler,
+                         task_coordinator,
+                         verbose_start,
+                         passive_mode)
 
-        self.middleware = AdminMiddleware(config, dbConnector)
+        self.static_dir = 'modules/AIDEAdmin/static'
+
+        self.middleware = AdminMiddleware(config, db_connector)
 
         # ping connected AIController, FileServer, etc. servers and check version
         self.middleware.getServiceDetails(verbose_start, verbose_start)
-        self._initBottle()
-    
-
-    def login_check(self,
-                    project: str=None,
-                    admin: bool=False,
-                    superuser: bool=False,
-                    can_create_projects: bool=False,
-                    extend_session: bool=False) -> bool:
-        '''
-            Login check function wrapper.
-        '''
-        return self.login_check_fun(project,
-                                    admin,
-                                    superuser,
-                                    can_create_projects,
-                                    extend_session)
-
-
-    def add_login_check_fun(self, login_check_fun: callable) -> None:
-        '''
-            Entry point during module assembly to provide login check function.
-        '''
-        self.login_check_fun = login_check_fun
-
-
-    def _initBottle(self):
 
         # read AIDE admin templates
-        with open(os.path.abspath(os.path.join(self.staticDir, 'templates/aideAdmin.html')), 'r', encoding='utf-8') as f:
-            self.adminTemplate = SimpleTemplate(f.read())
+        with open(os.path.abspath(os.path.join(self.static_dir, 'templates/aideAdmin.html')),
+                  'r',
+                  encoding='utf-8') as f_admin:
+            self.admin_template = SimpleTemplate(f_admin.read())
 
-        self.panelTemplates = {}
-        panelNames = os.listdir(os.path.join(self.staticDir, 'templates/panels'))
-        for pn in panelNames:
-            pnName, ext = os.path.splitext(pn)
+        self.panel_templates = {}
+        panel_names = os.listdir(os.path.join(self.static_dir, 'templates/panels'))
+        for panel_name in panel_names:
+            name, ext = os.path.splitext(panel_name)
             if ext.lower().startswith('.htm'):
-                with open(os.path.join(self.staticDir, 'templates/panels', pn), 'r', encoding='utf-8') as f:
-                    self.panelTemplates[pnName] = SimpleTemplate(f.read())
+                with open(os.path.join(self.static_dir,
+                                       'templates/panels',
+                                       panel_name),
+                          'r',
+                          encoding='utf-8') as f_panel:
+                    self.panel_templates[name] = SimpleTemplate(f_panel.read())
 
+        self._init_bottle()
+
+
+    def _init_bottle(self):
+        # pylint: disable=inconsistent-return-statements
 
         @self.app.route('/admin/config/panels/<panel>')
         def send_static_panel(panel):
             if self.login_check(superuser=True):
                 try:
-                    return self.panelTemplates[panel].render(
+                    return self.panel_templates[panel].render(
                         version=AIDE_VERSION
                     )
                 except Exception:
@@ -82,8 +82,8 @@ class AIDEAdmin:
         @self.app.get('/exec')
         def aide_exec():
             '''
-                Reserve for future implementations that require
-                unauthorized but token-protected services.
+                Reserve for future implementations that require unauthorized but token-protected
+                services.
             '''
             abort(404, 'not found')
 
@@ -98,10 +98,12 @@ class AIDEAdmin:
             # render configuration template
             try:
                 username = html.escape(request.get_cookie('username'))
-            except Exception:
+                if len(username.strip()) == 0:
+                    return redirect('/login?redirect=/admin')
+            except AttributeError:
                 return redirect('/login?redirect=/admin')
 
-            return self.adminTemplate.render(
+            return self.admin_template.render(
                     version=AIDE_VERSION,
                     username=username)
 
@@ -115,7 +117,7 @@ class AIDEAdmin:
             except Exception:
                 abort(404, 'not found')
 
-        
+
         @self.app.get('/getCeleryWorkerDetails')
         def get_celery_worker_details():
             try:
@@ -132,7 +134,7 @@ class AIDEAdmin:
                 if not self.login_check(superuser=True):
                     return redirect('/')
                 return {'details': self.middleware.getProjectDetails()}
-            except Exception as e:
+            except Exception:
                 abort(404, 'not found')
 
 
@@ -142,7 +144,7 @@ class AIDEAdmin:
                 if not self.login_check(superuser=True):
                     return redirect('/')
                 return {'details': self.middleware.getUserDetails()}
-            except Exception as e:
+            except Exception:
                 abort(404, 'not found')
 
 
@@ -151,18 +153,18 @@ class AIDEAdmin:
             try:
                 if not self.login_check(superuser=True):
                     return redirect('/')
-                
+
                 try:
                     data = request.json
-                    username = data['username']
-                    canCreateProjects = data['canCreateProjects']
-                    return {'response': self.middleware.setCanCreateProjects(username, canCreateProjects)}
-                except Exception as e:
+                    status = self.middleware.setCanCreateProjects(data['username'],
+                                                                  data['canCreateProjects'])
+                    return {'response': status}
+                except Exception as exc:
                     return {
                         'response': {
                             'success': False,
-                            'message': str(e)
+                            'message': str(exc)
                         }
                     }
-            except Exception as e:
+            except Exception:
                 abort(404, 'not found')

@@ -8,14 +8,16 @@
 
 import html
 from bottle import request, abort
+
 from modules.AIController.backend.middleware import AIMiddleware
 from modules.AIController.backend import celery_interface
 from util.logDecorator import LogDecorator
 from util.helpers import parse_boolean
+from ..module import Module
 
 
 
-class AIController:
+class AIController(Module):
     '''
         Interface between frontend and AI backend.
     '''
@@ -24,20 +26,26 @@ class AIController:
     def __init__(self,
                  config,
                  app,
-                 dbConnector,
-                 taskCoordinator,
+                 db_connector,
+                 user_handler,
+                 task_coordinator,
                  verbose_start=False,
-                 passive_mode=False):
-        self.config = config
-        self.app = app
+                 passive_mode=False) -> None:
+        super().__init__(config,
+                         app,
+                         db_connector,
+                         user_handler,
+                         task_coordinator,
+                         verbose_start,
+                         passive_mode)
 
         if verbose_start:
             print('AIController'.ljust(LogDecorator.get_ljust_offset()), end='')
 
         try:
             self.middleware = AIMiddleware(config,
-                                           dbConnector,
-                                           taskCoordinator,
+                                           db_connector,
+                                           task_coordinator,
                                            passive_mode)
             self.login_check_fun = None
             self._init_bottle()
@@ -48,22 +56,6 @@ class AIController:
 
         if verbose_start:
             LogDecorator.print_status('ok')
-
-
-    def login_check(self,
-                    project: str=None,
-                    admin: bool=False,
-                    superuser: bool=False,
-                    can_create_projects: bool=False,
-                    extend_session: bool=False) -> bool:
-        '''
-            Login check function wrapper.
-        '''
-        return self.login_check_fun(project,
-                                    admin,
-                                    superuser,
-                                    can_create_projects,
-                                    extend_session)
 
 
     def add_login_check_fun(self, login_check_fun: callable) -> None:

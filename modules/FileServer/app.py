@@ -7,13 +7,16 @@
 import os
 from io import BytesIO
 from bottle import static_file, request, abort, _file_iter_range, parse_range_header, HTTPResponse
+
 from util.cors import enable_cors
 from util import helpers
 from util.logDecorator import LogDecorator
 from util.drivers import is_web_compatible, GDALImageDriver
+from ..module import Module
 
 
-class FileServer():
+
+class FileServer(Module):
     '''
         File server module, responsible for project as well as static data (images, etc.).
     '''
@@ -23,9 +26,21 @@ class FileServer():
     }
     DEFAULT_IMAGE_MIME_TYPE = 'image/tiff'
 
-    def __init__(self, config, app, dbConnector, verbose_start=False):
-        self.config = config
-        self.app = app
+    def __init__(self,
+                 config,
+                 app,
+                 db_connector,
+                 user_handler,
+                 task_coordinator,
+                 verbose_start=False,
+                 passive_mode=False) -> None:
+        super().__init__(config,
+                         app,
+                         db_connector,
+                         user_handler,
+                         task_coordinator,
+                         verbose_start,
+                         passive_mode)
 
         if verbose_start:
             print('FileServer'.ljust(LogDecorator.get_ljust_offset()), end='')
@@ -53,29 +68,6 @@ class FileServer():
 
         if verbose_start:
             LogDecorator.print_status('ok')
-
-
-    def login_check(self,
-                    project: str=None,
-                    admin: bool=False,
-                    superuser: bool=False,
-                    can_create_projects: bool=False,
-                    extend_session: bool=False) -> bool:
-        '''
-            Login check function wrapper.
-        '''
-        return self.login_check_fun(project,
-                                    admin,
-                                    superuser,
-                                    can_create_projects,
-                                    extend_session)
-
-
-    def add_login_check_fun(self, login_check_fun: callable) -> None:
-        '''
-            Entry point during module assembly to provide login check function.
-        '''
-        self.login_check_fun = login_check_fun
 
 
     def _initBottle(self):

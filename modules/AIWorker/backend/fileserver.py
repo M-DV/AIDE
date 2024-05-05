@@ -74,16 +74,18 @@ class FileServer:
                 filename = urllib.parse.quote(filename)
             local_spec = ('files' if not self.is_local else '')
             if project is not None:
-                query_path = os.path.join(self.base_uri,
-                                          project,
+                query_path = os.path.join(project,
                                           local_spec,
                                           filename)
             else:
-                query_path = os.path.join(self.base_uri, filename)
+                query_path = filename
 
             if not self._path_valid(query_path):
                 raise ValueError('Parent accessors ("..") and absolute paths ' + \
                                  f'("{os.sep}path") are not allowed.')
+
+            # path is valid, now complete with prefix
+            query_path = os.path.join(self.base_uri, query_path)
 
             if self.is_local:
                 # load file from disk
@@ -136,16 +138,18 @@ class FileServer:
                 filename = urllib.parse.quote(filename)
             local_spec = ('files' if not self.is_local else '')
             if project is not None:
-                query_path = os.path.join(self.base_uri,
-                                         project,
-                                         local_spec,
-                                         filename)
+                query_path = os.path.join(project,
+                                          local_spec,
+                                          filename)
             else:
-                query_path = os.path.join(self.base_uri, filename)
+                query_path = filename
 
             if not self._path_valid(query_path):
                 raise ValueError('Parent accessors ("..") and absolute paths ' + \
                                  f'("{os.sep}path") are not allowed.')
+
+            # path is valid, now complete with prefix
+            query_path = os.path.join(self.base_uri, query_path)
 
             if self.is_local:
                 # load file from disk
@@ -189,17 +193,20 @@ class FileServer:
         '''
         #TODO: What about remote file server? Might need to do authentication and sanity checks...
         if project is not None:
-            path = os.path.join(self.base_uri, project, filename)
+            path = os.path.join(project, filename)
         else:
-            path = os.path.join(self.base_uri, filename)
+            path = filename
 
         if not self._path_valid(path):
             raise ValueError('Parent accessors ("..") and absolute paths ' + \
                              f'("{os.sep}path") are not allowed.')
 
-        with open(path, 'wb') as f:
-            f.write(bytea)
-        print('Wrote file to disk: ' + filename)    #TODO
+        # path is valid, now complete with prefix
+        path = os.path.join(self.base_uri, path)
+
+        with open(path, 'wb') as f_path:
+            f_path.write(bytea)
+        print(f'Wrote file to disk: "{path}".')
 
 
     def get_secure_instance(self, project: str) -> callable:

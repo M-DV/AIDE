@@ -7,11 +7,14 @@
 
 import os
 import json
-from bottle import static_file, abort, SimpleTemplate, HTTPResponse
+from bottle import static_file, SimpleTemplate, HTTPResponse
+
 from constants.version import AIDE_VERSION
+from ..module import Module
 
 
-class StaticFileServer:
+
+class StaticFileServer(Module):
     '''
         Entry point for frontend for serving static files (scripts, images, etc.) regarding all the
         modules.
@@ -28,11 +31,21 @@ class StaticFileServer:
         'aiController': 'modules/AIController/static'
     }
 
-    def __init__(self, config, app, dbConnector, verbose_start=False):
-        self.config = config
-        self.app = app
-
-        self.login_check_fun = None
+    def __init__(self,
+                 config,
+                 app,
+                 db_connector,
+                 user_handler,
+                 task_coordinator,
+                 verbose_start=False,
+                 passive_mode=False) -> None:
+        super().__init__(config,
+                         app,
+                         db_connector,
+                         user_handler,
+                         task_coordinator,
+                         verbose_start,
+                         passive_mode)
 
         with open(os.path.abspath('modules/StaticFiles/static/templates/about.html'),
                   'r',
@@ -50,31 +63,6 @@ class StaticFileServer:
             self.backdrops = json.load(f_backdrops)
 
         self._init_bottle()
-
-
-    def login_check(self,
-                    project: str=None,
-                    admin: bool=False,
-                    superuser: bool=False,
-                    can_create_projects: bool=False,
-                    extend_session: bool=False,
-                    return_all: bool=False) -> bool:
-        '''
-            Login check function wrapper.
-        '''
-        return self.login_check_fun(project,
-                                    admin,
-                                    superuser,
-                                    can_create_projects,
-                                    extend_session,
-                                    return_all)
-
-
-    def add_login_check_fun(self, login_check_fun: callable) -> None:
-        '''
-            Entry point during module assembly to provide login check function.
-        '''
-        self.login_check_fun = login_check_fun
 
 
     def _init_bottle(self) -> None:

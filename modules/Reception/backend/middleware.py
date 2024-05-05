@@ -1,22 +1,30 @@
 '''
     Handles data flow about projects in general.
 
-    2019-21 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
+from typing import List
 from psycopg2 import sql
+
 from util.helpers import current_time
 
 
+
 class ReceptionMiddleware:
+    '''
+        Reception middleware, responsible for queries about projects as a whole.
+    '''
 
     def __init__(self, config, dbConnector):
         self.config = config
-        self.dbConnector = dbConnector
+        self.db_connector = dbConnector
 
 
-    def get_project_info(self, username=None, isSuperUser=False,
-        archived=None):
+    def get_project_info(self,
+                         username: str=None,
+                         is_super_user: bool=False,
+                         archived: bool=None) -> dict:
         '''
             Returns metadata about projects:
             - names
@@ -29,24 +37,24 @@ class ReceptionMiddleware:
         assert archived is None or isinstance(archived, bool)
         now = current_time()
 
-        if isSuperUser:
-            authStr = ''
-            queryVals = None
+        if is_super_user:
+            auth_str = ''
+            query_vals = None
         elif username is not None:
-            authStr = 'WHERE (username = %s OR demoMode = TRUE OR isPublic = TRUE)'
-            queryVals = (username,)
+            auth_str = 'WHERE (username = %s OR demoMode = TRUE OR isPublic = TRUE)'
+            query_vals = (username,)
         else:
-            authStr = 'WHERE (demoMode = TRUE OR isPublic = TRUE)'
-            queryVals = None
+            auth_str = 'WHERE (demoMode = TRUE OR isPublic = TRUE)'
+            query_vals = None
         if isinstance(archived, bool):
-            if len(authStr) > 0:
+            if len(auth_str) > 0:
                 archived_str = f' AND archived = {archived}'
             else:
                 archived_str = f'WHERE archived = {archived}'
         else:
             archived_str = ''
 
-        queryStr = sql.SQL('''SELECT shortname, name, description, archived,
+        query_str = sql.SQL('''SELECT shortname, name, description, archived,
             username, isAdmin,
             admitted_until, blocked_until,
             annotationType, predictionType, isPublic, demoMode, interface_enabled, archived, ai_model_enabled,
@@ -57,80 +65,91 @@ class ReceptionMiddleware:
             ) AS auth ON proj.shortname = auth.project
             {authStr}
             {archived_str};
-        ''').format(authStr=sql.SQL(authStr),
+        ''').format(authStr=sql.SQL(auth_str),
             archived_str=sql.SQL(archived_str))
 
-        result = self.dbConnector.execute(queryStr, queryVals, 'all')
+        result = self.db_connector.execute(query_str,
+                                           query_vals,
+                                           'all')
         response = {}
         if result is not None and len(result):
-            for r in result:
-                projShort = r['shortname']
-                if not projShort in response:
-                    userAdmitted = True
-                    if r['admitted_until'] is not None and r['admitted_until'] < now:
-                        userAdmitted = False
-                    if r['blocked_until'] is not None and r['blocked_until'] >= now:
-                        userAdmitted = False
-                    response[projShort] = {
-                        'name': r['name'],
-                        'description': r['description'],
-                        'archived': r['archived'],
-                        'isOwner': r['is_owner'],
-                        'annotationType': r['annotationtype'],
-                        'predictionType': r['predictiontype'],
-                        'isPublic': r['ispublic'],
-                        'demoMode': r['demomode'],
-                        'interface_enabled': r['interface_enabled'] and not r['archived'],
-                        'aiModelEnabled': r['ai_model_enabled'],
-                        'aiModelSelected': (isinstance(r['ai_model_library'], str) and len(r['ai_model_library'])>0),
-                        'userAdmitted': userAdmitted
+            for res in result:
+                proj_shortname = res['shortname']
+                if proj_shortname not in response:
+                    user_admitted = True
+                    if res['admitted_until'] is not None and res['admitted_until'] < now:
+                        user_admitted = False
+                    if res['blocked_until'] is not None and res['blocked_until'] >= now:
+                        user_admitted = False
+                    response[proj_shortname] = {
+                        'name': res['name'],
+                        'description': res['description'],
+                        'archived': res['archived'],
+                        'isOwner': res['is_owner'],
+                        'annotationType': res['annotationtype'],
+                        'predictionType': res['predictiontype'],
+                        'isPublic': res['ispublic'],
+                        'demoMode': res['demomode'],
+                        'interface_enabled': res['interface_enabled'] and not res['archived'],
+                        'aiModelEnabled': res['ai_model_enabled'],
+                        'aiModelSelected': isinstance(res['ai_model_library'], str) and \
+                                            len(res['ai_model_library'])>0,
+                        'userAdmitted': user_admitted
                     }
-                if isSuperUser:
-                    response[projShort]['role'] = 'super user'
-                elif username is not None and r['username'] == username:
-                    if r['isadmin']:
-                        response[projShort]['role'] = 'admin'
+                if is_super_user:
+                    response[proj_shortname]['role'] = 'super user'
+                elif username is not None and res['username'] == username:
+                    if res['isadmin']:
+                        response[proj_shortname]['role'] = 'admin'
                     else:
-                        response[projShort]['role'] = 'member'
-        
+                        response[proj_shortname]['role'] = 'member'
+
         return response
 
-    
-    def enroll_in_project(self, project, username, secretToken=None):
+
+    def enroll_in_project(self,
+                          project: str,
+                          username: str,
+                          secret_token: str=None) -> bool:
         '''
-            Adds the user to the project if it allows arbitrary
-            users to join. Returns True if this succeeded, else
-            False.
+            Adds the user to the project if it allows arbitrary users to join. Returns True if this
+            succeeded, else False.
         '''
         try:
             # check if project is public, and whether user is already member of it
-            queryStr = sql.SQL('''SELECT isPublic, secret_token
+            query_str = sql.SQL('''SELECT isPublic, secret_token
             FROM aide_admin.project
             WHERE shortname = %s;
             ''')
-            result = self.dbConnector.execute(queryStr, (project,), 1)
+            result = self.db_connector.execute(query_str,
+                                               (project,),
+                                               1)
 
             # only allow enrolment if project is public, or else if secret tokens match
-            if not len(result):
+            if len(result) == 0:
                 return False
-            elif not result[0]['ispublic']:
+            if not result[0]['ispublic']:
                 # check if secret tokens match
-                if secretToken is None or secretToken != result[0]['secret_token']:
+                if secret_token is None or secret_token != result[0]['secret_token']:
                     return False
-            
+
             # add user
-            queryStr = '''INSERT INTO aide_admin.authentication (username, project, isAdmin)
+            query_str = '''INSERT INTO aide_admin.authentication (username, project, isAdmin)
             VALUES (%s, %s, FALSE)
             ON CONFLICT (username, project) DO NOTHING;
             '''
-            self.dbConnector.execute(queryStr, (username,project,), None)
+            self.db_connector.execute(query_str,
+                                      (username,project,),
+                                      None)
             return True
-        except Exception as e:
-            print(e)
+        except Exception as exc:
+            print(exc)
             return False
 
-    
-    def getSampleImages(self, project, limit=128):
+
+    def get_sample_images(self,
+                          project: str,
+                          limit: int=128) -> List[str]:
         '''
             Returns sample image URLs from the specified project for backdrop
             visualization on the landing page.
@@ -142,7 +161,7 @@ class ReceptionMiddleware:
             4. number of predictions
             5. random
         '''
-        queryStr = sql.SQL('''
+        query_str = sql.SQL('''
             SELECT filename FROM {id_img} AS img
             LEFT OUTER JOIN (
                 SELECT img_anno AS img_id, cnt_anno, cnt_pred FROM (
@@ -166,8 +185,8 @@ class ReceptionMiddleware:
             id_anno=sql.Identifier(project, 'annotation'),
             id_pred=sql.Identifier(project, 'prediction')
         )
-        result = self.dbConnector.execute(queryStr, (limit,), 'all')
+        result = self.db_connector.execute(query_str, (limit,), 'all')
         response = []
-        for r in result:
-            response.append(r['filename'])
+        for res in result:
+            response.append(res['filename'])
         return response

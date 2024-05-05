@@ -11,46 +11,37 @@ import html
 import json
 import bottle
 from bottle import request, redirect, abort, SimpleTemplate
+
 from constants.version import AIDE_VERSION
 from .backend.middleware import ProjectConfigMiddleware
+from ..module import Module
 
 
-class ProjectConfigurator:
 
-    def __init__(self, config, app, dbConnector, verbose_start=False):
-        self.config = config
-        self.app = app
+class ProjectConfigurator(Module):
+    '''
+        Entry point for frontend about project administration.
+    '''
+    def __init__(self,
+                 config,
+                 app,
+                 db_connector,
+                 user_handler,
+                 task_coordinator,
+                 verbose_start=False,
+                 passive_mode=False) -> None:
+        super().__init__(config,
+                         app,
+                         db_connector,
+                         user_handler,
+                         task_coordinator,
+                         verbose_start,
+                         passive_mode)
+
         self.static_dir = 'modules/ProjectAdministration/static'
-        self.middleware = ProjectConfigMiddleware(config, dbConnector)
-
-        self.login_check_fun = None
+        self.middleware = ProjectConfigMiddleware(config, db_connector)
 
         self._init_bottle()
-
-
-    def login_check(self,
-                    project: str=None,
-                    admin: bool=False,
-                    superuser: bool=False,
-                    can_create_projects: bool=False,
-                    extend_session: bool=False,
-                    return_all: bool=False) -> bool:
-        '''
-            Login check function wrapper.
-        '''
-        return self.login_check_fun(project,
-                                    admin,
-                                    superuser,
-                                    can_create_projects,
-                                    extend_session,
-                                    return_all)
-
-
-    def add_login_check_fun(self, login_check_fun: callable) -> None:
-        '''
-            Entry point during module assembly to provide login check function.
-        '''
-        self.login_check_fun = login_check_fun
 
 
     def __redirect(self, loginPage=False, redirect=None):

@@ -12,7 +12,11 @@ from .backend.middleware import UserMiddleware
 from .backend import exceptions
 
 
-class UserHandler():
+class UserHandler:
+    '''
+        Entry point for user administration, logging in/out, etc. Unlike other modules, this is one
+        of the core classes and therefore does not inherit from the base module class.
+    '''
 
     def __init__(self,
                  config,
@@ -376,4 +380,7 @@ class UserHandler():
 
 
     def get_login_check_fun(self) -> callable:
+        '''
+            Returns the function handle to check if a user is logged in.
+        '''
         return self.check_authenticated

@@ -225,12 +225,14 @@ def get_project_extent(db_connector: Database, project: str) -> tuple:
 
 
 def create_image_overviews(image_paths: Iterable,
-                                scale_factors: tuple=(2,4,8,16),
-                                method: Resampling=Resampling.nearest,
-                                verbose: bool=False) -> None:
+                           scale_factors: tuple=(2,4,8,16),
+                           method: Resampling=Resampling.nearest,
+                           verbose: bool=False,
+                           force_recreate: bool=False) -> None:
     '''
         Receives one or more images and calculates overviews (image pyramids) for them.
     '''
+    #TODO: implement check for existing overviews
     if isinstance(method, str):
         method = getattr(Resampling, method.lower())
     else:
