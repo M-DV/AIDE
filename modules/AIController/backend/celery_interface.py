@@ -28,77 +28,79 @@ aim = AIControllerWorker(Config(), current_app)
 def get_training_images(blank,
                         project: str,
                         epoch: int,
-                        numEpochs: int,
-                        minTimestamp: Union[datetime,str]='lastState',
-                        includeGoldenQuestions: bool=True,
-                        minNumAnnoPerImage: int=0,
-                        maxNumImages: int=None,
-                        numWorkers: int=1) -> List[UUID]:
+                        num_epochs: int,
+                        min_timestamp: Union[datetime,str]='lastState',
+                        include_golden_questions: bool=True,
+                        min_num_anno_per_image: int=0,
+                        max_num_images: int=None,
+                        num_workers: int=1) -> List[UUID]:
     '''
         Interface for Celery task to return list of image UUIDs used for training.
     '''
     return aim.get_training_images(project,
                                    epoch,
-                                   numEpochs,
-                                   minTimestamp,
-                                   includeGoldenQuestions,
-                                   minNumAnnoPerImage,
-                                   maxNumImages,
-                                   numWorkers)
+                                   num_epochs,
+                                   min_timestamp,
+                                   include_golden_questions,
+                                   min_num_anno_per_image,
+                                   max_num_images,
+                                   num_workers)
 
 
 @current_app.task(name='AIController.get_inference_images')
 def get_inference_images(blank,
                          project: str,
                          epoch: int,
-                         numEpochs: int,
-                         goldenQuestionsOnly: bool=False,
-                         forceUnlabeled: bool=False,
-                         maxNumImages: int=None,
-                         numWorkers: int=1) -> List[UUID]:
+                         num_epochs: int,
+                         golden_questions_only: bool=False,
+                         force_unlabeled: bool=False,
+                         max_num_images: int=None,
+                         num_workers: int=1) -> List[UUID]:
     '''
         Interface for Celery task to return list of image UUIDs to perform inference on.
     '''
     return aim.get_inference_images(project,
                                     epoch,
-                                    numEpochs,
-                                    goldenQuestionsOnly,
-                                    forceUnlabeled,
-                                    maxNumImages,
-                                    numWorkers)
+                                    num_epochs,
+                                    golden_questions_only,
+                                    force_unlabeled,
+                                    max_num_images,
+                                    num_workers)
 
 
 @current_app.task(name='AIController.delete_model_states')
 def delete_model_states(project: str,
-                        modelStateIDs: Iterable[Union[UUID, str]]) -> List[UUID]:
+                        model_state_ids: Iterable[Union[UUID, str]]) -> List[UUID]:
     '''
         Interface for Celery task to delete model states with given UUID. Returns a list with
         invalid model state UUIDs (i.e., not found in database).
     '''
-    return aim.delete_model_states(project, modelStateIDs)
+    return aim.delete_model_states(project, model_state_ids)
 
 
 @current_app.task(name='AIController.get_model_training_statistics')
 def get_model_training_statistics(project: str,
-                                  modelStateIDs: Iterable[Union[UUID, str]]=None,
-                                  modelLibraries: Iterable[str]=None,
-                                  skipImportedModels: bool=True) -> dict:
+                                  model_state_ids: Iterable[Union[UUID, str]]=None,
+                                  model_libraries: Iterable[str]=None,
+                                  skip_imported_models: bool=True) -> dict:
     '''
         Interface for Celery task to return training statistics for optional model states and/or
         libraries.
     '''
     return aim.get_model_training_statistics(project,
-                                             modelStateIDs,
-                                             modelLibraries,
-                                             skipImportedModels)
+                                             model_state_ids,
+                                             model_libraries,
+                                             skip_imported_models)
 
 
 @current_app.task(name='AIController.duplicate_model_state')
 def duplicate_model_state(project: str,
-                          modelStateID: Union[UUID, str],
-                          skipIfLatest: bool=True) -> str:
+                          model_state_id: Union[UUID, str],
+                          skip_if_latest: bool=True) -> str:
     '''
         Interface for Celery task to duplicate model state with given UUID. Returns UUID string of
         the duplicated state.
     '''
-    return aim.duplicate_model_state(project, modelStateID, skipIfLatest)
+    return aim.duplicate_model_state(project,
+                                     model_state_id,
+                                     skip_if_latest)

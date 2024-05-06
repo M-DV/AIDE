@@ -4,7 +4,6 @@
     2019-24 Benjamin Kellenberger
 '''
 
-import os
 from typing import Tuple, List, Union, Iterable
 from datetime import datetime
 from uuid import UUID
@@ -17,29 +16,28 @@ from modules.AIWorker.backend import celery_interface as aiw_int
 from celery import current_app
 from psycopg2 import sql
 
-from modules.AIController.taskWorkflow.workflowDesigner import WorkflowDesigner
-from modules.AIController.taskWorkflow.workflowTracker import WorkflowTracker
+from modules.AIController.taskWorkflow.workflow_designer import WorkflowDesigner
+from modules.AIController.taskWorkflow.workflow_tracker import WorkflowTracker
 from modules.AIWorker.backend.fileserver import FileServer
 from util import celeryWorkerCommons
 from util.common import get_project_immutables
 from util.helpers import array_split, parse_parameters, get_class_executable, get_library_available
 
 from .messageProcessor import MessageProcessor
-from .annotationWatchdog import Watchdog
-from .sql_string_builder import SQLStringBuilder
+from .annotation_watchdog import Watchdog
+from . import sql_string_builder
 
 
 
-class AIMiddleware():
+class AIMiddleware:
     '''
         Interface for the AI model side of AIDE between the frontend, database, and AIWorker task
         orchestration.
     '''
-    def __init__(self, config, dbConnector, taskCoordinator, passive_mode: bool=False) -> None:
+    def __init__(self, config, db_connector, task_coordinator, passive_mode: bool=False) -> None:
         self.config = config
-        self.db_connector = dbConnector
-        self.task_coordinator = taskCoordinator
-        self.sql_builder = SQLStringBuilder(config)
+        self.db_connector = db_connector
+        self.task_coordinator = task_coordinator
         self.script_pattern = re.compile(r'<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script\.?>')
         self._init_available_ai_models()
 
@@ -64,8 +62,8 @@ class AIMiddleware():
         if self.passive_mode:
             return
         self.message_processor.stop()
-        for w in self.watchdogs.values():
-            w.stop()
+        for watchdog in self.watchdogs.values():
+            watchdog.stop()
 
 
     def _check_prediction_model_details(self,
@@ -250,7 +248,7 @@ class AIMiddleware():
 
         if recheck_autotrain_settings:
             # also nudges the watchdog
-            self.watchdogs[project].recheckAutotrainSettings()
+            self.watchdogs[project].recheck_autotrain_settings()
 
         elif nudge:
             self.watchdogs[project].nudge()
@@ -329,7 +327,7 @@ class AIMiddleware():
             that are currently ongoing for the respective project.
         '''
         self._init_watchdog(project)
-        return self.watchdogs[project].getOngoingTasks()
+        return self.watchdogs[project].get_ongoing_tasks()
 
 
     def can_launch_task(self,
@@ -382,66 +380,65 @@ class AIMiddleware():
 
     def get_training_images(self,
                             project: str,
-                            minTimestamp: Union[datetime,str]='lastState',
-                            includeGoldenQuestions: bool=True,
-                            minNumAnnoPerImage: int=0,
-                            maxNumImages: int=None,
-                            maxNumWorkers: int=-1) -> List[UUID]:
+                            min_timestamp: Union[datetime,str]='lastState',
+                            include_golden_questions: bool=True,
+                            min_num_anno_per_image: int=0,
+                            max_num_images: int=None,
+                            max_num_workers: int=-1) -> List[UUID]:
         '''
-            Queries the database for the latest images to be used for model training.
-            Returns a list with image UUIDs accordingly, split into the number of
-            available workers.
+            Queries the database for the latest images to be used for model training. Returns a list
+            with image UUIDs accordingly, split into the number of available workers.
         '''
         # sanity checks
-        if not (isinstance(minTimestamp, datetime) or \
-            minTimestamp == 'lastState' or
-            minTimestamp == -1 or \
-            minTimestamp is None):
+        if not (isinstance(min_timestamp, datetime) or \
+            min_timestamp == 'lastState' or
+            min_timestamp == -1 or \
+            min_timestamp is None):
             raise ValueError(
-                f'{minTimestamp} is not a recognized property for variable "minTimestamp"')
+                f'{min_timestamp} is not a recognized property for variable "minTimestamp"')
 
         # identify number of available workers
-        if maxNumWorkers != 1:
+        if max_num_workers != 1:
             # only query the number of available workers if more than one is specified to save time
-            num_workers = min(maxNumWorkers, self._get_num_available_workers())
+            num_workers = min(max_num_workers, self._get_num_available_workers())
         else:
-            num_workers = maxNumWorkers
+            num_workers = max_num_workers
 
         # query image IDs
         query_vals = []
 
-        if minTimestamp is None:
+        if min_timestamp is None:
             timestamp_str = sql.SQL('')
-        elif minTimestamp == 'lastState':
+        elif min_timestamp == 'lastState':
             timestamp_str = sql.SQL('''
             WHERE iu.last_checked > COALESCE(to_timestamp(0),
             (SELECT MAX(timecreated) FROM {id_cnnstate}))''').format(
                 id_cnnstate=sql.Identifier(project, 'cnnstate')
             )
-        elif isinstance(minTimestamp, datetime):
+        elif isinstance(min_timestamp, datetime):
             timestamp_str = sql.SQL('WHERE iu.last_checked > COALESCE(to_timestamp(0), %s)')
-            query_vals.append(minTimestamp)
-        elif isinstance(minTimestamp, int) or isinstance(minTimestamp, float):
+            query_vals.append(min_timestamp)
+        elif isinstance(min_timestamp, (int, float)):
             timestamp_str = sql.SQL('''
                 WHERE iu.last_checked > COALESCE(to_timestamp(0), to_timestamp(%s))''')
-            query_vals.append(minTimestamp)
+            query_vals.append(min_timestamp)
 
         # golden questions
-        if includeGoldenQuestions:
+        if include_golden_questions:
             gq_str = sql.SQL('')
         else:
             gq_str = sql.SQL('AND isGoldenQuestion != TRUE')
 
-        if minNumAnnoPerImage > 0:
-            query_vals.append(minNumAnnoPerImage)
+        if min_num_anno_per_image > 0:
+            query_vals.append(min_num_anno_per_image)
 
-        if maxNumImages is None or not isinstance(maxNumImages, int) or maxNumImages <= 0:
+        if max_num_images is None or not isinstance(max_num_images, int) or max_num_images <= 0:
             limit_str = sql.SQL('')
         else:
             limit_str = sql.SQL('LIMIT %s')
-            query_vals.append(maxNumImages)
+            query_vals.append(max_num_images)
 
-        if minNumAnnoPerImage <= 0:
+        if min_num_anno_per_image <= 0:
             query_str = sql.SQL('''
                 SELECT newestAnno.image FROM (
                     SELECT image, last_checked FROM {id_iu} AS iu
@@ -490,13 +487,13 @@ class AIMiddleware():
                 id_img=sql.Identifier(project, 'image'),
                 id_anno=sql.Identifier(project, 'annotation'),
                 timestampStr=timestamp_str,
-                conjunction=(sql.SQL('WHERE') if minTimestamp is None else sql.SQL('AND')),
+                conjunction=(sql.SQL('WHERE') if min_timestamp is None else sql.SQL('AND')),
                 limitStr=limit_str)
 
         image_ids = self.db_connector.execute(query_str, tuple(query_vals), 'all')
         image_ids = [i['image'] for i in image_ids]
 
-        if maxNumWorkers > 1:
+        if max_num_workers > 1:
             # split for distribution across workers
             # (TODO: also specify subset size for multiple jobs; randomly draw if needed)
             image_ids = array_split(image_ids, max(1, len(image_ids) // num_workers))
@@ -508,105 +505,46 @@ class AIMiddleware():
 
     def get_inference_images(self,
                              project: str,
-                             goldenQuestionsOnly: bool=False,
-                             forceUnlabeled: bool=False,
-                             maxNumImages: int=None,
-                             maxNumWorkers: int=-1) -> List[UUID]:
+                             golden_questions_only: bool=False,
+                             force_unlabeled: bool=False,
+                             max_num_images: int=None,
+                             max_num_workers: int=-1) -> List[UUID]:
         '''
             Queries the database for the latest images to be used for inference after model
             training. Returns a list with image UUIDs accordingly, split into the number of
             available workers.
         '''
-        if maxNumImages is None or maxNumImages == -1:
+        if max_num_images is None or max_num_images == -1:
             query_result = self.db_connector.execute('''
                 SELECT maxNumImages_inference
                 FROM aide_admin.project
                 WHERE shortname = %s;''', (project,), 1)
-            maxNumImages = query_result[0]['maxnumimages_inference']
-
-        query_vals = (maxNumImages,)
+            max_num_images = query_result[0]['maxnumimages_inference']
 
         # load the IDs of the images that are being subjected to inference
-        sql_str = self.sql_builder.get_inference_query_string(project,
-                                                          forceUnlabeled,
-                                                          goldenQuestionsOnly,
-                                                          maxNumImages)
-        image_ids = self.db_connector.execute(sql_str, query_vals, 'all')
-        image_ids = [i['image'] for i in image_ids]
+        sql_str = sql_string_builder.get_inference_query_string(project,
+                                                                force_unlabeled,
+                                                                golden_questions_only,
+                                                                max_num_images)
+        image_ids = self.db_connector.execute(sql_str,
+                                              (max_num_images,),
+                                              'all')
+        image_ids = [img['image'] for img in image_ids]
 
         # split for distribution across workers
-        if maxNumWorkers != 1:
+        if max_num_workers != 1:
             # only query the number of available workers if more than one is specified to save time
             num_available = self._get_num_available_workers()
-            if maxNumWorkers == -1:
-                maxNumWorkers = num_available   #TODO: more than one process per worker?
+            if max_num_workers == -1:
+                max_num_workers = num_available   #TODO: more than one process per worker?
             else:
-                maxNumWorkers = min(maxNumWorkers, num_available)
+                max_num_workers = min(max_num_workers, num_available)
 
-        if maxNumWorkers > 1:
-            image_ids = array_split(image_ids, max(1, len(image_ids) // maxNumWorkers))
+        if max_num_workers > 1:
+            image_ids = array_split(image_ids, max(1, len(image_ids) // max_num_workers))
         else:
             image_ids = [image_ids]
         return image_ids
-
-
-
-    #TODO: deprecated; replace with workflow
-    def start_train_and_inference(self, project, minTimestamp='lastState', minNumAnnoPerImage=0, maxNumImages_train=-1, 
-                                    maxNumWorkers_train=1,
-                                    forceUnlabeled_inference=True, maxNumImages_inference=-1, maxNumWorkers_inference=1,
-                                    author=None):
-        '''
-            Submits a model training job, followed by inference.
-            This is the default behavior for the automated model update, since the newly trained model should directly
-            be used to infer new, potentially useful labels.
-        '''
-        # check if task launching is allowed
-        if not self.can_launch_task(project,
-                                    True if author is None else False):
-            return {
-                'status': 1,
-                'message': f'The maximum allowed number of concurrent tasks has been reached for project "{project}". Please wait until running tasks are finished.'
-            }
-
-        #TODO: sanity checks
-        workflow = {
-            'project': project,
-            'tasks': [
-                {
-                    'id': '0',
-                    'type': 'train',
-                    'kwargs': {
-                        'min_timestamp': minTimestamp,
-                        'min_anno_per_image': minNumAnnoPerImage,
-                        'max_num_images': maxNumImages_train,
-                        'max_num_workers': maxNumWorkers_train
-                    }
-                },
-                {
-                    'id': '1',
-                    'type': 'inference',
-                    'kwargs': {
-                        'force_unlabeled': forceUnlabeled_inference,
-                        'max_num_images': maxNumImages_inference,
-                        'max_num_workers': maxNumWorkers_inference
-                    }
-                }
-            ],
-            'options': {}
-        }
-        process = self.workflow_designer.parse_workflow(project, workflow)
-
-        # launch workflow
-        task_id = self.workflow_tracker.launchWorkflow(project,
-                                                       process,
-                                                       workflow,
-                                                       author)
-
-        return {
-            'status': 0,
-            'task_id': task_id
-        }
 
 
     def launch_task(self,
@@ -615,15 +553,13 @@ class AIMiddleware():
                     author=None) -> dict:
         '''
             Accepts a workflow as one of the following three variants:
-            - ID (str or UUID): ID of a saved workflow in this project
-            - 'default': uses the default workflow for this project
-            - dict: an actual workflow as per specifications
-            parses it and launches the job if valid.
-            Returns the task ID accordingly.
+                - ID (str or UUID): ID of a saved workflow in this project
+                - 'default': uses the default workflow for this project
+                - dict: an actual workflow as per specifications
+            parses it and launches the job if valid. Returns the task ID accordingly.
         '''
         # check if task launching is allowed
-        if not self.can_launch_task(project,
-                                    True if author is None else False):
+        if not self.can_launch_task(project, author is None):
             return {
                 'status': 1,
                 'message': 'The maximum allowed number of concurrent tasks has been reached ' + \
@@ -692,7 +628,7 @@ class AIMiddleware():
                 'message': f'Workflow could not be parsed (message: "{str(e)}")'
             }
 
-        task_id = self.workflow_tracker.launchWorkflow(project,
+        task_id = self.workflow_tracker.launch_workflow(project,
                                                        process,
                                                        workflow,
                                                        author)
@@ -705,15 +641,15 @@ class AIMiddleware():
 
     def revoke_task(self,
                     project: str,
-                    taskID: Union[UUID,str],
+                    task_id: Union[UUID,str],
                     username: str) -> None:
         '''
             Revokes (aborts) a task with given task ID for a given project, if it exists. Also sets
             an entry in the database (and notes who aborted the task).
         '''
-        self.workflow_tracker.revokeTask(username,
-                                         project,
-                                         taskID)
+        self.workflow_tracker.revoke_task(username,
+                                          project,
+                                          task_id)
 
 
     def revoke_all_tasks(self,
@@ -732,11 +668,11 @@ class AIMiddleware():
 
     def check_status(self,
                      project: str,
-                     checkProject: bool,
-                     checkTasks: bool,
-                     checkWorkers: bool,
-                     nudgeWatchdog: bool=False,
-                     recheckAutotrainSettings: bool=False) -> dict:
+                     check_project: bool,
+                     check_tasks: bool,
+                     check_workers: bool,
+                     nudge_watchdog: bool=False,
+                     recheck_autotrain_settings: bool=False) -> dict:
         '''
             Queries the Celery worker results depending on the parameters specified. Returns their
             status accordingly if they exist.
@@ -744,28 +680,34 @@ class AIMiddleware():
         status = {}
 
         # watchdog
-        self._init_watchdog(project, nudgeWatchdog, recheckAutotrainSettings)
+        self._init_watchdog(project,
+                            nudge_watchdog,
+                            recheck_autotrain_settings)
 
         # project status
-        if checkProject:
+        if check_project:
             status['project'] = {
-                'ai_auto_training_enabled': self.watchdogs[project].getAImodelAutoTrainingEnabled(),
-                'num_annotated': self.watchdogs[project].lastCount,
-                'num_next_training': self.watchdogs[project].getThreshold()
+                'ai_auto_training_enabled': self.watchdogs[project].get_model_autotrain_enabled(),
+                'num_annotated': self.watchdogs[project].last_count,
+                'num_next_training': self.watchdogs[project].get_threshold()
             }
 
         # running tasks status
-        if checkTasks:
-            status['tasks'] = self.workflow_tracker.pollAllTaskStatuses(project)
+        if check_tasks:
+            status['tasks'] = self.workflow_tracker.poll_all_task_statuses(project)
 
         # get worker status (this is very expensive, as each worker needs to be pinged)
-        if checkWorkers:
+        if check_workers:
             status['workers'] = self.message_processor.poll_worker_status()
 
         return status
 
 
-    def getAvailableAImodels(self, project: str=None) -> dict:
+    def get_available_ai_models(self, project: str=None) -> dict:
+        '''
+            Returns a dict with dicts under "prediction" and "ranking" of models available for the
+            given "project" and its annotation/prediction types.
+        '''
         if project is None:
             return {
                 'models': self.ai_models
@@ -787,10 +729,10 @@ class AIMiddleware():
         }
 
 
-    def verifyAImodelOptions(self,
-                             project: str,
-                             modelOptions: dict,
-                             modelLibrary: str=None) -> dict:
+    def verify_ai_model_options(self,
+                                project: str,
+                                model_options: dict,
+                                model_library: str=None) -> dict:
         '''
             Receives a dict of model options, a model library ID (optional) and verifies whether the
             provided options are valid for the model or not. Uses the following strategies to this
@@ -803,21 +745,21 @@ class AIMiddleware():
                    the options could not reliably be verified.
         '''
         # get AI model library if not specified
-        if modelLibrary is None or modelLibrary not in self.ai_models['prediction']:
+        if model_library is None or model_library not in self.ai_models['prediction']:
             model_lib = self.db_connector.execute('''
                 SELECT ai_model_library
                 FROM aide_admin.project
                 WHERE shortname = %s;
             ''', (project,), 1)
-            modelLibrary = model_lib[0]['ai_model_library']
+            model_library = model_lib[0]['ai_model_library']
 
-        model_name = self.ai_models['prediction'][modelLibrary]['name']
+        model_name = self.ai_models['prediction'][model_library]['name']
 
         response = None
 
-        model_class = get_class_executable(modelLibrary)
+        model_class = get_class_executable(model_library)
         if hasattr(model_class, 'verifyOptions'):
-            response = model_class.verifyOptions(modelOptions)
+            response = model_class.verifyOptions(model_options)
 
         if response is None:
             # no verification implemented; alternative
@@ -827,7 +769,7 @@ class AIMiddleware():
                             config=self.config,
                             dbConnector=self.db_connector,
                             fileServer=FileServer(self.config).get_secure_instance(project),
-                            options=modelOptions)
+                            options=model_options)
                 response = {
                     'valid': True,
                     'warnings': [f'A {model_name} instance could be launched, ' + \
@@ -843,10 +785,9 @@ class AIMiddleware():
         return response
 
 
-
-    def updateAImodelSettings(self,
-                              project: str,
-                              settings: dict) -> dict:
+    def update_ai_model_settings(self,
+                                 project: str,
+                                 settings: dict) -> dict:
         '''
             Updates the project's AI model settings. Verifies whether the specified AI and ranking
             model libraries exist on this setup of AIDE. Raises an exception otherwise.
@@ -855,7 +796,7 @@ class AIMiddleware():
             present and implemented). Returns warnings, errors, etc. about that.
         '''
         # AI libraries installed in AIDE
-        models_available = self.getAvailableAImodels()['models']
+        models_available = self.get_available_ai_models()['models']
 
         # project immutables
         anno_type, pred_type = get_project_immutables(project, self.db_connector)
@@ -865,7 +806,7 @@ class AIMiddleware():
             ('ai_model_enabled', bool),
             ('ai_model_library', str),
             ('ai_alcriterion_library', str),
-            ('numimages_autotrain', int),           #TODO: replace this and next four entries with default workflow
+            ('numimages_autotrain', int),
             ('minnumannoperimage', int),
             ('maxnumimages_train', int),
             ('maxnumimages_inference', int),
@@ -983,19 +924,18 @@ class AIMiddleware():
 
         # check for and verify AI model settings
         if 'ai_model_settings' in settings:
-            ai_model_opts_status = self.saveProjectModelSettings(project,
-                                                                 settings['ai_model_settings'])
+            ai_model_opts_status = self.save_project_model_settings(project,
+                                                                    settings['ai_model_settings'])
             response['ai_model_settings_status'] = ai_model_opts_status
 
         return response
 
 
-    def listModelStates(self,
-                        project: str,
-                        latestOnly: bool=False) -> List[dict]:
+    def list_model_states(self,
+                          project: str,
+                          latest_only: bool=False) -> List[dict]:
         '''
             Retrieves model states metadata for given project.
-
             Args:
                 - project:      str, project shortname
                 - latestOnly:   bool, only returns most recent model state if True (else all)
@@ -1003,7 +943,7 @@ class AIMiddleware():
             Returns:
                 - list of dicts, metadata for all model states in order of time created
         '''
-        model_libraries = self.getAvailableAImodels()
+        model_libraries = self.get_available_ai_models()
 
         # get meta data about models shared through model marketplace
         result = self.db_connector.execute('''
@@ -1028,7 +968,7 @@ class AIMiddleware():
             model_marketplace_meta = []
 
         # get project-specific model states
-        if latestOnly:
+        if latest_only:
             latest_only_str = sql.SQL('''
                 WHERE timeCreated = (
                     SELECT MAX(timeCreated)
@@ -1111,80 +1051,79 @@ class AIMiddleware():
         return response
 
 
-    def deleteModelStates(self,
-                          project: str,
-                          username: str,
-                          modelStateIDs: Union[str, List[str]]) -> UUID:
+    def delete_model_states(self,
+                            project: str,
+                            username: str,
+                            model_state_ids: Union[str, List[str]]) -> UUID:
         '''
             Receives a list of model state IDs (either str or UUID) and launches a task to delete
             them from the database. Unlike training and inference tasks, this one is routed through
             the default taskCoordinator.
         '''
         # verify IDs
-        if not isinstance(modelStateIDs, Iterable):
-            modelStateIDs = [modelStateIDs]
-        modelStateIDs = [str(m) for m in modelStateIDs]
-        process = aic_int.delete_model_states.s(project, modelStateIDs)
+        if not isinstance(model_state_ids, Iterable):
+            model_state_ids = [model_state_ids]
+        model_state_ids = [str(m) for m in model_state_ids]
+        process = aic_int.delete_model_states.s(project, model_state_ids)
         task_id = self.task_coordinator.submit_task(project,
-                                                   username,
-                                                   process,
-                                                   'AIController')
+                                                    username,
+                                                    process,
+                                                    'AIController')
         return task_id
 
 
-    def duplicateModelState(self,
-                            project: str,
-                            username: str,
-                            modelStateID: Union[UUID,str],
-                            skipIfLatest: bool=True) -> UUID:
+    def duplicate_model_state(self,
+                              project: str,
+                              username: str,
+                              model_state_id: Union[UUID,str],
+                              skip_if_latest: bool=True) -> UUID:
         '''
             Receives a model state ID and creates a copy of it in this project. This copy receives
-            the current date, which makes it the most recent model state. If "skipIfLatest" is True
-            and the model state with "modelStateID" is already the most recent state, no duplication
-            is being performed.
+            the current date, which makes it the most recent model state. If "skip_if_latest" is
+            True and the model state with "model_state_id" is already the most recent state, no
+            duplication is being performed (TODO: not yet implemented).
         '''
-        if not isinstance(modelStateID, UUID):
-            modelStateID = UUID(modelStateID)
+        if not isinstance(model_state_id, UUID):
+            model_state_id = UUID(model_state_id)
 
-        process = aic_int.duplicate_model_state.s(project, modelStateID)
+        process = aic_int.duplicate_model_state.s(project, model_state_id)
         task_id = self.task_coordinator.submit_task(project,
-                                                   username,
-                                                   process,
-                                                   'AIController')
+                                                    username,
+                                                    process,
+                                                    'AIController')
         return task_id
 
 
-    def getModelTrainingStatistics(self,
-                                   project: str,
-                                   username: str,
-                                   modelStateIDs: Union[List[str],str]=None) -> UUID:
+    def get_model_training_statistics(self,
+                                      project: str,
+                                      username: str,
+                                      model_state_ids: Union[List[str],str]=None) -> UUID:
         '''
-            Launches a task to assemble model-provided statistics
-            into uniform series.
-            Unlike training and inference tasks, this one is routed
-            through the default taskCoordinator.
+            Launches a task to assemble model-provided statistics into uniform series. Unlike
+            training and inference tasks, this one is routed through the default taskCoordinator.
         '''
         # verify IDs
-        if modelStateIDs is not None:
+        if model_state_ids is not None:
             try:
-                if not isinstance(modelStateIDs, Iterable):
-                    modelStateIDs = [modelStateIDs]
-                modelStateIDs = [str(m) for m in modelStateIDs]
+                if not isinstance(model_state_ids, Iterable):
+                    model_state_ids = [model_state_ids]
+                model_state_ids = [str(m) for m in model_state_ids]
             except Exception:
-                modelStateIDs = None
+                model_state_ids = None
 
-        process = aic_int.get_model_training_statistics.s(project, modelStateIDs)
+        process = aic_int.get_model_training_statistics.s(project, model_state_ids)
         task_id = self.task_coordinator.submit_task(project,
-                                                   username,
-                                                   process,
-                                                   'AIController')
+                                                    username,
+                                                    process,
+                                                    'AIController')
         return task_id
 
 
-    def getProjectModelSettings(self, project: str) -> dict:
+    def get_project_model_settings(self, project: str) -> dict:
         '''
             Returns the AI and AL model properties for the given project, as stored in the database.
         '''
+        #TODO: unused
         result = self.db_connector.execute('''SELECT ai_model_enabled,
                 ai_model_library, ai_model_settings,
                 ai_alcriterion_library, ai_alcriterion_settings,
@@ -1198,14 +1137,12 @@ class AIMiddleware():
         return result[0]
 
 
-    def saveProjectModelSettings(self,
-                                 project: str,
-                                 settings: dict) -> dict:
+    def save_project_model_settings(self,
+                                    project: str,
+                                    settings: dict) -> dict:
         '''
             Saves AI model settings for a given project.
-
             Args:
-
                 - "project":    str, project shortname
                 - "settings":   dict, AI model settings to save
 
@@ -1214,7 +1151,7 @@ class AIMiddleware():
                   errors
         '''
         # verify settings first
-        options_verification = self.verifyAImodelOptions(project, settings)
+        options_verification = self.verify_ai_model_options(project, settings)
         if options_verification['valid']:
             # save
             if isinstance(settings, dict):
@@ -1230,10 +1167,9 @@ class AIMiddleware():
         return options_verification
 
 
-    def getSavedWorkflows(self, project: str) -> dict:
+    def get_saved_workflows(self, project: str) -> dict:
         '''
             Returns all saved AI workflows for given project.
-
             Args:
                 - "project":    str, project shortname
             
@@ -1264,18 +1200,18 @@ class AIMiddleware():
         return response
 
 
-    def saveWorkflow(self,
-                     project: str,
-                     username: str,
-                     workflow: dict,
-                     workflowID: Union[UUID,str],
-                     workflowName: str,
-                     setDefault: bool=False) -> dict:
+    def save_workflow(self,
+                      project: str,
+                      username: str,
+                      workflow: dict,
+                      workflow_id: Union[UUID,str],
+                      workflow_name: str,
+                      set_default: bool=False) -> dict:
         '''
             Receives a workflow definition (Python dict) to be saved in the database for a given
             project under a provided user name. The workflow definition is first parsed by the
             WorkflowDesigner and checked for validity. If it passes, it is stored in the database.
-            If "setDefault" is True, the current workflow is set as the standard workflow, to be
+            If "set_default" is True, the current workflow is set as the standard workflow, to be
             used for automated model training. Workflows can also be updated if an ID is specified.
         '''
         try:
@@ -1288,9 +1224,9 @@ class AIMiddleware():
             workflow = json.dumps(workflow)
 
             # check if workflow already exists
-            query_args = [workflowName]
-            if workflowID is not None:
-                query_args.append(UUID(workflowID))
+            query_args = [workflow_name]
+            if workflow_id is not None:
+                query_args.append(UUID(workflow_id))
                 id_str = sql.SQL(' OR id = %s')
             else:
                 id_str = sql.SQL('')
@@ -1320,7 +1256,7 @@ class AIMiddleware():
                         WHERE id = %s
                         RETURNING id;
                     ''').format(id_workflow=sql.Identifier(project, 'workflow')),
-                    (workflowName, workflow, existing_workflow),
+                    (workflow_name, workflow, existing_workflow),
                     1
                 )
             else:
@@ -1330,13 +1266,13 @@ class AIMiddleware():
                         VALUES (%s, %s, %s)
                         RETURNING id;
                     ''').format(id_workflow=sql.Identifier(project, 'workflow')),
-                    (workflowName, workflow, username),
+                    (workflow_name, workflow, username),
                     1
                 )
             wid = result[0]['id']
 
             # set as default if requested
-            if setDefault:
+            if set_default:
                 self.db_connector.execute(
                     '''
                         UPDATE aide_admin.project
@@ -1357,19 +1293,19 @@ class AIMiddleware():
             }
 
 
-    def setDefaultWorkflow(self,
-                           project: str,
-                           workflowID: Union[UUID,str]) -> dict:
+    def set_default_workflow(self,
+                             project: str,
+                             workflow_id: Union[UUID,str]) -> dict:
         '''
             Receives a str (workflow ID) and sets the associated workflow as default, if it exists
             for a given project.
         '''
-        if isinstance(workflowID, str):
-            workflowID = UUID(workflowID)
-        if workflowID is not None and not isinstance(workflowID, UUID):
+        if isinstance(workflow_id, str):
+            workflow_id = UUID(workflow_id)
+        if workflow_id is not None and not isinstance(workflow_id, UUID):
             return {
                 'status': 2,
-                'message': f'Provided argument "{str(workflowID)}" is not a valid workflow ID'
+                'message': f'Provided argument "{str(workflow_id)}" is not a valid workflow ID'
             }
         query_str = sql.SQL('''
             UPDATE aide_admin.project
@@ -1383,37 +1319,37 @@ class AIMiddleware():
         ''').format(
             id_workflow=sql.Identifier(project, 'workflow')
         )
-        result = self.db_connector.execute(query_str, (workflowID, project,), 1)
+        result = self.db_connector.execute(query_str, (workflow_id, project,), 1)
         if result is None \
             or len(result) == 0 \
-                or str(result[0]['default_workflow']) != str(workflowID):
+                or str(result[0]['default_workflow']) != str(workflow_id):
             return {
                 'status': 3,
-                'message': f'Provided argument "{str(workflowID)}" is not a valid workflow ID'
+                'message': f'Provided argument "{str(workflow_id)}" is not a valid workflow ID'
             }
         return {
             'status': 0
         }
 
 
-    def deleteWorkflow(self,
-                       project: str,
-                       username: str,
-                       workflowID: Union[UUID,str,Iterable[Union[UUID,str]]]) -> dict:
+    def delete_workflow(self,
+                        project: str,
+                        username: str,
+                        workflow_id: Union[UUID,str,Iterable[Union[UUID,str]]]) -> dict:
         '''
             Receives a str or iterable of str variables under "workflowID" and finds and deletes
             them for a given project. Only deletes them if they were created by the user provided in
             "username", or if they are deleted by a super user.
         '''
-        if isinstance(workflowID, str):
-            workflowID = [UUID(workflowID)]
-        elif not isinstance(workflowID, Iterable):
-            workflowID = [workflowID]
-        for widx, wid in enumerate(workflowID):
+        if isinstance(workflow_id, str):
+            workflow_id = [UUID(workflow_id)]
+        elif not isinstance(workflow_id, Iterable):
+            workflow_id = [workflow_id]
+        for widx, wid in enumerate(workflow_id):
             if not isinstance(wid, UUID):
-                workflowID[widx] = UUID(wid)
+                workflow_id[widx] = UUID(wid)
 
-        workflowID = tuple((w,) for w in workflowID)
+        workflow_id = tuple((wid,) for wid in workflow_id)
 
         query_str = sql.SQL('''
             DELETE FROM {id_workflow}
@@ -1430,7 +1366,9 @@ class AIMiddleware():
         ''').format(
             id_workflow=sql.Identifier(project, 'workflow')
         )
-        result = self.db_connector.execute(query_str, (username, workflowID,), 'all')
+        result = self.db_connector.execute(query_str,
+                                           (username, workflow_id,),
+                                           'all')
         result = [str(r['id']) for r in result]
 
         return {
@@ -1439,19 +1377,19 @@ class AIMiddleware():
         }
 
 
-    def deleteWorkflow_history(self,
+    def delete_workflow_history(self,
                                project: str,
-                               workflowID: Union[UUID,str,Iterable[Union[UUID,str]]],
-                               revokeIfRunning: bool=False) -> dict:
+                               workflow_id: Union[UUID,str,Iterable[Union[UUID,str]]],
+                               revoke_if_running: bool=False) -> dict:
         '''
-            Receives a str or iterable of str variables under "workflowID" and finds and deletes
+            Receives a str or iterable of str variables under "workflow_id" and finds and deletes
             them for a given project. Only deletes them if they were created by the user provided in
-            "username", or if they are deleted by a super user. If "revokeIfRunning" is True, any
+            "username", or if they are deleted by a super user. If "revoke_if_running" is True, any
             workflow with ID given that is still running is aborted first.
         '''
-        if workflowID == 'all':
+        if workflow_id == 'all':
             # get all workflow IDs from DB
-            workflowID = self.db_connector.execute(
+            workflow_id = self.db_connector.execute(
                 sql.SQL('''
                     SELECT id FROM {id_workflowhistory};
                 ''').format(
@@ -1460,36 +1398,36 @@ class AIMiddleware():
                 None,
                 'all'
             )
-            if workflowID is None or len(workflowID) == 0:
+            if workflow_id is None or len(workflow_id) == 0:
                 return {
                     'status': 0,
                     'workflowIDs': None
                 }
-            workflowID = [w['id'] for w in workflowID]
+            workflow_id = [wid['id'] for wid in workflow_id]
 
-        elif isinstance(workflowID, str):
-            workflowID = [UUID(workflowID)]
-        elif not isinstance(workflowID, Iterable):
-            workflowID = [workflowID]
-        for widx, wid in enumerate(workflowID):
+        elif isinstance(workflow_id, str):
+            workflow_id = [UUID(workflow_id)]
+        elif not isinstance(workflow_id, Iterable):
+            workflow_id = [workflow_id]
+        for widx, wid in enumerate(workflow_id):
             if not isinstance(wid, UUID):
-                workflowID[widx] = UUID(wid)
+                workflow_id[widx] = UUID(wid)
 
-        if len(workflowID) == 0:
+        if len(workflow_id) == 0:
             return {
                 'status': 0,
                 'workflowIDs': None
             }
 
-        if revokeIfRunning:
-            WorkflowTracker._revoke_task([{'id': w} for w in workflowID])
+        if revoke_if_running:
+            WorkflowTracker._revoke_task([{'id': wid} for wid in workflow_id])
         else:
             # skip ongoing tasks
             task_ids_ongoing = self.get_ongoing_tasks(project)
             for tidx, task_id in enumerate(task_ids_ongoing):
                 if not isinstance(task_id, UUID):
                     task_ids_ongoing[tidx] = UUID(task_id)
-            workflowID = list(set(workflowID).difference(set(task_ids_ongoing)))
+            workflow_id = list(set(workflow_id).difference(set(task_ids_ongoing)))
 
         query_str = sql.SQL('''
             DELETE FROM {id_workflowhistory}
@@ -1498,7 +1436,7 @@ class AIMiddleware():
         ''').format(
             id_workflowhistory=sql.Identifier(project, 'workflowhistory')
         )
-        result = self.db_connector.execute(query_str, (tuple(workflowID),), 'all')
+        result = self.db_connector.execute(query_str, (tuple(workflow_id),), 'all')
         result = [str(r['id']) for r in result]
 
         return {
@@ -1507,9 +1445,9 @@ class AIMiddleware():
         }
 
 
-    def getLabelclassAutoadaptInfo(self,
-                                   project: str,
-                                   modelID: Union[UUID,str]=None) -> dict:
+    def get_labelclass_autoadapt_info(self,
+                                      project: str,
+                                      model_id: Union[UUID,str]=None) -> dict:
         '''
             Retrieves information on whether the model in a project has been configured to
             automatically incorporate new classes by parameter expansion, as well as whether it is
@@ -1518,11 +1456,11 @@ class AIMiddleware():
             supports label class adaptation.
         '''
 
-        if modelID is not None:
-            if not isinstance(modelID, UUID):
-                modelID = UUID(modelID)
+        if model_id is not None:
+            if not isinstance(model_id, UUID):
+                model_id = UUID(model_id)
             model_id_str = sql.SQL('WHERE id = %s')
-            query_args = (modelID, project)
+            query_args = (model_id, project)
         else:
             model_id_str = sql.SQL('''
                 WHERE timeCreated = (
@@ -1563,16 +1501,16 @@ class AIMiddleware():
         return response
 
 
-    def setLabelclassAutoadaptEnabled(self,
-                                      project: str,
-                                      enabled: bool) -> dict:
+    def set_labelclass_autoadapt_enabled(self,
+                                         project: str,
+                                         enabled: bool) -> dict:
         '''
             Sets automatic labelclass adaptation to the specified value. This is only allowed if the
             current model state does not already have automatic labelclass adaptation enabled.
         '''
         if not enabled:
             # user requests to disable adaptation; check if possible
-            enabled_model = self.getLabelclassAutoadaptInfo(project, None)
+            enabled_model = self.get_labelclass_autoadapt_info(project, None)
             if enabled_model['model']:
                 # current model has adaptation enabled; abort
                 return False

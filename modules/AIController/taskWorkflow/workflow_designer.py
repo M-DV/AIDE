@@ -354,15 +354,15 @@ class WorkflowDesigner:
     '''
         Server backend class for parsing, saving, and launching workflow graph definitions.
     '''
-    def __init__(self, dbConnector, celeryApp):
-        self.dbConnector = dbConnector
-        self.celeryApp = celeryApp
+    def __init__(self, db_connector, celery_app):
+        self.db_connector = db_connector
+        self.celery_app = celery_app
 
 
     def _get_num_available_workers(self) -> int:
         #TODO: improve...
         num_workers = 0
-        i = self.celeryApp.control.inspect()
+        i = self.celery_app.control.inspect()
         if i is not None:
             queues_active = i.active_queues()
             if queues_active is not None:
@@ -384,7 +384,7 @@ class WorkflowDesigner:
             FROM aide_admin.project
             WHERE shortname = %s;
         ''')
-        result = self.dbConnector.execute(query_str, (project,), 1)
+        result = self.db_connector.execute(query_str, (project,), 1)
         result = result[0]
         return {
             'train': {

@@ -83,11 +83,11 @@ class AIController(Module):
             except Exception:
                 latest_only = False
 
-            return {'modelStates': self.middleware.listModelStates(project, latest_only)}
+            return {'modelStates': self.middleware.list_model_states(project, latest_only)}
 
 
         @self.app.post('/<project>/deleteModelStates')
-        def delete_model_states(project):
+        def delete_model_states(project: str) -> dict:
             '''
                 Receives a list of model IDs and launches a background task to delete them.
             '''
@@ -97,9 +97,9 @@ class AIController(Module):
             try:
                 username = html.escape(request.get_cookie('username'))
                 model_state_ids = request.json['model_ids']
-                task_id = self.middleware.deleteModelStates(project,
-                                                            username,
-                                                            model_state_ids)
+                task_id = self.middleware.delete_model_states(project,
+                                                              username,
+                                                              model_state_ids)
                 return {
                     'status': 0,
                     'task_id': task_id
@@ -124,10 +124,10 @@ class AIController(Module):
             try:
                 username = html.escape(request.get_cookie('username'))
                 model_state_id = request.json['model_id']
-                task_id = self.middleware.duplicateModelState(project,
-                                                              username,
-                                                              model_state_id,
-                                                              skipIfLatest=True)
+                task_id = self.middleware.duplicate_model_state(project,
+                                                                username,
+                                                                model_state_id,
+                                                                skip_if_latest=True)
                 return {
                     'status': 0,
                     'task_id': task_id
@@ -152,9 +152,9 @@ class AIController(Module):
             try:
                 username = html.escape(request.get_cookie('username'))
                 #TODO: permit filtering for model state IDs (change to POST?)
-                task_id = self.middleware.getModelTrainingStatistics(project,
-                                                                     username,
-                                                                     modelStateIDs=None)
+                task_id = self.middleware.get_model_training_statistics(project,
+                                                                        username,
+                                                                        model_state_ids=None)
                 return {
                     'status': 0,
                     'task_id': task_id
@@ -240,10 +240,12 @@ class AIController(Module):
                     query_workers = 'workers' in request.query
                     nudge_watchdog = 'nudge_watchdog' in request.query
                     recheck_autotrain = 'recheck_autotrain_settings' in request.query
-                    status = self.middleware.check_status(
-                        project,
-                        query_project, query_tasks, query_workers,
-                        nudge_watchdog, recheck_autotrain)
+                    status = self.middleware.check_status(project,
+                                                          query_project,
+                                                          query_tasks,
+                                                          query_workers,
+                                                          nudge_watchdog,
+                                                          recheck_autotrain)
                 except Exception as exc:
                     status = str(exc)
                 return { 'status' : status }
@@ -259,7 +261,7 @@ class AIController(Module):
                 abort(401, 'unauthorized')
 
             try:
-                workflows = self.middleware.getSavedWorkflows(project)
+                workflows = self.middleware.get_saved_workflows(project)
                 return { 'workflows': workflows }
             except Exception as exc:
                 return { 'status': str(exc) }
@@ -286,12 +288,12 @@ class AIController(Module):
                 workflow_id = request.json.get('workflow_id', None)
                 set_default = request.json.get('set_default', False)
 
-                status = self.middleware.saveWorkflow(project,
-                                                      username,
-                                                      workflow,
-                                                      workflow_id,
-                                                      workflow_name,
-                                                      set_default)
+                status = self.middleware.save_workflow(project,
+                                                       username,
+                                                       workflow,
+                                                       workflow_id,
+                                                       workflow_name,
+                                                       set_default)
                 return { 'response': status }
 
             except Exception as exc:
@@ -309,7 +311,7 @@ class AIController(Module):
             try:
                 workflow_id = request.json['workflow_id']
 
-                status = self.middleware.setDefaultWorkflow(project, workflow_id)
+                status = self.middleware.set_default_workflow(project, workflow_id)
                 return status
 
             except Exception as exc:
@@ -328,9 +330,9 @@ class AIController(Module):
             try:
                 username = html.escape(request.get_cookie('username'))
                 workflow_id = request.json['workflow_id']
-                status = self.middleware.deleteWorkflow(project,
-                                                        username,
-                                                        workflow_id)
+                status = self.middleware.delete_workflow(project,
+                                                         username,
+                                                         workflow_id)
                 return status
 
             except Exception as exc:
@@ -351,9 +353,9 @@ class AIController(Module):
             try:
                 workflow_id = request.json['workflow_id']
                 revoke_running = request.json.get('revoke_running', False)
-                status = self.middleware.deleteWorkflow_history(project,
-                                                                workflow_id,
-                                                                revoke_running)
+                status = self.middleware.delete_workflow_history(project,
+                                                                 workflow_id,
+                                                                 revoke_running)
                 return status
 
             except Exception as exc:
@@ -391,7 +393,7 @@ class AIController(Module):
             if not self.login_check(project=project, admin=True):
                 abort(401, 'unauthorized')
 
-            return self.middleware.getAvailableAImodels(project)
+            return self.middleware.get_available_ai_models(project)
 
 
         @self.app.post('/<project>/verifyAImodelOptions')
@@ -410,9 +412,9 @@ class AIController(Module):
             try:
                 model_options = request.json['options']
                 model_library = request.json.get('ai_model_library', None)
-                status = self.middleware.verifyAImodelOptions(project,
-                                                              model_options,
-                                                              model_library)
+                status = self.middleware.verify_ai_model_options(project,
+                                                                 model_options,
+                                                                 model_library)
                 return {'status': status}
             except Exception as exc:
                 return {'status': 1, 'message': str(exc)}
@@ -425,7 +427,7 @@ class AIController(Module):
 
             try:
                 settings = request.json['settings']
-                response = self.middleware.updateAImodelSettings(project, settings)
+                response = self.middleware.update_ai_model_settings(project, settings)
                 return {'status': 0, 'message': response}
             except Exception as exc:
                 return {'status': 1, 'message': str(exc)}
@@ -440,7 +442,7 @@ class AIController(Module):
 
             try:
                 model_id = request.params.get('model_id', None)
-                response = self.middleware.getLabelclassAutoadaptInfo(project, model_id)
+                response = self.middleware.get_labelclass_autoadapt_info(project, model_id)
                 return {'status': 0, 'message': response}
             except Exception as exc:
                 return {'status': 1, 'message': str(exc)}
@@ -455,7 +457,7 @@ class AIController(Module):
 
             try:
                 enabled = parse_boolean(request.params.get('enabled', False))
-                response = self.middleware.setLabelclassAutoadaptEnabled(project, enabled)
+                response = self.middleware.set_labelclass_autoadapt_enabled(project, enabled)
                 return {'status': 0, 'message': response}
             except Exception as exc:
                 return {'status': 1, 'message': str(exc)}

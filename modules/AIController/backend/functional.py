@@ -12,7 +12,7 @@ from datetime import datetime
 from psycopg2 import sql
 from modules.Database.app import Database
 from util.helpers import array_split
-from .sql_string_builder import SQLStringBuilder
+from . import sql_string_builder
 
 
 
@@ -23,11 +23,10 @@ class AIControllerWorker:
     def __init__(self, config, celery_app):
         self.config = config
         self.db_connector = Database(config)
-        self.sql_builder = SQLStringBuilder(config)
         self.celery_app = celery_app
 
 
-    def _get_num_available_workers(self):
+    def _get_num_available_workers(self) -> int:
         #TODO: filter for right tasks and queues
         #TODO: limit to n tasks per worker
         i = self.celery_app.control.inspect()
@@ -38,62 +37,60 @@ class AIControllerWorker:
         return 1    #TODO
 
 
-
     def get_training_images(self,
                             project: str,
                             epoch: int=None,
-                            numEpochs: int=None,
-                            minTimestamp: Union[datetime,str]='lastState',
-                            includeGoldenQuestions: bool=True,
-                            minNumAnnoPerImage: int=0,
-                            maxNumImages: int=None,
-                            numChunks: int=1) -> List[UUID]:
+                            num_epochs: int=None,
+                            min_timestamp: Union[datetime,str]='lastState',
+                            include_golden_questions: bool=True,
+                            min_num_anno_per_image: int=0,
+                            max_num_images: int=None,
+                            num_chunks: int=1) -> List[UUID]:
         '''
-            Queries the database for the latest images to be used for model training.
-            Returns a list with image UUIDs accordingly, split into the number of
-            available workers.
+            Queries the database for the latest images to be used for model training. Returns a list
+            with image UUIDs accordingly, split into the number of available workers.
         '''
         # sanity checks
-        if not (isinstance(minTimestamp, datetime) or minTimestamp == 'lastState' or
-                minTimestamp == -1 or minTimestamp is None):
-            raise ValueError(f'{minTimestamp} is not a recognized property ' + \
+        if not (isinstance(min_timestamp, datetime) or min_timestamp == 'lastState' or
+                min_timestamp == -1 or min_timestamp is None):
+            raise ValueError(f'{min_timestamp} is not a recognized property ' + \
                              'for variable "minTimestamp"')
 
         # query image IDs
         query_vals = []
 
-        if minTimestamp is None:
+        if min_timestamp is None:
             timestamp_str = sql.SQL('')
-        elif minTimestamp == 'lastState':
+        elif min_timestamp == 'lastState':
             timestamp_str = sql.SQL('''
             WHERE iu.last_checked > COALESCE(to_timestamp(0),
             (SELECT MAX(timecreated) FROM {id_cnnstate}))''').format(
                 id_cnnstate=sql.Identifier(project, 'cnnstate')
             )
-        elif isinstance(minTimestamp, datetime):
+        elif isinstance(min_timestamp, datetime):
             timestamp_str = sql.SQL('WHERE iu.last_checked > COALESCE(to_timestamp(0), %s)')
-            query_vals.append(minTimestamp)
-        elif isinstance(minTimestamp, (int, float)):
+            query_vals.append(min_timestamp)
+        elif isinstance(min_timestamp, (int, float)):
             timestamp_str = sql.SQL('''WHERE iu.last_checked > COALESCE(to_timestamp(0),
                                       to_timestamp(%s))''')
-            query_vals.append(minTimestamp)
+            query_vals.append(min_timestamp)
 
-        if minNumAnnoPerImage > 0:
-            query_vals.append(minNumAnnoPerImage)
+        if min_num_anno_per_image > 0:
+            query_vals.append(min_num_anno_per_image)
 
-        if maxNumImages is None or maxNumImages <= 0:
+        if max_num_images is None or max_num_images <= 0:
             limit_str = sql.SQL('')
         else:
             limit_str = sql.SQL('LIMIT %s')
-            query_vals.append(maxNumImages)
+            query_vals.append(max_num_images)
 
         # golden questions
-        if includeGoldenQuestions:
+        if include_golden_questions:
             gq_str = sql.SQL('')
         else:
             gq_str = sql.SQL('AND isGoldenQuestion IS NOT TRUE')
 
-        if minNumAnnoPerImage <= 0:
+        if min_num_anno_per_image <= 0:
             query_str = sql.SQL('''
                 SELECT newestAnno.image FROM (
                     SELECT image, last_checked FROM {id_iu} AS iu
@@ -142,16 +139,16 @@ class AIControllerWorker:
                 id_anno=sql.Identifier(project, 'annotation'),
                 gqStr=gq_str,
                 timestampStr=timestamp_str,
-                conjunction=(sql.SQL('WHERE') if minTimestamp is None else sql.SQL('AND')),
+                conjunction=(sql.SQL('WHERE') if min_timestamp is None else sql.SQL('AND')),
                 limitStr=limit_str)
 
         image_ids = self.db_connector.execute(query_str, tuple(query_vals), 'all')
         image_ids = [i['image'] for i in image_ids]
 
-        if numChunks > 1:
+        if num_chunks > 1:
             # split for distribution across workers (TODO: also specify subset size for multiple
             # jobs; randomly draw if needed)
-            image_ids = array_split(image_ids, max(1, len(image_ids) // numChunks))
+            image_ids = array_split(image_ids, max(1, len(image_ids) // num_chunks))
         else:
             image_ids = [image_ids]
 
@@ -164,64 +161,65 @@ class AIControllerWorker:
     def get_inference_images(self,
                              project: str,
                              epoch: int=None,
-                             numEpochs: int=None,
-                             goldenQuestionsOnly: bool=False,
-                             forceUnlabeled: bool=False,
-                             maxNumImages: int=None,
-                             numChunks: int=1) -> List[UUID]:
-            '''
-                Queries the database for the latest images to be used for inference after model training.
-                Returns a list with image UUIDs accordingly, split into the number of available workers.
-            '''
-            if maxNumImages is None or maxNumImages <= 0:
-                query_result = self.db_connector.execute('''
-                    SELECT maxNumImages_inference
-                    FROM aide_admin.project
-                    WHERE shortname = %s;''', (project,), 1)
-                maxNumImages = query_result[0]['maxnumimages_inference']
-            
-            query_vals = (maxNumImages,)
+                             num_epochs: int=None,
+                             golden_questions_only: bool=False,
+                             force_unlabeled: bool=False,
+                             max_num_images: int=None,
+                             num_chunks: int=1) -> List[UUID]:
+        '''
+            Queries the database for the latest images to be used for inference after model
+            training. Returns a list with image UUIDs accordingly, split into the number of
+            available workers.
+        '''
+        if max_num_images is None or max_num_images <= 0:
+            query_result = self.db_connector.execute('''
+                SELECT maxNumImages_inference
+                FROM aide_admin.project
+                WHERE shortname = %s;''', (project,), 1)
+            max_num_images = query_result[0]['maxnumimages_inference']
 
-            # load the IDs of the images that are being subjected to inference
-            sql_str = self.sql_builder.get_inference_query_string(project,
-                                                               forceUnlabeled,
-                                                               goldenQuestionsOnly,
-                                                               maxNumImages)
-            image_ids = self.db_connector.execute(sql_str, query_vals, 'all')
-            image_ids = [i['image'] for i in image_ids]
-            
-            if numChunks > 1:
-                image_ids = array_split(image_ids, max(1, len(image_ids) // numChunks))
-            else:
-                image_ids = [image_ids]
-            return image_ids
+        query_vals = (max_num_images,)
+
+        # load the IDs of the images that are being subjected to inference
+        sql_str = sql_string_builder.get_inference_query_string(project,
+                                                                force_unlabeled,
+                                                                golden_questions_only,
+                                                                max_num_images)
+        image_ids = self.db_connector.execute(sql_str, query_vals, 'all')
+        image_ids = [i['image'] for i in image_ids]
+
+        if num_chunks > 1:
+            image_ids = array_split(image_ids, max(1, len(image_ids) // num_chunks))
+        else:
+            image_ids = [image_ids]
+        return image_ids
 
 
-    
+
     def delete_model_states(self,
                             project: str,
-                            modelStateIDs: Iterable[Union[UUID, str]]) -> List[UUID]:
+                            model_state_ids: Iterable[Union[UUID, str]]) -> List[UUID]:
         '''
             Deletes model states with provided IDs from the database
             for a given project.
         '''
         # verify IDs
-        if not isinstance(modelStateIDs, Iterable):
-            modelStateIDs = [modelStateIDs]
+        if not isinstance(model_state_ids, Iterable):
+            model_state_ids = [model_state_ids]
         model_ids_invalid = []
         query_str_a = sql.SQL('''
                 DELETE FROM {id_pred}
                 WHERE cnnstate = %s;
             ''').format(
-                id_pred=sql.Identifier(project, 'prediction')            )
+                id_pred=sql.Identifier(project, 'prediction'))
         query_str_b = sql.SQL('''
                 DELETE FROM {id_cnnstate}
                 WHERE id = %s;
             ''').format(
                 id_cnnstate=sql.Identifier(project, 'cnnstate')
             )
-        for idx, model_state_id in enumerate(modelStateIDs):
-            print(f'[{project}] Deleting model state {idx+1}/{len(modelStateIDs)}...')
+        for idx, model_state_id in enumerate(model_state_ids):
+            print(f'[{project}] Deleting model state {idx+1}/{len(model_state_ids)}...')
             try:
                 if isinstance(model_state_id, UUID):
                     next_id = model_state_id
@@ -235,22 +233,19 @@ class AIControllerWorker:
         return model_ids_invalid
 
 
-
     def duplicate_model_state(self,
                               project: str,
-                              modelStateID: Union[UUID, str],
-                              skipIfLatest: bool=True) -> str:
+                              model_state_id: Union[UUID, str],
+                              skip_if_latest: bool=True) -> str:
         '''
-            Receives a model state ID and creates a copy of it in this project.
-            This copy receives the current date, which makes it the most recent
-            model state.
-            If "skipIfLatest" is True and the model state with "modelStateID" is
-            already the most recent state, no duplication is being performed.
-            Returns the ID of the newly duplicated model state.
+            Receives a model state ID and creates a copy of it in this project. This copy receives
+            the current date, which makes it the most recent model state. If "skip_if_latest" is
+            True and the model state with "model_state_id" is already the most recent state, no
+            duplication is being performed. Returns the ID of the newly duplicated model state.
         '''
 
-        if not isinstance(modelStateID, UUID):
-            modelStateID = UUID(modelStateID)
+        if not isinstance(model_state_id, UUID):
+            model_state_id = UUID(model_state_id)
 
         # check if model ID exists and get AI model library
         new_model_details = self.db_connector.execute(
@@ -262,16 +257,16 @@ class AIControllerWorker:
             ''').format(
                 id_cnnstate=sql.Identifier(project, 'cnnstate')
             ),
-            (modelStateID,),
+            (model_state_id,),
             1
         )
         if new_model_details is None or len(new_model_details) == 0:
-            raise Exception(f'Model state with ID "{modelStateID}" does not exist in project.')
+            raise ValueError(f'Model state with ID "{model_state_id}" does not exist in project.')
 
         new_model_library = new_model_details[0]['model_library']
 
         # check if latest (if required)
-        if skipIfLatest:
+        if skip_if_latest:
             is_latest = self.db_connector.execute(
                 sql.SQL('''
                     SELECT id
@@ -286,9 +281,11 @@ class AIControllerWorker:
                 None,
                 1
             )
-            if is_latest is not None and len(is_latest) and is_latest[0]['id'] == modelStateID:
+            if is_latest is not None and \
+                len(is_latest) and \
+                    is_latest[0]['id'] == model_state_id:
                 # is already latest
-                return str(modelStateID)
+                return str(model_state_id)
 
         # get current AI model and settings
         current_model_details = self.db_connector.execute('''
@@ -315,7 +312,7 @@ class AIControllerWorker:
             # same AI model
             ai_model_update_str = sql.SQL('')
 
-        insertion_args.append(modelStateID)
+        insertion_args.append(model_state_id)
 
         # perform the actual duplication
         new_model_state_id = self.db_connector.execute(
@@ -337,70 +334,65 @@ class AIControllerWorker:
         )
         if new_model_state_id is None or len(new_model_state_id) == 0:
             raise Exception('An unknown error occurred trying to duplicate model state ' + \
-                            f'with id "{modelStateID}".')
+                            f'with id "{model_state_id}".')
 
         new_model_state_id = new_model_state_id[0]['id']
 
         return str(new_model_state_id)
 
 
-
     def get_model_training_statistics(self,
                                       project: str,
-                                      modelStateIDs: Iterable[Union[UUID, str]]=None,
-                                      modelLibraries: Iterable[str]=None,
-                                      skipImportedModels: bool=True) -> dict:
+                                      model_state_ids: Iterable[Union[UUID, str]]=None,
+                                      model_libraries: Iterable[str]=None,
+                                      skip_imported_models: bool=True) -> dict:
         '''
-            Assembles statistics as returned by the model (if done so). Returned
-            statistics may be dicts with keys for variable names and values for
-            each model state. None is appended for each model state and variable
-            that does not exist.
-            The optional input "modelStateIDs" may be a str, UUID, or list of str
-            or UUID, and indicates a filter for model state IDs to be included
-            in the assembly.
-            Optional input "modelLibraries" may be a str or list of str and filters
-            model libraries that were used in the project over time.
-            If "skipImportedModels" is True, model states that were directly imported
-            from the Model Marketplace are ignored. This is True by default, since these
-            model states usually don't contain statistics, let alone values that are re-
-            lated to the current project.
+            Assembles statistics as returned by the model (if done so). Returned statistics may be
+            dicts with keys for variable names and values for each model state. None is appended for
+            each model state and variable that does not exist. The optional input "model_state_ids"
+            may be a str, UUID, or list of str or UUID, and indicates a filter for model state IDs
+            to be included in the assembly. Optional input "model_libraries" may be a str or list of
+            str and filters model libraries that were used in the project over time. If
+            "skip_imported_models" is True, model states that were directly imported from the Model
+            Marketplace are ignored. This is True by default, since these model states usually don't
+            contain statistics, let alone values that are re- lated to the current project.
         '''
         # verify IDs
-        if modelStateIDs is not None:
-            if not isinstance(modelStateIDs, Iterable):
-                modelStateIDs = [modelStateIDs]
+        if model_state_ids is not None:
+            if not isinstance(model_state_ids, Iterable):
+                model_state_ids = [model_state_ids]
             uuids = []
-            for m in modelStateIDs:
+            for m_id in model_state_ids:
                 try:
-                    uuids.append((UUID(m),))
+                    uuids.append((UUID(m_id),))
                 except Exception:
                     pass
-            modelStateIDs = uuids
-            if len(modelStateIDs) == 0:
-                modelStateIDs = None
+            model_state_ids = uuids
+            if len(model_state_ids) == 0:
+                model_state_ids = None
 
         sql_filter = ''
         query_args = []
 
         # verify libraries
-        if modelLibraries is not None:
-            if not isinstance(modelLibraries, Iterable):
-                modelLibraries = [modelLibraries]
-            if len(modelLibraries):
-                modelLibraries = tuple([(str(m_lib),) for m_lib in modelLibraries])
-                query_args.append((modelLibraries,))
+        if model_libraries is not None:
+            if not isinstance(model_libraries, Iterable):
+                model_libraries = [model_libraries]
+            if len(model_libraries):
+                model_libraries = tuple((str(m_lib),) for m_lib in model_libraries)
+                query_args.append((model_libraries,))
                 sql_filter = 'WHERE model_library IN %s'
 
         # get all statistics
-        if modelStateIDs is not None and len(modelStateIDs):
+        if model_state_ids is not None and len(model_state_ids):
             if len(sql_filter) > 0:
                 sql_filter += ' AND id IN %s'
             else:
                 sql_filter = 'WHERE id IN %s'
-            query_args.append((tuple([(m,) for m in modelStateIDs]),))
+            query_args.append((tuple([(m,) for m in model_state_ids]),))
 
         # skip imported model states
-        if skipImportedModels:
+        if skip_imported_models:
             if len(sql_filter) > 0:
                 sql_filter += ' AND imported_from_marketplace IS FALSE'
             else:
@@ -408,7 +400,8 @@ class AIControllerWorker:
 
         #TODO: add number of images used to train model, too?
         query_result = self.db_connector.execute(sql.SQL('''
-            SELECT id, model_library, EXTRACT(epoch FROM timeCreated) AS timeCreated, stats FROM {id_cnnstate}
+            SELECT id, model_library, EXTRACT(epoch FROM timeCreated) AS timeCreated,
+                stats FROM {id_cnnstate}
             {sql_filter}
             ORDER BY timeCreated ASC;
         ''').format(
@@ -437,16 +430,16 @@ class AIControllerWorker:
                 keys[model_lib] = keys[model_lib].union(set(q_dict.keys()))
             except Exception:
                 stats_raw[model_lib].append({})
-                
+
         # assemble into series
         series = {}
-        for m in model_libs:
-            series[m] = dict((k, len(stats_raw[m])*[None]) for k in keys[m])
+        for m_id in model_libs:
+            series[m_id] = dict((k, len(stats_raw[m_id])*[None]) for k in keys[m_id])
 
-            for idx, stat in enumerate(stats_raw[m]):
-                for key in keys[m]:
+            for idx, stat in enumerate(stats_raw[m_id]):
+                for key in keys[m_id]:
                     if key in stat:
-                        series[m][key][idx] = stat[key]
+                        series[m_id][key][idx] = stat[key]
 
         return {
             'ids': ids,

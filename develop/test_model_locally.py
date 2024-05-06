@@ -143,7 +143,7 @@ def test_model_locally(project: str,
     if run_train:
         data = aicw.get_training_images(
             project=project,
-            maxNumImages=512)
+            max_num_images=512)
         data = __load_metadata(project, db_connector, data[0], True, model_origin_id)
 
         if update_model:
@@ -159,7 +159,7 @@ def test_model_locally(project: str,
     if run_inference:
         data = aicw.get_inference_images(
             project=project,
-            maxNumImages=512)
+            max_num_images=512)
         data = __load_metadata(project, db_connector, data[0], False, model_origin_id)
 
         if update_model:
