@@ -51,6 +51,13 @@ This section contains parameters for all the individual instances' addresses.
 | max_num_concurrent_tasks | (numeric) | 2 |  | Maximum number of tasks that can be launched at a time per project. Individual projects may provide their own override, but the value provided here serves as an absolute upper ceiling. Auto-launched tasks are always limited to one at a time; the number of tasks here takes these into account, even for user-launched tasks (i.e., if the number set here is 2 and there is already a task running, whether auto-launched or not, at most one additional task can be run at a time). Set to <= 0 to allow an unlimited number of tasks to be executed at a time per project. |
 
 
+## [Mapserver]
+
+| Name | Values | Default value | Required | Comments |
+|----------------------------|--------------|---------------|----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| wms_max_image_width | (numeric) | 2000 | NO | Maximum image width in pixels for WMS requests. If set to a numerical value > 0, WMS server will populate tag "MaxWidth" in GetCapabilities request. Note that this does not enforce restriction; a client could potentially ignore tag and request and receive larger images.
+| wms_max_image_height | (numeric) | 2000 | NO | Maximum image height in pixels for WMS requests. If set to a numerical value > 0, WMS server will populate tag "MaxWidth" in GetCapabilities request. Note that this does not enforce restriction; a client could potentially ignore tag and request and receive larger images.
+
 
 ## [AIWorker]
 

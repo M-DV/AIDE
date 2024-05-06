@@ -30,6 +30,7 @@
     </ContactInformation> -->
     <Fees>none</Fees>
     <AccessConstraints>none</AccessConstraints>
+    {max_size}
   </Service>
   <Capability>
     <Request>

@@ -25,7 +25,7 @@ class MapserverMiddleware:
 
     # seconds to wait until project metadata is re-queried from database
     #TODO: make global option
-    METADATA_QUERY_INTERVAL = 150
+    METADATA_QUERY_INTERVAL = 120
 
     def __init__(self, config: Config, db_connector: Database) -> None:
         self.config = config
@@ -142,7 +142,7 @@ class MapserverMiddleware:
             query_args = None if project is None else (project,)
 
             meta = self.db_connector.execute(sql.SQL('''
-                SELECT srid, shortname, band_config, render_config,
+                SELECT srid, shortname, band_config, mapserver_settings,
                     annotationtype, predictiontype,
                     proj.demomode,
                     auth.username, auth.isadmin, auth.admitted_until, auth.blocked_until
@@ -162,18 +162,26 @@ class MapserverMiddleware:
             projects_queried = set()
             for item in meta:
                 proj_name = item['shortname']
+                mapserver_settings = helpers.DEFAULT_MAPSERVER_SETTINGS
+                settings_override = item.get('mapserver_settings', None)
+                if isinstance(settings_override, str):
+                    settings_override = json.loads(settings_override)
+                if isinstance(settings_override, dict):
+                    mapserver_settings.update(settings_override)
                 if proj_name not in self.project_meta:
                     self.project_meta[proj_name] = {
+                        'enabled': mapserver_settings.get('enabled', False),
                         'last_queried': now,
                         'annotation_type': item['annotationtype'].lower(),
                         'prediction_type': item['predictiontype'].lower(),
                         'band_config': json.loads(item['band_config']),
-                        'render_config': json.loads(item['render_config']),
+                        'layers': mapserver_settings.get('layers', {}),
                         'srid': item['srid'],
                         'extent': geospatial.get_project_extent(self.db_connector, proj_name),
                         'demo_mode': item['demomode'],
                         'users': {}
                     }
+
                 # check member list
                 if (item['admitted_until'] is None or (item['admitted_until'] >= now)) and \
                     (item['blocked_until'] is None or (item['blocked_until'] < now)):
@@ -266,9 +274,9 @@ class MapserverMiddleware:
             project_meta[project] = access_control['project_meta']
 
         return self.services[service](request,
-                                        project_meta,
-                                        base_url,
-                                        request_params)
+                                      project_meta,
+                                      base_url,
+                                      request_params)
 
 
     def __call__(self,

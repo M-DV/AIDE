@@ -1,5 +1,6 @@
 <div>
     <div id="mapserver-settings">Loading...</div>
+    <p>Allow up to two minutes for settings to change.</p>
     <p>
         More info:
         <ul>
@@ -161,6 +162,7 @@
                     // image WMS render configuration. TODO: ugly compatibility solution with
                     //existing render config UI; re-write latter
                     $(`[id="${serviceID}_opts"]`).append($('<div id="rendering-controls-container"></div>'));
+                    window.render_config = DEFAULT_RENDER_CONFIG;
                     setupImageRendererControls($('#rendering-controls-container'));
                 }
             }
@@ -249,10 +251,20 @@
                 services[service]['enabled'] = $(`[id="${serviceEnabledID}"]`).prop('checked');
                 let serviceNonAdminID = `${layer}_${service}_nonAdmin`;
                 services[service]['non_admin'] = $(`[id="${serviceNonAdminID}"]`).prop('checked');
+
+                // render settings for WMS services
+                if(service === 'wms') {
+                    services[service]['options']['render_config'] = window.render_config;
+                    let max_image_size = parseInt($(`#${layer}_${service}_maxImgSize`).val());
+                    if(!Number.isFinite(max_image_size)) {
+                        max_image_size = 0;
+                    } else {
+                        max_image_size = Math.max(0, max_image_size);
+                    }
+                }
             }
         }
-        //TODO: image WMS renderer
-    
+
         return $.ajax({
             url: window.baseURL + 'saveProjectConfiguration',
             method: 'POST',

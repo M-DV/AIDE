@@ -38,10 +38,12 @@ def render_array(array: np.array,
             percentiles = render_config['contrast']['percentile']
             band_min = np.nanpercentile(array[band,...], percentiles['min'])
             band_max = np.nanpercentile(array[band,...], percentiles['max'])
-            array[band,...] = multiplier * (array[band,...] - band_min) / (band_max - band_min)
+            if band_max - band_min != 0:
+                array[band,...] = multiplier * (array[band,...] - band_min) / (band_max - band_min)
         elif to_uint8:
             band_min, band_max = np.nanmin(array[band,...]), np.nanmax(array[band,...])
-            array[band,...] = multiplier * (array[band,...] - band_min) / (band_max - band_min)
+            if band_max - band_min != 0:
+                array[band,...] = multiplier * (array[band,...] - band_min) / (band_max - band_min)
     array += render_config.get('brightness', 0)
     if to_uint8:
         array = np.nan_to_num(array, 0).astype(np.uint8)
@@ -51,7 +53,7 @@ def render_array(array: np.array,
 def get_map_images(db_connector: Database,
                    images_dir: str,
                    project: str,
-                   project_meta: dict,
+                   render_config: dict,
                    bbox: tuple,
                    srid: int,
                    resolution: tuple,
@@ -70,7 +72,6 @@ def get_map_images(db_connector: Database,
     bands = None
     if not raw:
         bands = [1, 2, 3]
-        render_config = project_meta['render_config']
         if 'indices' in render_config.get('bands', {}):
             indices = render_config['bands']['indices']
             if 'grayscale' in indices:
@@ -143,7 +144,7 @@ def get_map_images(db_connector: Database,
 def get_map_segmentation(db_connector: Database,
                          images_dir: str,
                          project: str,
-                         project_meta: dict,
+                         label_classes: dict,
                          relation_name: str,
                          username: str,
                          bbox: tuple,
@@ -182,8 +183,6 @@ def get_map_segmentation(db_connector: Database,
         return bytes()     #TODO
 
     driver = rasterio.driver_from_extension(image_ext)
-
-    label_classes = project_meta.get('label_classes', [])
 
     # decode segmentation masks and wrap in rasterio DatasetReader instances
     rio_datasets = []

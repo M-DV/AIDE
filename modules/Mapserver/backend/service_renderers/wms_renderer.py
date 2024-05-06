@@ -8,7 +8,7 @@ import re
 
 from modules.Database.app import Database
 from util.configDef import Config
-from util import geospatial
+from util import geospatial, helpers
 
 from .abstract_renderer import AbstractRenderer
 from .._functional import map_operations
@@ -36,6 +36,22 @@ class WMSRenderer(AbstractRenderer):
 
         self.static_dir = self.config.get_property('FileServer', 'staticfiles_dir')
         self.mime_pattern = re.compile(r'.*\/')
+
+        max_image_size = (
+            config.get_property('Mapserver',
+                                'wms_max_image_width',
+                                dtype=int,
+                                fallback=None),
+            config.get_property('Mapserver',
+                                'wms_max_image_height',
+                                dtype=int,
+                                fallback=None)
+        )
+        self.size_tags = ''
+        if isinstance(max_image_size[0], int) and max_image_size[0] > 0:
+            self.size_tags = f'<MaxWidth>{max_image_size[0]}</MaxWidth>\n'
+        if isinstance(max_image_size[1], int) and max_image_size[1] > 0:
+            self.size_tags += f'<MaxHeight>{max_image_size[1]}</MaxHeight>'
 
 
     def get_capabilities(self,
@@ -76,7 +92,7 @@ class WMSRenderer(AbstractRenderer):
                 'bbox_west_wgs84': extent_wgs84[0],
                 'bbox_south_wgs84': extent_wgs84[1],
                 'bbox_east_wgs84': extent_wgs84[2],
-                'bbox_north_wgs84': extent_wgs84[3],
+                'bbox_north_wgs84': extent_wgs84[3]
             }
 
             project_layers = ''
@@ -139,6 +155,7 @@ class WMSRenderer(AbstractRenderer):
             'version': version,
             'online_resource_href': base_url,
             'base_href': base_url,
+            'max_size': self.size_tags,
             'project_meta': projects_xml
         })
         return self.render_service_template(version,
@@ -158,13 +175,24 @@ class WMSRenderer(AbstractRenderer):
         version = self.parse_version(request_params, False)
         layer = request_params.get('LAYER', request_params.get('LAYERS', None))
         project, layer_name, entity = self._decode_layer_name(layer)
-        if project not in projects:
-            # invalid/inaccessible project requested
+        project_meta = projects[project]
+        if project not in projects or \
+            not project_meta.get('enabled', False) or \
+                layer_name not in project_meta['layers']:
+            # project has Mapserver disabled, or else invalid/inaccessible project requested
             return self.render_error_template(11000,
                                               version,
                                               f'Invalid layer "{layer}"'), \
                     self.DEFAULT_RESPONSE_HEADERS
-        project_meta = projects[project]
+
+        layer_meta = project_meta['layers'][layer_name]['services'].get('wms', {})
+        if len(layer_meta) == 0 or not layer_meta.get('enabled', False):
+            # WMS disabled for this project
+            return self.render_error_template(11000,
+                                              version,
+                                              f'WMS disabled for project "{project}"'), \
+                    self.DEFAULT_RESPONSE_HEADERS
+
         srid = project_meta['srid']
         bbox = request_params.get('BBOX', None)
         if bbox is not None:
@@ -194,13 +222,16 @@ class WMSRenderer(AbstractRenderer):
             mime_type
         )
 
+        render_config = layer_meta.get('options', {}).get('render_config',
+                                                          helpers.DEFAULT_RENDER_CONFIG)
+
         response_headers = self.DEFAULT_RESPONSE_HEADERS.copy()
 
         if layer_name == 'images':
             bytes_obj = map_operations.get_map_images(self.db_connector,
                                                       self.static_dir,
                                                       project,
-                                                      project_meta,
+                                                      render_config,
                                                       bbox,
                                                       srid,
                                                       resolution,
@@ -222,7 +253,7 @@ class WMSRenderer(AbstractRenderer):
             bytes_obj = map_operations.get_map_segmentation(self.db_connector,
                                                             self.static_dir,
                                                             project,
-                                                            project_meta,
+                                                            project_meta['label_classes'],
                                                             layer_name,
                                                             entity,
                                                             bbox,

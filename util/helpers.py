@@ -72,6 +72,42 @@ DEFAULT_RENDER_CONFIG = {
     "brightness": 0
 }
 
+DEFAULT_MAPSERVER_SETTINGS = {
+    'enabled': False,
+    'layers': {
+        'image-outlines': {
+            'name': 'Image outlines',
+            'services': {
+                'wfs': {
+                    'enabled': False,
+                    'acl': {
+                        'non_admin': False
+                    }
+                }
+            }
+        },
+        'images': {
+            'name': 'Images',
+            'services': {
+                'wms': {
+                    'enabled': False,
+                    'acl': {
+                        'non_admin': False
+                    },
+                    'options': {
+                        'render_config': DEFAULT_RENDER_CONFIG
+                    }
+                },
+                'wcs': {
+                    'enabled': False,
+                    'acl': {
+                        'non_admin': False
+                    }
+                }
+            }
+        }
+    }
+}
 
 
 def to_number(value: Union[int,float,str]) -> Union[int,float]:

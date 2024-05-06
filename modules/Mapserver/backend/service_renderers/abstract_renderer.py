@@ -250,10 +250,11 @@ class AbstractRenderer:
         raise NotImplementedError('Not implemented for abstract base class')
 
 
-    def service(self, request_name: str,
-                    projects: dict,
-                    base_url: str,
-                    request_params: dict) -> Tuple[object, dict]:
+    def service(self,
+                request_name: str,
+                projects: dict,
+                base_url: str,
+                request_params: dict) -> Tuple[object, dict]:
         '''
             Calls the renderer's service by a given request_name (case-insensitive) and arguments.
             Raises an Exception if the request has not been found.
