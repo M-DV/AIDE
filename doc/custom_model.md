@@ -215,9 +215,17 @@ Loading such an object could then look as follows:
             * `height`: the height of the segmentation mask.
           To create a PIL Image from the encoded segmentation mask, you can use the following code snippet:
           ```python
-            from util.helpers import base64ToImage
-            image = base64ToImage(segmentationMask, width, height)
+            from util.helpers import base64_to_image
+            image = base64_to_image(segmentation_mask,
+                                    width,
+                                    height,
+                                    to_pil=False,
+                                    attempt_rescale_if_needed=True)
           ```
+          Script attempts to rescale segmentation mask to original size if
+          `attempt_rescale_if_needed=True`. This is required as segmentation masks might have
+          smaller dimensions than the image if "max_image_width" and "max_image_height" parameters
+          are set to prevent large images being sent over to the Web frontend.
         * All class indices (ordinals) specified by the user start at 1 (one). Unless you have a dedicated "background" class (see next point), you may want to shift your annotation segmentation mask values down by one, also depending on the model.
         * In the latest versions of AIDE it is possible to specify whether unlabeled pixels in a segmentation map should be treated as "background" or completely ignored. This is a shortcut for projects that only require segmenting objects, instead of the full image.
         Make sure to adhere to this property in your custom model. You can find out the setting through the parameter `ignore_unlabeled` of the `AIModel` base class:

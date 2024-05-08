@@ -26,6 +26,8 @@ import pytz
 import netifaces
 import requests
 from PIL import Image, ImageColor
+import torch
+from torch.nn import functional as F
 
 from util.configDef import Config
 from util import drivers
@@ -600,14 +602,49 @@ def image_to_base64(image: Image) -> Tuple[str,int,int]:
 def base64_to_image(base64str: str,
                     width: int,
                     height: int,
-                    to_pil: bool=True) -> Image:
+                    to_pil: bool=True,
+                    attempt_rescale_if_needed: bool=False,
+                    interpolation: str='nearest') -> Image:
     '''
         Receives a base64-encoded string as stored in AIDE's database (e.g. for segmentation masks)
-        and returns a PIL image with its contents if "toPIL" is True (default), or an ndarray
+        and returns a PIL image with its contents if "to_pil" is True (default), or an ndarray
         otherwise.
+
+        Args:
+            - "base64str":                  str, base64-encoded string of image
+            - "width":                      int, image width in pixels
+            - "height":                     int, image height in pixels
+            - "to_pil":                     bool, returns PIL.Image if True (default), else
+                                            Numpy.ndarray
+            - "attempt_rescale_if_needed":  bool, tries to identify the actual size based on
+                                            width/height aspect ratio if True, else raises an
+                                            exception (default)
+            - "interpolation":              str, interpolation mode if size mismatch could be solved
+                                            to scale image back up to target size
     '''
+    #TODO: adjust for LabelUI restrictions (determine aspect ratio > segmask size > resize with
+    #nearest)
     raster = np.frombuffer(base64.b64decode(base64str), dtype=np.uint8)
-    raster = np.reshape(raster, (int(height),int(width),))
+    size = (int(height),int(width),)
+    if size[0] * size[1] != len(raster):
+        if attempt_rescale_if_needed:
+            width_actual = np.sqrt(float(width)/float(height) * float(len(raster)))
+            if np.mod(len(raster) / np.ceil(width_actual), 1) == 0:
+                size = (int(len(raster)/np.ceil(width_actual)), int(np.ceil(width_actual)))
+            elif np.mod(len(raster) / np.floor(width_actual), 1) == 0:
+                size = (int(len(raster)/np.floor(width_actual)), int(np.floor(width_actual)))
+            else:
+                # neither rounding method worked
+                raise ArithmeticError(
+                    f'Could not properly infer dimensions for base64 buffer of size {len(raster)}.')
+        else:
+            raise AttributeError(f'Invalid dimensions ({width} x {height} != {len(raster)})')
+    raster = np.reshape(raster, size)
+    if raster.shape[0] != height or raster.shape[1] != width:
+        # rescale back up
+        raster = F.upsample(torch.from_numpy(raster).unsqueeze(0).unsqueeze(0),
+                            (height, width),
+                            mode=interpolation).squeeze().numpy()
     if not to_pil:
         return raster
     image = Image.fromarray(raster)

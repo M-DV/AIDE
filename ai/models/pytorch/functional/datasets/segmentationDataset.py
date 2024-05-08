@@ -1,7 +1,7 @@
 '''
     PyTorch dataset wrapper for segmentation masks.
 
-    2020-21 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
 from io import BytesIO
@@ -9,6 +9,9 @@ import numpy as np
 import base64
 from PIL import Image
 from torch.utils.data import Dataset
+
+from util import helpers
+
 
 
 class SegmentationDataset(Dataset):
@@ -66,7 +69,12 @@ class SegmentationDataset(Dataset):
             try:
                 width = int(annotation['width'])
                 height = int(annotation['height'])
-                raster = np.frombuffer(base64.b64decode(annotation['segmentationmask']), dtype=np.uint8)
+                raster = helpers.base64_to_image(annotation['segmentationmask'],
+                                                 width,
+                                                 height,
+                                                 False,
+                                                 True,
+                                                 'nearest')
                 raster = np.reshape(raster, (height,width,))
 
                 if self.indexMap is not None:

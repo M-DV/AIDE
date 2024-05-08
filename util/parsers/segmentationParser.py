@@ -467,10 +467,16 @@ class SegmentationFileParser(AbstractAnnotationParser):
                     (anno['id'],), 1)
 
                     # convert base64 mask to image
-                    raster_raw = np.frombuffer(base64.b64decode(segmap[0]['segmentationmask']),
-                                                dtype=rasterio.ubyte)
-                    raster_raw = np.reshape(raster_raw,
-                                            (1, int(anno['height']),int(anno['width']),))
+                    raster_raw = helpers.base64_to_image(segmap[0]['segmentationmask'],
+                                                         int(anno['width']),
+                                                         int(anno['height']),
+                                                         False,
+                                                         True,
+                                                         'nearest')
+                    # raster_raw = np.frombuffer(base64.b64decode(segmap[0]['segmentationmask']),
+                    #                             dtype=rasterio.ubyte)
+                    # raster_raw = np.reshape(raster_raw,
+                    #                         (1, int(anno['height']),int(anno['width']),))
 
                     # convert to RGB image if needed
                     if export_colors:

@@ -1,14 +1,15 @@
 '''
-    Pulls segmentation masks from the database and exports them
-    into folders with specifiable format (JPEG, TIFF, etc.).
+    Pulls segmentation masks from the database and exports them into folders with specifiable format
+    (JPEG, TIFF, etc.).
 
-    2019-22 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import os
 import argparse
 from psycopg2 import sql
-from util import drivers
+from util import drivers, helpers
+
 
 
 if __name__ == '__main__':
@@ -136,7 +137,7 @@ if __name__ == '__main__':
         # iterate
         if allData is not None and len(allData):
             print('Exporting images...\n')
-            for nextItem in allData:   
+            for nextItem in allData:
                 # parse
                 imgName = nextItem['filename']
                 imgName, _ = os.path.splitext(imgName)
@@ -147,9 +148,15 @@ if __name__ == '__main__':
                 # convert base64 mask to image
                 width = int(nextItem['width'])
                 height = int(nextItem['height'])
-                raster = np.frombuffer(base64.b64decode(nextItem['segmentationmask']), dtype=np.uint8)
-                raster = np.reshape(raster, (height,width,))
-                img = Image.fromarray(raster)
+                img = helpers.base64_to_image(nextItem['segmentationmask'],
+                                              width,
+                                              height,
+                                              True,
+                                              True,
+                                              'nearest')
+                # raster = np.frombuffer(base64.b64decode(nextItem['segmentationmask']), dtype=np.uint8)
+                # raster = np.reshape(raster, (height,width,))
+                # img = Image.fromarray(raster)
                 img.save(targetName)
                 print(targetName)
         else:

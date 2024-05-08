@@ -88,7 +88,7 @@ class DataWorker:
     def _get_project_srid(self, project: str) -> int:
         if project not in self.project_data:
             srid = geospatial.get_project_srid(self.db_connector, project)
-            if srid <= 0:
+            if isinstance(srid, (int, float)) and srid <= 0:
                 srid = None
             self.project_data[project] = srid
         return self.project_data[project]
@@ -1323,7 +1323,7 @@ class DataWorker:
         current_task.update_state(meta={'message': 'locating images...'})
 
         # load geospatial project metadata
-        srid = geospatial.get_project_srid(self.db_connector, project)
+        srid = self._get_project_srid(project)
 
         # get all images on disk that are not in database
         imgs_candidates = self.scanForImages(project,
@@ -1627,7 +1627,7 @@ class DataWorker:
             Mapserver operations.
         '''
         # load geospatial project metadata
-        srid = geospatial.get_project_srid(self.db_connector, project)
+        srid = self._get_project_srid(project)
 
         if srid is None:
             # no geospatial project; abort

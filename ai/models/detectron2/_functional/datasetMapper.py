@@ -6,7 +6,7 @@
     if present (relative coordinates are currently not supported in
     Detectron2).
 
-    2020-22 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
 import copy
@@ -19,7 +19,8 @@ import detectron2.data.transforms as T
 import detectron2.data.detection_utils as utils
 from detectron2.structures import BoxMode
 
-from util import drivers
+from util import drivers, helpers
+
 
 
 class Detectron2DatasetMapper(DatasetMapper):
@@ -93,7 +94,12 @@ class Detectron2DatasetMapper(DatasetMapper):
 
         if "segmentationMask" in dataset_dict:
             try:
-                raster = np.frombuffer(base64.b64decode(dataset_dict['segmentationMask']), dtype=np.uint8)
+                raster = helpers.base64_to_image(dataset_dict['segmentationMask'],
+                                                 image_shape[1],
+                                                 image_shape[0],
+                                                 False,
+                                                 True,
+                                                 'nearest')
                 sem_seg_gt = np.reshape(raster, image_shape)    #TODO: check format
                 if self.classIndexMap is not None:
                     sem_seg_gt_copy = np.copy(sem_seg_gt)

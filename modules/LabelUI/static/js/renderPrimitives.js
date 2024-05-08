@@ -2255,6 +2255,8 @@ class SegmentationElement extends AbstractRenderElement {
             data[offset+3] = alpha;
             offset += 4;
         }
+
+        //TODO: if LabelUI image size restrictions change, old segmasks won't have correct height
         this.ctx.putImageData(new ImageData(data, this.canvas.width, this.canvas.height), 0, 0);
     }
 
