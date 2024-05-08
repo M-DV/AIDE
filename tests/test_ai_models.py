@@ -37,7 +37,7 @@ if __name__ == '__main__':
 
     # check if AIDE file server is reachable
     admin = AdminMiddleware(config, db_connector)
-    conn_details = admin.getServiceDetails(True, False)
+    conn_details = admin.get_service_details(True, False)
     fs_version = conn_details['FileServer']['aide_version']
     # if not isinstance(fs_version, str):
     #     # no file server running

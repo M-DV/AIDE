@@ -1,6 +1,5 @@
 '''
-    Common functionalities for Celery workers
-    (AIController, AIWorker, FileServer).
+    Common functionalities for Celery workers (AIController, AIWorker, FileServer).
 
     2020-24 Benjamin Kellenberger
 '''
@@ -36,7 +35,7 @@ def get_worker_details() -> dict:
 
 
 
-def getCeleryWorkerDetails():
+def get_celery_worker_details() -> dict:
     '''
         Queries all Celery workers for their details (name, URL, capabilities, AIDE version,
         etc.)
@@ -55,7 +54,7 @@ def getCeleryWorkerDetails():
             res = aiw_v.apply_async(queue=worker)
             res = res.get(timeout=20)                   #TODO: timeout (in seconds)
             if res is None:
-                raise Exception('connection timeout')
+                raise TimeoutError('connection timeout')
             result[worker] = res
             result[worker]['online'] = True
         except Exception as exc:

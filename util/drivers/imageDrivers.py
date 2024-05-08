@@ -4,7 +4,7 @@
     2021-24 Benjamin Kellenberger
 '''
 
-from typing import Union
+from typing import Union, Iterable, Tuple
 from io import BytesIO
 import mimetypes
 import numpy as np
@@ -95,6 +95,34 @@ def normalize_image(img: np.array,
         img = np.transpose(img, np.argsort(band_order))
     img = img.astype(np.uint8)
     return img
+
+
+def limit_size(image_size: Union[Iterable[int], int],
+               max_size: Union[Iterable[int], int]) -> Tuple[int, int]:
+    '''
+        Receives a current "image_size" and a "max_size" the image should be limited to in size and
+        returns a tuple of size values that correspond to the maximum allowed size while maintaining
+        the image's aspect ratio.
+    '''
+    if image_size is None or max_size is None:
+        return tuple(image_size)
+    if isinstance(image_size, int):
+        image_size = [image_size, image_size]
+    elif len(image_size) != 2:
+        image_size = [image_size[0], image_size[0]]
+    if isinstance(max_size, int):
+        max_size = [max_size, max_size]
+    elif len(max_size) != 2:
+        max_size = [max_size[0], max_size[0]]
+    if any(val <= 0 for val in max_size) or \
+        all(image_size[idx] <= max_size[idx] for idx in (0,1)):
+        return tuple(image_size)
+    base = int(image_size[0] < image_size[1])
+    ratio = float(image_size[1-base])/image_size[base]
+    out_size = [int(max_size[base]), int(max_size[base]*ratio)]
+    if base > 0:
+        out_size = [out_size[1], out_size[0]]
+    return tuple(out_size)
 
 
 
@@ -393,14 +421,13 @@ class GDALImageDriver(AbstractImageDriver):
             geospatial registration info.
         '''
         meta = DEFAULT_IMAGE_METADATA
-        if 'window' in kwargs and kwargs['window'] is not None:
+        window = kwargs.get('window', None)
+        if isinstance(kwargs.get('window', None), Iterable):
             # crop
             window = cls.window(*kwargs['window'])
-        else:
-            window = None
         if isinstance(obj, cls.driver.DatasetReader):
             f_raster = obj
-        if isinstance(obj, str):
+        elif isinstance(obj, str):
             f_raster = cls.driver.open(obj, 'r')
         else:
             with cls.memfile(bytesio_to_bytea(obj)) as memfile:
@@ -433,46 +460,65 @@ class GDALImageDriver(AbstractImageDriver):
         return size
 
     @classmethod
-    def load_from_disk(cls, file_path, **kwargs):
-        if 'window' in kwargs and kwargs['window'] is not None:
+    def _load(cls, reader, return_metadata, **kwargs):
+        if kwargs is None:
+            kwargs = {}
+        if isinstance(kwargs.get('window', None), Iterable):
             # crop
             window = cls.window(*kwargs['window'])
         else:
             window = None
+        if isinstance(kwargs.get('max_size', None), (Iterable, int)):
+            max_size = kwargs['max_size']
+            if isinstance(max_size, int):
+                max_size = (max_size, max_size)
+        else:
+            max_size = None
+        bands = kwargs.get('bands', None)
+        if bands is not None:
+            if isinstance(bands, int):
+                bands = [bands]
+            bands = [band+1 for band in bands]
+        if window is not None:
+            out_shape = limit_size([window.height, window.width], max_size)
+        else:
+            out_shape = limit_size([reader.height, reader.width], max_size)
+        data = reader.read(indexes=bands,
+                           window=window,
+                           out_shape=out_shape,
+                           resampling=kwargs.get('resampling', 0),    # 0: nearest
+                           boundless=True)
+        if return_metadata:
+            profile, meta = reader.profile, reader.meta
+            profile.update(cls.metadata(reader, window=window))
+            profile.update({
+                'width': data.shape[2],
+                'height': data.shape[1],
+                'count': data.shape[0]
+            })
+            meta.update({
+                'width': data.shape[2],
+                'height': data.shape[1],
+                'count': data.shape[0]
+            })
+            meta.update(kwargs)
+            return data, profile, meta
+        return data
+
+    @classmethod
+    def load_from_disk(cls, file_path, **kwargs):
         with cls.driver.open(file_path, 'r') as f_raster:
-            raster = f_raster.read(window=window, boundless=True)
-            return_metadata = kwargs.get('return_metadata', False)
-            if return_metadata:
-                profile = cls.metadata(f_raster, window=window)
-
-            bands = kwargs.get('bands', None)
-            if bands is not None:
-                raster = band_selection(raster, bands)
-                profile['count'] = len(bands)
-
-            if return_metadata:
+            raster, profile, _ = cls._load(f_raster, True, **kwargs)
+            if kwargs.get('return_metadata', False):
                 return raster, profile
             return raster
 
     @classmethod
     def load_from_bytes(cls, bytea, **kwargs):
-        if 'window' in kwargs and kwargs['window'] is not None:
-            # crop
-            window = cls.window(*kwargs['window'])
-        else:
-            window = None
         with cls.memfile(bytesio_to_bytea(bytea)) as memfile:
             with memfile.open() as f_raster:
-                raster = f_raster.read(window=window, boundless=True)
-                return_metadata = kwargs.get('return_metadata', False)
-                if return_metadata:
-                    profile = cls.metadata(f_raster, window=window)
-                bands = kwargs.get('bands', None)
-                if bands is not None:
-                    raster = band_selection(raster, bands)
-                    profile['count'] = len(bands)
-
-                if return_metadata:
+                raster, profile, _ = cls._load(f_raster, True, **kwargs)
+                if kwargs.get('return_metadata', False):
                     return raster, profile
                 return raster
 
@@ -524,27 +570,8 @@ class GDALImageDriver(AbstractImageDriver):
 
     @classmethod
     def disk_to_bytes(cls, file_path, **kwargs):
-        if 'window' in kwargs and kwargs['window'] is not None:
-            # crop
-            window = cls.window(*kwargs['window'])
-        else:
-            window = None
         with cls.driver.open(file_path, 'r') as f_raster:
-            data = f_raster.read(window=window, boundless=True)
-            profile, meta = f_raster.profile, f_raster.meta
-        if window is not None:
-            profile['width'] = window.width
-            profile['height'] = window.height
-            meta['width'] = window.width
-            meta['height'] = window.height
-
-        meta.update(kwargs)
-
-        bands = kwargs.get('bands', None)
-        if bands is not None:
-            data = band_selection(data, bands)
-            profile['count'] = len(bands)
-            meta['count'] = len(bands)
+            data, profile, meta = cls._load(f_raster, True, **kwargs)
 
         with cls.memfile() as memfile:
             with memfile.open(**meta) as rst:

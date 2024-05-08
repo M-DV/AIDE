@@ -1,7 +1,7 @@
 /**
  * Handles different formats of images.
  * 
- * 2021 Benjamin Kellenberger
+ * 2021-24 Benjamin Kellenberger
  */
 
 
@@ -189,11 +189,14 @@ class WebImageParser {
             let self = this;
             if(this.sourceType === 'uri') {
                 // we now perform band selection on the server; add bands directly
-                let bands = [       //TODO: grayscale
-                    window.renderConfig['bands']['indices']['red'],
-                    window.renderConfig['bands']['indices']['green'],
-                    window.renderConfig['bands']['indices']['blue']
-                ];
+                let bands = [0,1,2];
+                if(window.renderConfig !== undefined) {
+                    bands = [       //TODO: grayscale
+                        window.renderConfig['bands']['indices']['red'],
+                        window.renderConfig['bands']['indices']['green'],
+                        window.renderConfig['bands']['indices']['blue']
+                    ];
+                }
                 let source = self.source +
                     (self.source.includes('?') ? '&' : '?') + 'bands=' +
                         `${bands[0]},${bands[1]},${bands[2]}`;
@@ -321,11 +324,14 @@ class TIFFImageParser extends WebImageParser {
             self.size = [];
             if(self.sourceType === 'uri') {
                 // we now perform band selection on the server; add bands directly
-                let bands = [       //TODO: grayscale
-                    window.renderConfig['bands']['indices']['red'],
-                    window.renderConfig['bands']['indices']['green'],
-                    window.renderConfig['bands']['indices']['blue']
-                ];
+                let bands = [0,1,2];
+                if(window.renderConfig !== undefined) {
+                    bands = [       //TODO: grayscale
+                        window.renderConfig['bands']['indices']['red'],
+                        window.renderConfig['bands']['indices']['green'],
+                        window.renderConfig['bands']['indices']['blue']
+                    ];
+                }
                 let source = self.source +
                     (self.source.includes('?') ? '&' : '?') + 'bands=' +
                         `${bands[0]},${bands[1]},${bands[2]}`;

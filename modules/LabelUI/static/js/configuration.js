@@ -1,7 +1,7 @@
 /*
     Retrieves global project settings, such as the class definitions and the data query URI, from the server.
 
-    2019-20 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 */
 
 
@@ -35,6 +35,7 @@ window.getProjectSettings = function() {
         if(window.aiControllerURI != null && !window.aiControllerURI.endsWith('/')) {
             window.aiControllerURI += '/';
         }
+        window.maxImageSize = data['settings']['maxImageSize'];
         window.dataType = 'images';
         window.minObjSize = data['settings']['minObjSize'];
         window.classes = data['settings']['classes'];

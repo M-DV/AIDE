@@ -1,7 +1,7 @@
 /*
     Definition of a data entry, as shown on a grid on the screen.
 
-    2019-23 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
  */
 
 class AbstractDataEntry {
@@ -12,13 +12,20 @@ class AbstractDataEntry {
         this.entryID = entryID;
         this.canvasID = entryID + '_canvas';
         this.fileName = properties['fileName'];
+        let suffix = '';
         this.window = [properties['w_x'], properties['w_y'], properties['w_width'], properties['w_height']];       // for virtual views
         if(!this.window.every(function(v){return Number.isInteger(v)})) {
             this.window = null;
         } else {
             // append window information to file name
-            this.fileName += '?window=' + this.window[0] + ',' + this.window[1] + ',' + this.window[2] + ',' + this.window[3];
+            suffix += '?window=' + this.window[0] + ',' + this.window[1] + ',' + this.window[2] + ',' + this.window[3];
         }
+        let maxImageSize = window.maxImageSize;
+        if(Array.isArray(maxImageSize) && maxImageSize.every(function(v){return Number.isInteger(v)})) {
+            suffix += suffix.length > 0 ? `&maxsize=${maxImageSize[0]},${maxImageSize[1]}` :
+                        `?maxsize=${maxImageSize[0]},${maxImageSize[1]}`;
+        }
+        this.fileName += suffix;
         this.isGoldenQuestion = ( typeof(properties['isGoldenQuestion']) === 'boolean' ? properties['isGoldenQuestion'] : false);
         this.isBookmarked = ( typeof(properties['isBookmarked']) === 'boolean' ? properties['isBookmarked'] : false);
         this.numInteractions = 0;

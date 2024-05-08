@@ -40,7 +40,7 @@ class AIDEAdmin(Module):
         self.middleware = AdminMiddleware(config, db_connector)
 
         # ping connected AIController, FileServer, etc. servers and check version
-        self.middleware.getServiceDetails(verbose_start, verbose_start)
+        self.middleware.get_service_details(verbose_start, verbose_start)
 
         # read AIDE admin templates
         with open(os.path.abspath(os.path.join(self.static_dir, 'templates/aideAdmin.html')),
@@ -113,7 +113,7 @@ class AIDEAdmin(Module):
             try:
                 if not self.login_check(superuser=True):
                     return redirect('/')
-                return {'details': self.middleware.getServiceDetails()}
+                return {'details': self.middleware.get_service_details()}
             except Exception:
                 abort(404, 'not found')
 
@@ -123,7 +123,7 @@ class AIDEAdmin(Module):
             try:
                 if not self.login_check(superuser=True):
                     return redirect('/')
-                return {'details': self.middleware.getCeleryWorkerDetails()}
+                return {'details': self.middleware.get_celery_worker_details()}
             except Exception:
                 abort(404, 'not found')
 
@@ -133,7 +133,7 @@ class AIDEAdmin(Module):
             try:
                 if not self.login_check(superuser=True):
                     return redirect('/')
-                return {'details': self.middleware.getProjectDetails()}
+                return {'details': self.middleware.get_project_details()}
             except Exception:
                 abort(404, 'not found')
 
@@ -143,7 +143,7 @@ class AIDEAdmin(Module):
             try:
                 if not self.login_check(superuser=True):
                     return redirect('/')
-                return {'details': self.middleware.getUserDetails()}
+                return {'details': self.middleware.get_user_details()}
             except Exception:
                 abort(404, 'not found')
 
@@ -156,8 +156,8 @@ class AIDEAdmin(Module):
 
                 try:
                     data = request.json
-                    status = self.middleware.setCanCreateProjects(data['username'],
-                                                                  data['canCreateProjects'])
+                    status = self.middleware.set_can_create_projects(data['username'],
+                                                                     data['canCreateProjects'])
                     return {'response': status}
                 except Exception as exc:
                     return {

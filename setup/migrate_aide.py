@@ -2,7 +2,7 @@
     Run this file whenever you update AIDE to bring your existing project setup up-to-date
     with respect to changes due to newer versions.
 
-    2019-23 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import os
@@ -22,7 +22,8 @@ MODIFICATIONS_sql = [
     '''DO $$
         BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'labeltype') THEN
-                create type labelType AS ENUM ('labels', 'points', 'boundingBoxes', 'segmentationMasks');
+                CREATE type labelType
+                    AS ENUM ('labels', 'points', 'boundingBoxes', 'polygons', 'segmentationMasks');
             END IF;
         END
         $$;''',
@@ -238,7 +239,7 @@ MODIFICATIONS_sql = [
         COST 4;
   ''',
   '''
-    CREATE OR REPLACE VIEW "{schema}".fileHierarchy AS (
+    CREATE OR REPLACE VIEW "{schema}".filehierarchy AS (
         SELECT DISTINCT
         CASE WHEN position('/' IN filename) = 0 THEN null
         ELSE left(filename, strposrev(filename, '/')-1) END
@@ -373,7 +374,7 @@ MODIFICATIONS_sql = [
                 SELECT COUNT(1) FROM information_schema.columns
                 WHERE table_schema='{schema}' AND table_name='image' AND column_name='extent'
             ) = 0
-        THEN PERFORM AddGeometryColumn('{schema}', 'image', 'extent', 4326, 'POLYGON', 2, true);
+        THEN PERFORM AddGeometryColumn('{schema}', 'image', 'extent', 0, 'POLYGON', 2, true);
         END IF;
     END $$;
   ''',

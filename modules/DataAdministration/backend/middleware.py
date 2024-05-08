@@ -71,7 +71,7 @@ class DataAdministrationMiddleware:
             SELECT folder FROM {}
             ORDER BY folder ASC;
         ''').format(
-            sql.Identifier(html.escape(project), 'fileHierarchy')
+            sql.Identifier(html.escape(project), 'filehierarchy')
         ), None, 'all')
         if folder_names is not None and len(folder_names):
             for folder_name in folder_names:

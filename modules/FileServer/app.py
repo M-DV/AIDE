@@ -79,6 +79,9 @@ class FileServer(Module):
             file_path = os.path.join(self.static_dir, project, path)
             need_conversion = not is_web_compatible(file_path)
             window = request.params.get('window', None)
+            max_size = request.params.get('maxsize', None)
+            if isinstance(max_size, str):
+                max_size = [int(val) for val in max_size.strip().split(',')]
             bands = request.params.get('bands', None)
             if need_conversion or window is not None or bands is not None:
                 # load from disk and crop
@@ -89,6 +92,8 @@ class FileServer(Module):
                 if isinstance(bands, str):
                     bands = [int(band) for band in bands.strip().split(',')]
                     driver_kwargs['bands'] = bands
+                #TODO
+                driver_kwargs['max_size'] = max_size
 
                 # check if file needs conversion
                 if need_conversion:

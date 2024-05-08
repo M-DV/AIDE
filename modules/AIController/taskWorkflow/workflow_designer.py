@@ -73,6 +73,47 @@ from .defaultOptions import DEFAULT_WORKFLOW_ARGS
 
 
 
+# for backwards compatibility
+KEYWORD_MAP =  (
+    ('numEpochs', 'num_epochs'),
+    ('minTimestamp', 'min_timestamp'),
+    ('includeGoldenQuestions', 'include_golden_questions'),
+    ('goldenQuestionsOnly', 'golden_questions_only'),
+    ('forceUnlabeled', 'force_unlabeled'),
+    ('minNumAnnoPerImage', 'min_num_anno_per_image'),
+    ('maxNumImages', 'max_num_images'),
+    ('numWorkers', 'num_workers'),
+    ('modelStateID', 'model_state_id'),
+    ('modelStateIDs', 'model_state_ids'),
+    ('modelLibraries', 'model_libraries'),
+    ('skipImportedModels', 'skip_imported_models'),
+    ('skipLatest', 'skip_latest'),
+    ('isSubset', 'is_subset'),
+    ('aiModelSettings', 'ai_model_settings'),
+    ('alCriterionSettings', 'al_criterion_settings')
+)
+
+
+
+def update_defs(workflow: dict) -> dict:
+    '''
+        Receives a "workflow" dict and updates its definition keywords from the old, camel (Pascal)
+        case to the new snake case style. Used for backwards compatibility with older, saved
+        workflows.
+    '''
+    for task in workflow.get('tasks', []):
+        task_kwargs = task.get('kwargs', {})
+        if task_kwargs is None or len(task_kwargs) == 0:
+            continue
+        for (key_old, key_new) in KEYWORD_MAP:
+            if key_old not in task_kwargs or key_new in task_kwargs:
+                continue
+            task_kwargs[key_new] = task_kwargs.get(key_old, None)
+        task['kwargs'] = task_kwargs
+    return workflow
+
+
+
 def expand_from_name(index: int,
                      project: str,
                      task_name: str,
@@ -159,17 +200,17 @@ def get_training_signature(project: str,
 
         img_task_kwargs = {'project': project,
                            'epoch': epoch,
-                           'numEpochs': num_epochs,
-                           'minTimestamp': task_args['min_timestamp'],
-                           'includeGoldenQuestions': task_args['include_golden_questions'],
-                           'minNumAnnoPerImage': min_num_anno_per_image,
-                           'maxNumImages': max_num_images,
-                           'numWorkers': num_workers}
+                           'num_epochs': num_epochs,
+                           'min_timestamp': task_args['min_timestamp'],
+                           'include_golden_questions': task_args['include_golden_questions'],
+                           'min_num_anno_per_image': min_num_anno_per_image,
+                           'max_num_images': max_num_images,
+                           'num_workers': num_workers}
         if is_first_node:
             # first node: prepend update model task and fill blank
             img_task_kwargs['blank'] = None
             update_model_kwargs = {'project': project,
-                                   'numEpochs': num_epochs,
+                                   'num_epochs': num_epochs,
                                    'blank': None}
             task_list.append(
                 celery.group([
@@ -184,18 +225,18 @@ def get_training_signature(project: str,
 
         train_args = {
             'epoch': epoch,
-            'numEpochs': num_epochs,
+            'num_epochs': num_epochs,
             'project': project,
-            'aiModelSettings': ai_model_settings
+            'ai_model_settings': ai_model_settings
         }
 
     else:
         train_args = {
             'data': task_args['data'],
             'epoch': epoch,
-            'numEpochs': num_epochs,
+            'num_epochs': num_epochs,
             'project': project,
-            'aiModelSettings': ai_model_settings
+            'ai_model_settings': ai_model_settings
         }
 
     if num_workers > 1:
@@ -207,10 +248,11 @@ def get_training_signature(project: str,
         task_list.append(
             celery.chord(
                 train_tasks,
-                aiw_int.call_average_model_states.si(**{'epoch': epoch,
-                            'numEpochs': num_epochs,
-                            'project': project,
-                            'aiModelSettings': ai_model_settings}).set(queue='AIWorker')
+                aiw_int.call_average_model_states.si(
+                        **{'epoch': epoch,
+                           'num_epochs': num_epochs,
+                           'project': project,
+                           'ai_model_settings': ai_model_settings}).set(queue='AIWorker')
             )
         )
     else:
@@ -251,16 +293,16 @@ def get_inference_signature(project: str,
         # no list of images provided; prepend getting inference images
         img_task_kwargs = {'project': project,
                            'epoch': epoch,
-                           'numEpochs': num_epochs,
-                           'goldenQuestionsOnly': task_args['golden_questions_only'],
-                           'maxNumImages': max_num_images,
-                           'numWorkers': num_workers}
+                           'num_epochs': num_epochs,
+                           'golden_questions_only': task_args['golden_questions_only'],
+                           'max_num_images': max_num_images,
+                           'num_workers': num_workers}
         if is_first_node:
             # first task to be executed; prepend model update and fill blanks
             img_task_kwargs['blank'] = None
             update_model_kwargs = {'project': project,
-                                'numEpochs': num_epochs,
-                                'blank': None}
+                                   'num_epochs': num_epochs,
+                                   'blank': None}
             task_list.append(
                 celery.group([
                     aic_int.get_inference_images.s(**img_task_kwargs).set(queue='AIController'),
@@ -274,20 +316,20 @@ def get_inference_signature(project: str,
 
         inference_args = {
             'epoch': epoch,
-            'numEpochs': num_epochs,
+            'num_epochs': num_epochs,
             'project': project,
-            'aiModelSettings': ai_model_settings,
-            'alCriterionSettings': al_criterion_settings
+            'ai_model_settings': ai_model_settings,
+            'al_criterion_settings': al_criterion_settings
         }
 
     else:
         inference_args = {
             'data': task_args['data'],
             'epoch': epoch,
-            'numEpochs': num_epochs,
+            'num_epochs': num_epochs,
             'project': project,
-            'aiModelSettings': ai_model_settings,
-            'alCriterionSettings': al_criterion_settings
+            'ai_model_settings': ai_model_settings,
+            'al_criterion_settings': al_criterion_settings
         }
 
     if num_workers > 1:
@@ -416,6 +458,8 @@ class WorkflowDesigner:
             workflow = json.loads(workflow)
         if not 'options' in workflow:
             workflow['options'] = {}    # for compatibility
+
+        workflow = update_defs(workflow)
 
         # get number of available workers
         num_workers_max = self._get_num_available_workers()

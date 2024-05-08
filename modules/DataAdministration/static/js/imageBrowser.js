@@ -1,9 +1,10 @@
 /*
-    JS module for displaying a given list of images,
-    either in list view, or with thumbnails.
+    JS module for displaying a given list of images, either in list view, or with thumbnails.
 
-    2020-22 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 */
+
+const MAX_IMAGE_SIZE = [640, 480];
 
 var randomUID = function() {
     return new Date().toString() + Math.random().toString(36).substring(7);
@@ -68,6 +69,9 @@ class ImageEntry {
         } else {
             this.imageURL = this.data['url'];
         }
+        // add size restriction
+        this.imageURL += (this.imageURL.includes('?') ? '&' : '?') + 
+                            `maxSize=${MAX_IMAGE_SIZE[1]},${MAX_IMAGE_SIZE[0]}`;
 
         this.checkbox = undefined;
         this.image = undefined;
@@ -100,7 +104,9 @@ class ImageEntry {
         // get ImageRenderer to create canvas from source
         let fullImagePath = this.baseURL+this.imageURL;
         if(typeof(getParserByExtension) === 'function') {
-            let parserClass = getParserByExtension(this.imageURL.substring(this.imageURL.lastIndexOf('.')));
+            let substrStart = this.imageURL.lastIndexOf('.');
+            let substrEnd = this.imageURL.includes('?') ? this.imageURL.lastIndexOf('?') : null;
+            let parserClass = getParserByExtension(this.imageURL.substring(substrStart, substrEnd));
             if(parserClass !== undefined) {
                 let parser = new parserClass(fullImagePath);
                 let self = this;

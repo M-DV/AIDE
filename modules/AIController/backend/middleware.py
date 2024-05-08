@@ -299,7 +299,7 @@ class AIMiddleware:
 
         # check if AIController worker and AIWorker are connected
         aic_w, aiw_w = {}, {}
-        workers = celeryWorkerCommons.getCeleryWorkerDetails()
+        workers = celeryWorkerCommons.get_celery_worker_details()
         for w_key in workers.keys():
             try:
                 worker = workers[w_key]

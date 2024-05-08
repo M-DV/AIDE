@@ -24,9 +24,9 @@ class DBMiddleware():
     '''
         Label UI middleware, performing communication between frontend and the database.
     '''
-    def __init__(self, config, dbConnector) -> None:
+    def __init__(self, config, db_connector) -> None:
         self.config = config
-        self.db_connector = dbConnector
+        self.db_connector = db_connector
 
         # project settings that cannot be changed (project shorthand -> {settings})
         self.project_immutables = {}
@@ -49,8 +49,20 @@ class DBMiddleware():
                                                  dtype=str,
                                                  fallback='/'),
             'dataServerURI': self.config.get_property('Server', 'dataServer_uri'),
-            'aiControllerURI': ai_controller_uri
+            'aiControllerURI': ai_controller_uri,
+
         }
+        max_image_size = (self.config.get_property('LabelUI',
+                                                   'max_image_height',
+                                                   dtype=int,
+                                                   fallback=None),
+                          self.config.get_property('LabelUI',
+                                                   'max_image_width',
+                                                   dtype=int,
+                                                   fallback=None))
+        if all(val is None for val in max_image_size):
+            self.max_image_size = None
+        self.global_settings['maxImageSize'] = max_image_size
 
         # default styles
         try:
@@ -144,8 +156,7 @@ class DBMiddleware():
             self.db_connector.execute(query_str, (now, tuple(vals),), None)
 
 
-    def _get_sample_metadata(self,
-                             meta_type: str) -> dict:
+    def _get_sample_metadata(self, meta_type: str) -> dict:
         '''
             Returns a dummy annotation or prediction for the sample image in the "exampleData"
             folder, depending on the "metaType" specified (i.e., labels, points, boundingBoxes, or
@@ -192,11 +203,11 @@ class DBMiddleware():
         return {}
 
 
-    def get_project_immutables(self,
-                               project: str) -> dict:
+    def get_project_immutables(self, project: str) -> dict:
         '''
             Returns project properties that are immutable (currently: the project's annotation and
-            prediction types). Caches values for reduced database access in future.
+            prediction types). Caches values
+            for reduced database access in future.
 
             Args:
                 - "project": str, project shortname
@@ -218,8 +229,7 @@ class DBMiddleware():
         return self.project_immutables[project]
 
 
-    def get_project_ui_settings(self,
-                                project: str) -> dict:
+    def get_project_ui_settings(self, project: str) -> dict:
         '''
             Returns the project's user interface settings).
 
@@ -240,8 +250,7 @@ class DBMiddleware():
         return result
 
 
-    def get_project_settings(self,
-                             project: str) -> dict:
+    def get_project_settings(self, project: str) -> dict:
         '''
             Queries the database for general project-specific metadata, such as:
             - Classes: names, indices, default colors
@@ -269,8 +278,7 @@ class DBMiddleware():
         return proj_settings
 
 
-    def get_project_info(self,
-                         project: str) -> dict:
+    def get_project_info(self, project: str) -> dict:
         '''
             Returns safe, shareable information about the project
             (i.e., users don't need to be part of the project to see these data).

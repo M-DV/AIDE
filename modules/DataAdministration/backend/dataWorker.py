@@ -63,6 +63,7 @@ class DataWorker:
                                                  dtype=str,
                                                  fallback=tempfile.gettempdir())
 
+        self.project_data = {}          # cache for immutable project data
         self.upload_sessions = {}
 
 
@@ -82,6 +83,15 @@ class DataWorker:
             return transform, extent, size, crs
         except Exception:
             return None, None, None, None
+
+
+    def _get_project_srid(self, project: str) -> int:
+        if project not in self.project_data:
+            srid = geospatial.get_project_srid(self.db_connector, project)
+            if srid <= 0:
+                srid = None
+            self.project_data[project] = srid
+        return self.project_data[project]
 
 
     def aide_internal_notify(self, message: str) -> None:
@@ -572,7 +582,7 @@ class DataWorker:
         meta = self.upload_sessions[session_id]
 
         # load geospatial project metadata
-        srid = geospatial.get_project_srid(self.db_connector, project)
+        srid = self._get_project_srid(project)
 
         # temp dir to save raw files to
         tempRoot = os.path.join(meta['sessionDir'], 'files')

@@ -1,5 +1,6 @@
 # Installing AIDE
 
+* [Compatibility](#compatibility)
 * [New installation](#new-installation)
     * [Microsoft Windows](#microsoft-windows)
         * [With the Installer](#with-the-installer)
@@ -14,6 +15,29 @@
 * [Migration from previous versions of AIDE](#migration-from-previous-versions-of-aide)
     * [from AIDE v1](#from-aide-v1)
     * [from AIDE v2](#from-aide-v2)
+
+
+
+## Compatibility
+
+Below is a compatibility matrix of operating systems (OS), Python, and PyTorch:
+
+| **OS** | **Python** | **PyTorch** | **verified** | **comments** |
+|---|---|---|---|---|
+| Ubuntu 20.04 LTS to 22.04 LTS | 3.7 to 3.11 | 1.12.1 to 2.3.0 | ✅ | Python 3.10 and above: Detectron2 requires GCC ver. 9 or higher. |
+| macOS 11 to 14.4.1 | 3.9 to 3.11 | 2.0.0 to 2.3.0 | ✅ | Python 3.8 and below cause problems with imagecodecs library under macOS with Apple Silicon:  [see here](https://github.com/cgohlke/imagecodecs/issues/72). |
+| Microsoft Windows 10 | 3.7 to 3.11 | 1.12.1 to 2.3.0 |  | Requires WSL2 |
+
+
+_Note:_ You can help complete these compatibility matrices! Since we cannot test every possible
+hard- and software combination, we would love to hear feedback regarding experiences and (in-)
+compatibilities. Please report the following:
+* Installation log (as produced by the installer)
+* Terminal/command line output (as much as is available; make sure to remove sensitive information)
+* Information about your operating system (Linux: `uname -a`; macOS: `sw_vers`), as well as versions
+  of Python (`python -V`) and CUDA (`nvidia-smi`).
+
+Thank you very much!
 
 
 

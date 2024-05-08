@@ -1,38 +1,14 @@
 # Manual installation for Debian/Ubuntu
 
 Follow these instructions if you are encountering issues with the
-[installer](install_overview.md#Debian-) or would like to take full control over which components
+[installer](install_overview.md#with-the-installer-2) or would like to take full control over which components
 you want to install.
 
-## Requirements
-
-All AIDE modules (bar the database) require the libraries as specified in the
-[requirements.txt](/requirements.txt).
-
-If you have a CUDA-capable GPU it is highly recommended to install PyTorch with GPU support (see the
-[official website](https://pytorch.org/get-started/locally/)).
 
 
-### Compatibility
+## Compatibility
 
-Below is a compatibility matrix of operating systems (OS), Python, and PyTorch:
-
-| **OS** | **Python** | **PyTorch** | **verified** | **comments** |
-|---|---|---|---|---|
-| Ubuntu 20.04 LTS to 22.04 LTS | 3.7 to 3.11 | 1.12.1 to 2.3.0 | ✅ | Python 3.10 and above: Detectron2 requires GCC ver. 9 or higher. |
-| macOS 11 to 14.4.1 | 3.9 to 3.11 | 2.0.0 to 2.3.0 | ✅ | Python 3.8 and below cause problems with imagecodecs library under macOS with Apple Silicon:  [see here](https://github.com/cgohlke/imagecodecs/issues/72). |
-| Microsoft Windows 10 | 3.7 to 3.11 | 1.12.1 to 2.3.0 |  | Requires WSL2 |
-
-
-_Note:_ You can help complete these compatibility matrices! Since we cannot test every possible
-hard- and software combination, we would love to hear feedback regarding experiences and (in-)
-compatibilities. Please report the following:
-* Installation log (as produced by the installer)
-* Terminal/command line output (as much as is available; make sure to remove sensitive information)
-* Information about your operating system (Linux: `uname -a`; macOS: `sw_vers`), as well as versions
-  of Python (`python -V`) and CUDA (`nvidia-smi`).
-
-Thank you very much!
+See [here](install_overview.md#compatibility).
 
 
 
@@ -79,10 +55,13 @@ environment, such as [Conda](https://conda.io/) (recommended and used below) or
     pip install -U -r requirements.txt
 ```
 
-Note: script `install/get_pytorch_version.py` attempts to auto-detect compatible PyTorch and
-Torchvision versions based on currently installed Python version (and CUDA, if available and
-specified). If this fails, you may try and install PyTorch and dependencies manually as per
+Notes:
+* Script `install/get_pytorch_version.py` attempts to auto-detect compatible PyTorch and Torchvision
+versions based on currently installed Python version (and CUDA, if available and specified). If this
+fails, you may try and install PyTorch and dependencies manually as per
 [official guidelines](https://pytorch.org/get-started/previous-versions/).
+* If you have a CUDA-capable GPU it is highly recommended to install PyTorch with GPU support (see
+the [official website](https://pytorch.org/get-started/locally/)).
 
 
 ### Create the settings.ini file

@@ -39,6 +39,21 @@ This section contains parameters for all the individual instances' addresses.
 | create_account_token | (string) |  |  | A custom string of (preferably) random characters required to be known to users who would like to create a new account on the project page. This is to make the project semi-secret. If this value is set, the webpage to create a new account can be accessed as follows: `http://<hostname>/createAccount?t=<create_account_token>`, substituting the expressions in angular brackets accordingly. If left out, a new account can be created by simply visiting:  `http://<hostname>/createAccount`. |
 
 
+## [LabelUI]
+
+| Name | Values | Default value | Required | Comments |
+|-|-|-|-|-|
+
+| max_image_width | (numeric) | 2000 | NO | Maximum image width in pixels as
+served to the frontend. Set to a reasonable value to accelerate data serving to Web clients and
+  prevent Web browsers running out of memory. If provided, images will be resized so that their
+  longer side matches its respective maximum value, with the images' aspect ratios preserved. Also
+  applies to windows if image in project is split accordingly. Note that these settings only applies
+  to the Web frontend, not to the AI models, nor does it modify image files themselves. Omit values
+  or set either or both of them to value <= 0 to disable. | | max_image_height | (numeric) | 2000 |
+NO | Ditto, for maximum image height. If neither value is provided or any of the values is <= 0,
+image size will be unrestricted. If only one is provided, it will be copied over to the other. |
+
 
 ## [AIController]
 

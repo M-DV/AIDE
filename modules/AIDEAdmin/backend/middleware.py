@@ -1,7 +1,4 @@
 '''
-    Middleware for administrative functionalities
-    of AIDE.
-
     2020-24 Benjamin Kellenberger
 '''
 
@@ -9,39 +6,41 @@ import os
 import datetime
 import requests
 from psycopg2 import sql
-from celery import current_app
+# from celery import current_app
+
 from constants.version import AIDE_VERSION, MIN_FILESERVER_VERSION, compare_versions
 from util import celeryWorkerCommons
 from util.logDecorator import LogDecorator
 from util.helpers import is_localhost
 
 
+
 class AdminMiddleware:
-
-    def __init__(self, config, dbConnector):
+    '''
+        Middleware for administrative functionalities of AIDE.
+    '''
+    def __init__(self, config, db_connector) -> None:
         self.config = config
-        self.dbConnector = dbConnector
+        self.db_connector = db_connector
 
 
-    def getServiceDetails(self, verbose=False, raise_error=False):
+    def get_service_details(self,
+                            verbose: bool=False,
+                            raise_error: bool=False) -> dict:
         '''
-            Queries the indicated AIController and FileServer
-            modules for availability and their version. Returns
-            metadata about the setup of AIDE accordingly.
-            Raises an Exception if not running on the main host.
-            If "verbose" is True, a warning statement is printed
-            to the command line if the version of AIDE on the attached
-            AIController and/or FileServer is not the same as on the
-            host, or if the servers cannot be contacted.
-            If "raise_error" is True, an Exception is being thrown at
-            the first error occurrence.
+            Queries the indicated AIController and FileServer modules for availability and their
+            version. Returns metadata about the setup of AIDE accordingly. Raises an Exception if
+            not running on the main host. If "verbose" is True, a warning statement is printed to
+            the command line if the version of AIDE on the attached AIController and/or FileServer
+            is not the same as on the host, or if the servers cannot be contacted. If "raise_error"
+            is True, an Exception is being thrown at the first error occurrence.
         '''
         if verbose:
             print('Contacting AIController...'.ljust(LogDecorator.get_ljust_offset()), end='')
 
         # check if running on the main host
         modules = os.environ['AIDE_MODULES'].strip().split(',')
-        modules = set([m.strip() for m in modules])
+        modules = set(module.strip() for module in modules)
         if not 'LabelUI' in modules:
             # not running on main host
             raise Exception('Not a main host; cannot query service details.')
@@ -58,7 +57,8 @@ class AdminMiddleware:
         if not is_localhost(aic_uri):
             # AIController runs on a different machine; poll for version of AIDE
             try:
-                aic_response = requests.get(os.path.join(aic_uri, 'version'))
+                aic_response = requests.get(os.path.join(aic_uri, 'version'),
+                                            timeout=60)
                 aic_version = aic_response.text
                 if verbose and aic_version != AIDE_VERSION:
                     LogDecorator.print_status('warn')
@@ -66,16 +66,16 @@ class AdminMiddleware:
                     print(f'\tAIController URI: {aic_uri}')
                     print(f'\tAIController AIDE version:    {aic_version}')
                     print(f'\tAIDE version on this machine: {AIDE_VERSION}')
-                
+
                 elif verbose:
                     LogDecorator.print_status('ok')
-            except Exception as e:
-                message = f'ERROR: could not connect to AIController (message: "{str(e)}").'
+            except Exception as exc:
+                message = f'ERROR: could not connect to AIController (message: "{str(exc)}").'
                 if verbose:
                     LogDecorator.print_status('fail')
                     print(message)
                 if raise_error:
-                    raise Exception(message)
+                    raise Exception(message) from exc
                 aic_version = None
         else:
             aic_version = AIDE_VERSION
@@ -87,7 +87,8 @@ class AdminMiddleware:
         if not is_localhost(fs_uri):
             # same for the file server
             try:
-                fs_response = requests.get(os.path.join(fs_uri, 'version'))
+                fs_response = requests.get(os.path.join(fs_uri, 'version'),
+                                           timeout=60)
                 fs_version = fs_response.text
 
                 # check if version if recent enough
@@ -102,17 +103,17 @@ class AdminMiddleware:
                     LogDecorator.print_status('warn')
                     print('WARNING: AIDE version of connected FileServer differs from main host.')
                     print(f'\tFileServer URI: {fs_uri}')
-                    print(f'\tFileServer AIDE version:       {fs_version}')
+                    print(f'\tFileServer AIDE version:      {fs_version}')
                     print(f'\tAIDE version on this machine: {AIDE_VERSION}')
                 elif verbose:
                     LogDecorator.print_status('ok')
-            except Exception as e:
-                message = f'ERROR: could not connect to FileServer (message: "{str(e)}").'
+            except Exception as exc:
+                message = f'ERROR: could not connect to FileServer (message: "{str(exc)}").'
                 if verbose:
                     LogDecorator.print_status('fail')
                     print(message)
                 if raise_error:
-                    raise Exception(message)
+                    raise Exception(message) from exc
                 fs_version = None
         else:
             fs_version = AIDE_VERSION
@@ -122,21 +123,25 @@ class AdminMiddleware:
         # query database
         if verbose:
             print('Contacting Database...'.ljust(LogDecorator.get_ljust_offset()), end='')
-        dbVersion = None
-        dbInfo = None
+        db_version = None
+        db_info = None
         try:
-            dbVersion = self.dbConnector.execute('SHOW server_version;', None, 1)[0]['server_version']
-            dbVersion = dbVersion.split(' ')[0].strip()
-            dbInfo = self.dbConnector.execute('SELECT version() AS version;', None, 1)[0]['version']
+            db_version = self.db_connector.execute('SHOW server_version;',
+                                                   None,
+                                                   1)[0]['server_version']
+            db_version = db_version.split(' ')[0].strip()
+            db_info = self.db_connector.execute('SELECT version() AS version;',
+                                                None,
+                                                1)[0]['version']
             if verbose:
                 LogDecorator.print_status('ok')
-        except Exception as e:
-            message = f'ERROR: database version ("{str(dbVersion)}") could not be parsed properly.'
+        except Exception as exc:
+            message = f'ERROR: database version ("{str(db_version)}") could not be parsed properly.'
             if verbose:
                 LogDecorator.print_status('warn')
                 print(message)
             if raise_error:
-                raise Exception(message)
+                raise Exception(message) from exc
 
         return {
                 'aide_version': AIDE_VERSION,
@@ -149,30 +154,28 @@ class AdminMiddleware:
                     'aide_version': fs_version
                 },
                 'Database': {
-                    'version': dbVersion,
-                    'details': dbInfo
+                    'version': db_version,
+                    'details': db_info
                 }
             }
 
-    
-    def getCeleryWorkerDetails(self):
+
+    def get_celery_worker_details(self) -> dict:
         '''
-            Queries all Celery workers for their details (name,
-            URL, capabilities, AIDE version, etc.)
+            Queries all Celery workers for their details (name, URL, capabilities, AIDE version,
+            etc.)
         '''
-        return celeryWorkerCommons.getCeleryWorkerDetails()
+        return celeryWorkerCommons.get_celery_worker_details()
 
 
-
-    def getProjectDetails(self):
+    def get_project_details(self) -> dict:
         '''
-            Returns projects and statistics about them
-            (number of images, disk usage, etc.).
+            Returns projects and statistics about them (number of images, disk usage, etc.).
         '''
 
         # get all projects
         projects = {}
-        response = self.dbConnector.execute('''
+        response = self.db_connector.execute('''
                 SELECT shortname, name, owner, annotationtype, predictiontype,
                     ispublic, demomode, ai_model_enabled, interface_enabled, archived,
                     COUNT(username) AS num_users
@@ -182,18 +185,18 @@ class AdminMiddleware:
                 GROUP BY shortname
             ''', None, 'all')
 
-        for r in response:
-            projDef = {}
-            for key in r.keys():
+        for res in response:
+            proj_def = {}
+            for key in res.keys():
                 if key == 'interface_enabled':
-                    projDef[key] = r['interface_enabled'] and not r['archived']
+                    proj_def[key] = res['interface_enabled'] and not res['archived']
                 if key != 'shortname':
-                    projDef[key] = r[key]
-            projects[r['shortname']] = projDef
-        
+                    proj_def[key] = res[key]
+            projects[res['shortname']] = proj_def
+
         # get statistics (number of annotations, predictions, prediction models, etc.)
-        for project in projects.keys():
-            stats = self.dbConnector.execute(sql.SQL('''
+        for p_key, project in projects.items():
+            stats = self.db_connector.execute(sql.SQL('''
                     SELECT COUNT(*) AS count
                     FROM {id_img}
                     UNION ALL
@@ -209,58 +212,58 @@ class AdminMiddleware:
                     SELECT COUNT(*)
                     FROM {id_cnnstate}
                 ''').format(
-                    id_img=sql.Identifier(project, 'image'),
-                    id_anno=sql.Identifier(project, 'annotation'),
-                    id_pred=sql.Identifier(project, 'prediction'),
-                    id_iu=sql.Identifier(project, 'image_user'),
-                    id_cnnstate=sql.Identifier(project, 'cnnstate')
+                    id_img=sql.Identifier(p_key, 'image'),
+                    id_anno=sql.Identifier(p_key, 'annotation'),
+                    id_pred=sql.Identifier(p_key, 'prediction'),
+                    id_iu=sql.Identifier(p_key, 'image_user'),
+                    id_cnnstate=sql.Identifier(p_key, 'cnnstate')
                 ), None, 'all')
-            projects[project]['num_img'] = stats[0]['count']
-            projects[project]['num_anno'] = stats[1]['count']
-            projects[project]['num_pred'] = stats[2]['count']
-            projects[project]['total_viewcount'] = stats[3]['count']
-            projects[project]['num_cnnstates'] = stats[4]['count']
+            project['num_img'] = stats[0]['count']
+            project['num_anno'] = stats[1]['count']
+            project['num_pred'] = stats[2]['count']
+            project['total_viewcount'] = stats[3]['count']
+            project['num_cnnstates'] = stats[4]['count']
 
             # time statistics (last viewed)
-            stats = self.dbConnector.execute(sql.SQL('''
+            stats = self.db_connector.execute(sql.SQL('''
                 SELECT MIN(first_checked) AS first_checked,
                     MAX(last_checked) AS last_checked
                 FROM {id_iu};
             ''').format(
-                id_iu=sql.Identifier(project, 'image_user')
+                id_iu=sql.Identifier(p_key, 'image_user')
             ), None, 1)
             try:
-                projects[project]['first_checked'] = stats[0]['first_checked'].timestamp()
+                project['first_checked'] = stats[0]['first_checked'].timestamp()
             except Exception:
-                projects[project]['first_checked'] = None
+                project['first_checked'] = None
             try:
-                projects[project]['last_checked'] = stats[0]['last_checked'].timestamp()
+                project['last_checked'] = stats[0]['last_checked'].timestamp()
             except Exception:
-                projects[project]['last_checked'] = None
+                project['last_checked'] = None
 
         return projects
 
 
-    def getUserDetails(self):
+    def get_user_details(self) -> dict:
         '''
-            Returns details about the user (name, number of
-            enrolled projects, last activity, etc.).
+            Returns details about the user (name, number of enrolled projects, last activity, etc.).
         '''
         users = {}
-        userData = self.dbConnector.execute('''
+        user_data = self.db_connector.execute('''
                 SELECT name, email, isSuperUser, canCreateProjects,
                     last_login, project, isAdmin, admitted_until, blocked_until
                 FROM aide_admin.user AS u
                 LEFT OUTER JOIN aide_admin.authentication AS auth
                 ON u.name = auth.username
             ''', None, 'all')
-        for ud in userData:
+        for ud in user_data:
             if not ud['name'] in users:
                 users[ud['name']] = {
                     'email': ud['email'],
                     'canCreateProjects': ud['cancreateprojects'],
                     'isSuperUser': ud['issuperuser'],
-                    'last_login': (None if ud['last_login'] is None else ud['last_login'].timestamp()),
+                    'last_login': (None if ud['last_login'] is None \
+                                   else ud['last_login'].timestamp()),
                     'enrolled_projects': {}
                 }
                 if ud['project'] is not None:
@@ -277,32 +280,33 @@ class AdminMiddleware:
         return users
 
 
-    def setCanCreateProjects(self, username, allowCreateProjects):
+    def set_can_create_projects(self,
+                                username: str,
+                                allow_create_projects: bool) -> dict:
         '''
-            Sets or unsets the flag on whether a user
-            can create new projects or not.
+            Sets or unsets the flag on whether a user can create new projects or not.
         '''
         # check if user exists
-        userExists = self.dbConnector.execute('''
+        user_exists = self.db_connector.execute('''
             SELECT * FROM aide_admin.user
             WHERE name = %s;
         ''', (username,), 1)
-        if not len(userExists):
+        if len(user_exists) == 0:
             return {
                 'success': False,
                 'message': f'User with name "{username}" does not exist.'
             }
-        
-        result = self.dbConnector.execute('''
+
+        result = self.db_connector.execute('''
             UPDATE aide_admin.user
             SET cancreateprojects = %s
             WHERE name = %s;
             SELECT cancreateprojects
             FROM aide_admin.user
             WHERE name = %s;
-        ''', (allowCreateProjects, username, username), 1)
+        ''', (allow_create_projects, username, username), 1)
         result = result[0]['cancreateprojects']
         return {
-            'success': (result == allowCreateProjects)
+            'success': (result == allow_create_projects)
         }
         
