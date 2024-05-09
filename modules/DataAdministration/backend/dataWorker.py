@@ -1052,7 +1052,12 @@ class DataWorker:
             for key, img_meta in imgs_warn.items():
                 result[key] = img_meta
                 result[key]['status'] = 2
-            #TODO: do the same for imgs_quarantine:
+
+            # check for remaining files in quarantine
+            for q_value in imgs_quarantine.values():
+                for key, img_meta in q_value.items():
+                    result[key] = img_meta
+
             for key, img_meta in imgs_error.items():
                 # we might need to flatten hierarchy of quarantined auxiliary files that actually
                 # turned out to be errors
@@ -1075,6 +1080,14 @@ class DataWorker:
                         'filename': aux_meta[subkey]['filename'],
                         'message': '(auxiliary file)'
                     }
+        else:
+            # no image but annotation upload; mark all files as pending
+            for key, item in tempFiles.items():
+                result[key] = {
+                    'status': 1,
+                    'filename': item['orig'],
+                    'message': 'file uploaded, analysis pending...'
+                }
 
         # dump list of uploaded and imported images to temporary file
         uploads_path = os.path.join(meta['sessionDir'], 'uploads', now+'.txt')

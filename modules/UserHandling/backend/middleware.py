@@ -109,7 +109,7 @@ class UserMiddleware():
                                 session_token: str=None) -> Tuple[str,float,float]:
         '''
             Establishes a "session" for the user (i.e., sets 'time_login' to now). Also creates a
-            new sessionToken if None provided.
+            new "session_token" if None provided.
         '''
         now = self._current_time()
 
@@ -229,8 +229,7 @@ class UserMiddleware():
             # invalid session token provided; check database if token has updated
             # (can happen if user logs in again from another machine)
             result = self._get_user_data(username)
-            if not self._compare_tokens(result['session_token'],
-                        session_token):
+            if not self._compare_tokens(result['session_token'], session_token):
                 return False
 
             # update local cache
@@ -413,7 +412,6 @@ class UserMiddleware():
             If 'return_all' is True, all individual flags (instead of just a single bool) is
             returned.
         '''
-
         demo_mode = check_demo_mode(project, self.db_connector)
 
         if return_all:

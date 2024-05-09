@@ -741,17 +741,19 @@
                                     window.imageBrowser.set('url', key, imgName);
                                     window.imageBrowser.set('message', key, message);
 
-                                    if(result['status'] < 3) {
+                                    if(result['status'] <= 3) {
                                         uploads_complete[imgName] = 1;      //TODO: technically not complete if only a single patch is uploaded
                                         window.uploadedFiles[key] = 1;
                                     }
                                 }
                                 // update progress bar
-                                numComplete = (Object.keys(uploads_complete).length).toString();
+                                numComplete = Object.keys(uploads_complete).length;
                                 pBar.set(true, numComplete, numFiles);
                                 infoBar.html('uploading... ('+numComplete+'/'+numFiles+' files uploaded)');
                                 if(numComplete >= numFiles) {
                                     pBar.set(false);
+                                    $('#global-progress-bar').hide();
+                                    $('#global-progress-bar').empty();
                                 }
                             // } catch(error) {
                             //     //TODO

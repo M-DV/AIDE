@@ -19,6 +19,7 @@ from util import helpers, drivers
 drivers.init_drivers()
 
 
+
 class SegmentationFileParser(AbstractAnnotationParser):
     '''
         Parser for pixel-wise segmentation rasters.
@@ -26,7 +27,7 @@ class SegmentationFileParser(AbstractAnnotationParser):
 
     NAME = 'Image Files'
     INFO = '<p>Supports pixel-wise annotations in images (e.g., TIFFs)'
-    ANNOTATION_TYPES = ('segmentationMasks')
+    ANNOTATION_TYPES = ('segmentationMasks',)
 
     # pattern that attempts to identify image file name from label file name
     FILE_SUB_PATTERN = r'(\/|\\\\)*.*\/*(images|labels|annotations)(\/|\\\\)*'
@@ -208,6 +209,13 @@ class SegmentationFileParser(AbstractAnnotationParser):
             # load map
             arr = drivers.load_from_disk(os.path.join(self.tempDir, file))
 
+            if isinstance(arr, np.floating):
+                # floating point array, not a segmentation mask
+                warnings.append(
+                    f'File "{file}": floating point image found; skipping...'
+                )
+                continue
+
             # get unique classes across channel dimension
             num_bands = arr.shape[0]
             if num_bands == 1:
@@ -238,6 +246,15 @@ class SegmentationFileParser(AbstractAnnotationParser):
                 # RGB; convert from colors
                 arr_flat = np.reshape(arr, (arr.shape[0], -1))
                 arr_colors = np.unique(arr_flat, axis=1)
+
+                num_unique = arr_colors.shape[1]
+                if num_unique > 255:
+                    # too many unique values; possibly not a segmentation mask after all
+                    warnings.append(
+                        f'File "{file}": too many unique values ({num_unique}); skipping...'
+                    )
+                    continue
+
                 arr_colors = set(tuple(a) for a in arr_colors.T.tolist())
 
                 arr_out = np.zeros(shape=arr.shape[1:3], dtype=np.uint8)
