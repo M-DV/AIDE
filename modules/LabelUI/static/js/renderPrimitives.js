@@ -2225,23 +2225,42 @@ class SegmentationElement extends AbstractRenderElement {
 
     _parse_map(indexedData) {
         /*
-            Receives an array of pixel values corresponding to class
-            indices. Fills the canvas with RGB values of the respective
-            class, or zeros if no class match could be found.
+            Receives an array of pixel values corresponding to class indices. Fills the canvas with
+            RGB values of the respective class, or zeros if no class match could be found.
         */
 
         // get current canvas pixel values for a quick template
         var pixels = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
         var data = pixels.data;
 
+        // account for case where the segmentation mask is not the same size as the image. This
+        // might happen if size limits to images served to the LabelUI ("max_image_width" and
+        // "max_image_height" in the settings.ini file) get changed after a segmentation mask has
+        // been made (which still adheres to the previous size limit values). Since the aspect ratio
+        // stays constant (identical to the image's), we can perform nearest neighbor interpolation
+        // accordingly.
+        var aspectRatio = this.canvas.width / this.canvas.height;
+        var sWidth = parseInt(Math.round(Math.sqrt(indexedData.length * aspectRatio)));
+        var scaleFactor = sWidth / this.canvas.width;
+
         // iterate over index data and assign
         var nothing = [0,0,0];
-        var offset = 0;
         var color = nothing;
         var alpha = 0;
-        for(var i=0; i<indexedData.length; i++) {
+        for(var i=0; i<data.length; i+= 4) {
+            // spatial position in image
+            var dx = (i/4) % this.canvas.width;
+            var dy = (i/4 - dx) / this.canvas.width;
+
+            // spatial position in segmask
+            var sx = Math.round(dx * scaleFactor);
+            var sy = Math.round(dy * scaleFactor);
+
+            // index position in segmask
+            var s = (sy-1) * sWidth + sx;
+
             // find label class color at position
-            var lc = window.labelClassHandler.getByIndex(indexedData[i]);
+            var lc = window.labelClassHandler.getByIndex(indexedData[s]);
             if(lc) {
                 color = lc.colorValues;
                 alpha = 255;
@@ -2249,14 +2268,11 @@ class SegmentationElement extends AbstractRenderElement {
                 color = nothing;
                 alpha = 0;
             }
-            data[offset] = color[0];
-            data[offset+1] = color[1];
-            data[offset+2] = color[2];
-            data[offset+3] = alpha;
-            offset += 4;
+            data[i] = color[0];
+            data[i+1] = color[1];
+            data[i+2] = color[2];
+            data[i+3] = alpha;
         }
-
-        //TODO: if LabelUI image size restrictions change, old segmasks won't have correct height
         this.ctx.putImageData(new ImageData(data, this.canvas.width, this.canvas.height), 0, 0);
     }
 
