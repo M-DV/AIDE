@@ -2,7 +2,7 @@
     Contains functionality to split a NumPy ndarray image into shards (patches)
     on a regular grid.
 
-    2020-23 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
 import os
@@ -70,8 +70,7 @@ def get_split_positions(array, patch_size, stride=None, tight=True,
             patch_size = (patch_size, patch_size)
         assert isinstance(patch_size[0], int), f'"{str(patch_size[0])}" is not an integer value.'
         assert isinstance(patch_size[1], int), f'"{str(patch_size[1])}" is not an integer value.'
-        # need to flip patch size as NumPy indexes height first
-        patch_size = (max(1,min(patch_size[1], size[1])), max(1,min(patch_size[0], size[2])))
+        patch_size = (max(1,min(patch_size[0], size[1])), max(1,min(patch_size[1], size[2])))
     if stride is None:
         stride = patch_size
     elif isinstance(stride, int):
@@ -83,7 +82,7 @@ def get_split_positions(array, patch_size, stride=None, tight=True,
         assert isinstance(stride[0], int), f'"{str(stride[0])}" is not an integer value.'
         assert isinstance(stride[1], int), f'"{str(stride[1])}" is not an integer value.'
         # ditto for stride
-        stride = (max(1,min(stride[1], size[1])), max(1,min(stride[0], size[2])))
+        stride = (max(1,min(stride[0], size[1])), max(1,min(stride[1], size[2])))
     if isinstance(discard_homogeneous_percentage, (float, int)):
         discard_homogeneous_percentage = max(0.001, min(100, discard_homogeneous_percentage))
     else:

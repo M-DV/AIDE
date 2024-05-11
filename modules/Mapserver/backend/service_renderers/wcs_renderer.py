@@ -306,8 +306,8 @@ class WCSRenderer(AbstractRenderer):
             resolution is None and all(dim in request_params for dim in ('WIDTH', 'HEIGHT')):
                 width, height = request_params['WIDTH'], request_params['HEIGHT']
                 resolution = (
-                    (bbox[2]-bbox[0]) / float(height),
-                    (bbox[3]-bbox[1]) / float(width)
+                    (bbox[3]-bbox[1]) / float(height),
+                    (bbox[2]-bbox[0]) / float(width)
                 )
 
         mime_type = request_params.get('FORMAT', 'image/tiff')

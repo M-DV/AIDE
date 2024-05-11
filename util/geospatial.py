@@ -142,7 +142,7 @@ def get_geospatial_metadata(file_name: str,
         Inputs:
         - "file_name": str, path of image to calculate extent for
         - "srid": int, spatial reference id for output polygon
-        - "window" tuple, optional window as (y, x, height, width)
+        - "window" tuple, optional window as (x, y, width, height)
         - "transform_if_needed": bool, performs coordinate transformation for extent calculation if
                                  SRIDs don't match (else sets extent to None)
 
@@ -170,7 +170,7 @@ def calc_extent(file_name: str,
         Inputs:
         - "file_name": str, path of image to calculate extent for
         - "srid": int, spatial reference id for output polygon
-        - "window": tuple, optional window as (y, x, height, width)
+        - "window": tuple, optional window as (x, y, width, height)
         - "transform_if_needed": bool, performs coordinate transformation if SRIDs don't match (else
                                  returns None)
 
@@ -191,12 +191,17 @@ def calc_extent(file_name: str,
                 return None
 
             # transform bounds
-            transformer = pyproj.Transformer.from_crs(crs_source, crs_target,
-                                                        always_xy=True)
-            bounds = transformer.transform(*bounds)
+            # pylint: disable=unpacking-non-sequence
+            transformer = pyproj.Transformer.from_crs(crs_source,
+                                                      crs_target,
+                                                      always_xy=True)
+            bounds_x, bounds_y = transformer.transform(xx=(bounds[0],bounds[2]),
+                                                       yy=(bounds[1],bounds[3]))
+            bounds = (bounds_x[0], bounds_y[0], bounds_x[1], bounds_y[1])
         return bounds
     except Exception:
         return None
+
 
 
 def get_project_extent(db_connector: Database, project: str) -> tuple:

@@ -58,7 +58,8 @@ def get_map_images(db_connector: Database,
                    srid: int,
                    resolution: tuple,
                    image_ext: str,
-                   raw: bool=False) -> bytes:
+                   raw: bool=False,
+                   transparent: bool=False) -> bytes:
     '''
         TODO
     '''
@@ -127,6 +128,8 @@ def get_map_images(db_connector: Database,
                 'transform': transform,
                 'crs': rasterio.crs.CRS.from_epsg(srid)
             }
+            if transparent:
+                meta['nodatavals'] = rio_datasets[0].nodatavals
             with rasterio.MemoryFile() as memfile:
                 with memfile.open(**meta) as f_raster:
                     f_raster.write(arr)

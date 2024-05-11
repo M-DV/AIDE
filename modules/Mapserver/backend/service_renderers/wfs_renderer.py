@@ -353,11 +353,12 @@ class WFSRenderer(AbstractRenderer):
                         bbox[3], bbox[2]
                     )
 
-                bbox = self._convert_extent(bbox,
-                                            request_params.get('CRS', srid),
-                                            srid)
+                query_srid = geospatial.to_srid(request_params.get('CRS', srid))
+                bbox_proj = self._convert_extent(bbox,
+                                                 query_srid,
+                                                 srid)
 
-                query_args = [*bbox, srid]
+                query_args = [*bbox_proj, srid]
                 bbox_sql = '''
                     WHERE ST_Intersects(
                         img.extent,
@@ -368,7 +369,7 @@ class WFSRenderer(AbstractRenderer):
                     )
                 '''
                 bbox_gml = f'''<wfs:boundedBy>
-                    <gml:Box srsName="urn:ogc:def:crs:EPSG::{srid}">
+                    <gml:Box srsName="urn:ogc:def:crs:EPSG::{query_srid}">
                         <gml:coordinates>{",".join([str(val) for val in bbox])}</gml:coordinates>
                     </gml:Box>
                 </wfs:boundedBy>

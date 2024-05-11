@@ -961,8 +961,8 @@ class DataWorker:
                         window = None
                         if 'x' in img_valid:
                             window = [
-                                img_valid['y'], img_valid['x'],
-                                img_valid['height'], img_valid['width']
+                                img_valid['x'], img_valid['y'],
+                                img_valid['width'], img_valid['height']
                             ]
                         file_path = os.path.join(destFolder, img_valid['filename'])
                         transform, extent, img_size, img_crs = self._get_geospatial_metadata(srid,
@@ -1378,19 +1378,18 @@ class DataWorker:
                                 viewParameters.get('discard_homogeneous_percentage', None),
                                 viewParameters.get('discard_homogeneous_quantization_value', 255),
                                 celery_update_interval=self.CELERY_UPDATE_INTERVAL)
-
                     if len(coords) == 1:
                         # only a single view; don't register x, y
                         db_values.append((
-                            img, None, None, size[1], size[2]
+                            img, None, None, size[2], size[1]
                         ))
 
                     else:
                         for coord in coords:
                             db_values.append((
                                 img,
-                                coord[0], coord[1],
-                                coord[2], coord[3]
+                                coord[1], coord[0],
+                                coord[3], coord[2]
                             ))
 
                 except Exception:
@@ -1406,16 +1405,23 @@ class DataWorker:
                     driver = drivers.get_driver(fpath)
                     size = driver.size(fpath)
                     db_values.append((
-                        img, None, None, size[1], size[2]
+                        img, None, None, size[2], size[1]
                     ))
                 except Exception:
                     # could not determine image size
                     continue        #TODO: error log?
 
         current_task.update_state(meta={'message': 'registering images...'})
+        print(f'[{project}] Registering images...')
         if srid is not None:
             # retrieve geospatial information
-            for img_meta in db_values:
+            for iidx, img_meta in enumerate(tqdm(db_values)):
+                if iidx % 10 == 0:
+                    current_task.update_state(state='PROGRESS',
+                                              message='registering',
+                                              done=iidx,
+                                              total=len(db_values))
+
                 window = None
                 if img_meta[1] is not None:
                     # x coordinate specified; entry is patch
@@ -1423,8 +1429,8 @@ class DataWorker:
 
                 file_path = os.path.join(project_folder, img_meta[0])
                 transform, extent, img_size, img_crs = self._get_geospatial_metadata(srid,
-                                                                                    file_path,
-                                                                                    window)
+                                                                                     file_path,
+                                                                                     window)
                 if not geospatial.crs_match(srid, img_crs):
                     # CRS mismatch
                     continue

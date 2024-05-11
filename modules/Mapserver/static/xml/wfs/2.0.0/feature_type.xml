@@ -3,7 +3,6 @@
     <wfs:Title>{title}</wfs:Title>
     <wfs:Abstract>{abstract}</wfs:Abstract>
     <wfs:DefaultCRS>urn:ogc:def:crs:EPSG::{srid}</wfs:DefaultCRS>
-    <wfs:OtherCRS>urn:ogc:def:crs:EPSG::4326</wfs:OtherCRS>
     <OutputFormats>
         <Format>application/xml; subtype="gml/3.2.1"</Format>
     </OutputFormats>

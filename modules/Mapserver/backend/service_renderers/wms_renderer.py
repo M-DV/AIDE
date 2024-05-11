@@ -83,6 +83,12 @@ class WMSRenderer(AbstractRenderer):
             # convert to WGS84 for Mapserver
             extent_wgs84 = self._convert_extent(extent, srid, 4326)
 
+            # convert to upright orientation
+            extent = self._to_orientation(extent,
+                                          srid,
+                                          False,
+                                          True)
+
             base_args = {
                 'srid': srid,
                 'bbox_west': extent[0],
@@ -196,21 +202,26 @@ class WMSRenderer(AbstractRenderer):
         srid = project_meta['srid']
         bbox = request_params.get('BBOX', None)
         if bbox is not None:
-            if request_params.get('FLIP_COORDINATES', False):
-                bbox = (
-                    bbox[1], bbox[0],
-                    bbox[3], bbox[2]
-                )
-
-        bbox = self._convert_extent(bbox,
-                                    request_params.get('CRS', srid),
-                                    srid)
+            req_crs = request_params.get('CRS', srid)
+            if not geospatial.crs_match(req_crs, srid):
+                # bbox = self._to_orientation(bbox,
+                #                             req_crs,
+                #                             False,
+                #                             True)
+                bbox = self._convert_extent(bbox,
+                                            req_crs,
+                                            srid,
+                                            True)
+                # bbox = self._to_orientation(bbox,
+                #                             srid,
+                #                             False,
+                #                             False)
 
         width, height = request_params.get('WIDTH', None), request_params.get('HEIGHT', None)
         if all(item is not None for item in (bbox, width, height)):
             resolution = (
-                (bbox[2]-bbox[0]) / float(height),
-                (bbox[3]-bbox[1]) / float(width)
+                (bbox[3]-bbox[1]) / float(height),
+                (bbox[2]-bbox[0]) / float(width)
             )
         else:
             resolution = None
@@ -228,6 +239,7 @@ class WMSRenderer(AbstractRenderer):
         response_headers = self.DEFAULT_RESPONSE_HEADERS.copy()
 
         if layer_name == 'images':
+            transparent = request_params.get('TRANSPARENT', False)
             bytes_obj = map_operations.get_map_images(self.db_connector,
                                                       self.static_dir,
                                                       project,
@@ -236,7 +248,8 @@ class WMSRenderer(AbstractRenderer):
                                                       srid,
                                                       resolution,
                                                       image_ext,
-                                                      raw=False)
+                                                      raw=False,
+                                                      transparent=transparent)
             response_headers.update({
                 'Content-Type': mime_type,
                 'Content-Length': len(bytes_obj)
