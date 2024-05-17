@@ -48,13 +48,13 @@ class DataWorker:
     # number of images to verify at a time
     VERIFICATION_BATCH_SIZE = 1024
 
-    def __init__(self, config, dbConnector, passiveMode=False):
+    def __init__(self, config, db_connector, passive_mode=False):
         self.config = config
-        self.db_connector = dbConnector
-        self.count_pattern = re.compile('\_[0-9]+$')
-        self.passive_mode = passiveMode
+        self.db_connector = db_connector
+        self.count_pattern = re.compile(r'\_[0-9]+$')
+        self.passive_mode = passive_mode
 
-        if not is_file_server(self.config):
+        if not passive_mode and not is_file_server(self.config):
             raise Exception('Not a FileServer instance.')
 
         self.files_dir = self.config.get_property('FileServer', 'staticfiles_dir')

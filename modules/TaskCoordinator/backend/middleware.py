@@ -1,7 +1,8 @@
 '''
-    2020-21 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
+from typing import Iterable
 import uuid
 import html
 from psycopg2 import sql
@@ -10,19 +11,23 @@ from celery import current_app
 from celery.result import AsyncResult
 
 from util.helpers import is_ai_task
+from .task_watchdog import TaskWatchdog
+
 
 
 class TaskCoordinatorMiddleware:
 
-    def __init__(self, config, dbConnector):
+    def __init__(self, config, db_connector):
         self.config = config
         self.celery_app = current_app
         self.celery_app.set_current()
         self.celery_app.set_default()
 
-        self.dbConnector = dbConnector
+        self.db_connector = db_connector
 
         self.tasks = {}      # dict per project of tasks
+        self.task_watchdog = TaskWatchdog()
+        self.task_watchdog.start()
 
 
 
@@ -32,7 +37,7 @@ class TaskCoordinatorMiddleware:
             local dict of running tasks.
         '''
         # add to database
-        self.dbConnector.execute(sql.SQL('''
+        self.db_connector.execute(sql.SQL('''
                 INSERT INTO {} (task_id, launchedBy, taskName, processDescription)
                 VALUES (%s, %s, %s, %s);
             ''').format(sql.Identifier(project, 'taskhistory')),
@@ -44,10 +49,12 @@ class TaskCoordinatorMiddleware:
             self.tasks[project] = set()
         self.tasks[project].add(task_id)
 
+        # nudge watchdog
+        self.task_watchdog.nudge()
 
 
     def _update_task(self, project, task_id, aborted_by=None, result=None):
-        self.dbConnector.execute(sql.SQL('''
+        self.db_connector.execute(sql.SQL('''
             UPDATE {id_taskhistory}
             SET abortedBy = %s, result = %s, timeFinished = NOW()
             WHERE task_id = (
@@ -67,13 +74,14 @@ class TaskCoordinatorMiddleware:
             Returns a UUID that is not already in use.
         '''
         while True:
-            id = str(uuid.uuid1()) #TODO: causes conflict with database format: project + '__' + str(uuid.uuid1())
-            if project not in self.tasks or id not in self.tasks[project]:
-                return id
+            task_id = str(uuid.uuid1()) #TODO: causes conflict with database format: project + '__' + str(uuid.uuid1())
+            if project not in self.tasks or task_id not in self.tasks[project]:
+                return task_id
 
 
 
     def _poll_database(self, project, task_name=None, running_only=True):
+        #TODO: check if task is still running; if not, mark as finished
         option_str = ''
         query_args = []
         if task_name is not None:
@@ -84,7 +92,7 @@ class TaskCoordinatorMiddleware:
                 option_str += ' AND timeFinished IS NULL'
             else:
                 option_str = 'WHERE timeFinished IS NULL'
-        task_ids = self.dbConnector.execute(
+        task_ids = self.db_connector.execute(
             sql.SQL('''
                 SELECT task_id FROM {id_thistory}
                 {option_str};
@@ -103,6 +111,22 @@ class TaskCoordinatorMiddleware:
                 self.tasks[project] = set()
             self.tasks[project] = self.tasks[project].union(task_ids)
         return task_ids
+
+
+    def _mark_tasks_finished(self,
+                             project: str,
+                             task_ids: Iterable[uuid.UUID]) -> None:
+        if isinstance(task_ids, uuid.UUID):
+            task_ids = [task_ids]
+        task_ids = [(tid,) for tid in task_ids]
+        self.db_connector.insert(sql.SQL('''
+            UPDATE {id_thistory}
+            SET timeFinished = NOW()
+            WHERE timeFinished IS NULL
+            AND task_id IN (%s)
+        ''').format(
+            id_thistory=sql.Identifier(project, 'taskhistory'),
+        ), task_ids)
 
 
 
@@ -184,9 +208,9 @@ class TaskCoordinatorMiddleware:
 
         # set flag in database
         if len(tasks_revoke) > 0:
-            self.dbConnector.execute(sql.SQL('''
+            self.db_connector.execute(sql.SQL('''
                 UPDATE {id_taskhistory}
-                SET abortedBy = %s
+                SET timeFinished = NOW(), abortedBy = %s
                 WHERE task_id IN %s;
             ''').format(id_taskhistory=sql.Identifier(project, 'taskhistory')),
             (username, tuple(tasks_revoke)))
@@ -206,14 +230,12 @@ class TaskCoordinatorMiddleware:
 
     def poll_task_status(self, project, task_ids=None):
         '''
-            Queries the dict of registered tasks and polls the respective task
-            for status updates, resp. final results. Returns the respective
-            data. If the task has terminated or failed, it is re- moved from the
-            dict. If the task cannot be found in the dict, the message broker is
-            being queried for potentially missing tasks (e.g. due to
-            multi-threaded web server processes), and the missing tasks are
-            added accordingly. If the task can still not be found, an exception
-            is thrown.
+            Queries the dict of registered tasks and polls the respective task for status updates,
+            resp. final results. Returns the respective data. If the task has terminated or failed,
+            it is removed from the dict. If the task cannot be found in the dict, the message
+            broker is being queried for potentially missing tasks (e.g. due to multi-threaded web
+            server processes), and the missing tasks are added accordingly. If the task can still
+            not be found, an exception is thrown.
         '''
         if task_ids is None or len(task_ids) == 0:
             # query all tasks for project
@@ -226,14 +248,26 @@ class TaskCoordinatorMiddleware:
 
         # poll statuses
         statuses = {}
+        tasks_orphaned = []
         for task_id in task_ids:
             if task_id not in self.tasks[project]:
                 statuses[task_id] = {}
                 continue
             try:
-                msg = self.celery_app.backend.get_task_meta(task_id)
+                # get Celery task status
+                if task_id not in self.task_watchdog.tasks:
+                    # task in database but not active anymore
+                    tasks_orphaned.append(task_id)      #TODO: check if not already completed
+
+                # get submission details from watchdog
+                submission_details = self.task_watchdog.tasks[task_id]
+
+                # get current status from backend
+                msg = self.celery_app.backend.get_task_meta(str(task_id))
                 status = {
-                    'status': msg['status']
+                    'status': msg['status'],
+                    'name': submission_details['name'],
+                    'worker': submission_details['worker_id']
                 }
                 if msg['status'] == celery.states.FAILURE:
                     # append failure message
@@ -248,7 +282,7 @@ class TaskCoordinatorMiddleware:
                     info = msg['result']
 
                     # check if ongoing and remove if done
-                    result = AsyncResult(task_id)
+                    result = AsyncResult(str(task_id))
                     if result.ready():
                         result_data = result.get()
                         result.forget()
@@ -262,5 +296,8 @@ class TaskCoordinatorMiddleware:
                     'status': 'ERROR',
                     'message': str(exc)
                 }
+
+        if len(tasks_orphaned) > 0:
+            self._mark_tasks_finished(project, tasks_orphaned)
 
         return statuses

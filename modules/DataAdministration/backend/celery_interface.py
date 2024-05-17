@@ -2,9 +2,9 @@
     Wrapper for the Celery message broker concerning the data management module. This module may
     require some longer running tasks, such as the preparation of data to download, or the scanning
     of a directory for untracked images. These jobs are dispatched as Celery tasks. Function
-    "init_celery_dispatcher" is to be initia- lized at launch time with a Celery app instance.
+    "init_celery_dispatcher" is to be initialized at launch time with a Celery app instance.
 
-    2020-23 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
 import os
@@ -18,7 +18,7 @@ from .dataWorker import DataWorker
 # initialize dataWorker
 modules = os.environ['AIDE_MODULES']
 config = Config()
-worker = DataWorker(config, Database(config))
+worker = DataWorker(config, Database(config), passive_mode=True)
 
 @current_app.task()
 def aide_internal_notify(message):

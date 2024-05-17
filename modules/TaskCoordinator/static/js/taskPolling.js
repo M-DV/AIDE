@@ -7,6 +7,8 @@
 
 if(window.baseURL === undefined) window.baseURL = '';
 
+
+//TODO: replace with taskMonitor.js
 function poll_status(taskID, successHandle, errorHandle, progressHandle, timeout) {
     /**
      * Polls the main server for tasks dispatched through Celery by the "DataAdministration" module.

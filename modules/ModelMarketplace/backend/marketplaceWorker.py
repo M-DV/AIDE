@@ -316,7 +316,7 @@ class ModelMarketplaceWorker:
             if modelName.strip() in allNames:
                 startIdx = 1
                 insertPos = len(modelName)
-                trailingNumber = re.findall(' \d+$', modelName.strip())
+                trailingNumber = re.findall(r' \d+$', modelName.strip())
                 if len(trailingNumber):
                     startIdx = int(trailingNumber[0])
                     insertPos = modelName.rfind(str(startIdx)) - 1

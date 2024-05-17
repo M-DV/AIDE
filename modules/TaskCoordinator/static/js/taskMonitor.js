@@ -1,7 +1,7 @@
 /**
  * TaskMonitor, for issuing, aborting, and keeping track of all non-AI tasks.
  *
- * 2021-23 Benjamin Kellenberger
+ * 2021-24 Benjamin Kellenberger
  */
 
 
@@ -472,6 +472,8 @@ class TaskMonitor {
 
         this.tasks = {};
 
+        this.taskListeners = {};
+
         this._setup_markup();
     }
 
@@ -496,50 +498,59 @@ class TaskMonitor {
         this.domElement_main.append(this.finishedTasksContainer);
     }
 
+    _call_listener(taskID, status, data) {
+        if(this.taskListeners.hasOwnProperty(taskID)) {
+            let callback = this.taskListeners[taskID][status];
+            if(callback !== undefined && callback !== null) {
+                try {
+                    return callback(data);
+                } catch {}
+            }
+        }
+    }
+
     _do_query() {
         //TODO
         let self = this;
         let queryURL = window.baseURL + 'pollStatus';
         return $.ajax({
             url: queryURL,
-            method: 'GET',
+            method: 'POST',
             success: function(data) {
                 // running tasks
                 let totalProgress = 0;
                 let targetProgress = 0;
-                let tasks = data['status']['tasks'];
-                if(tasks === undefined || tasks === null || (Array.isArray(tasks) && tasks.length === 0)) {
-                    tasks = [];
-                    // self.setQueryInterval(self.queryIntervals['idle'], false);
-                } else {
-                    // self.setQueryInterval(self.queryIntervals['active'], false);
-                }
                 let numActiveTasks = 0;
-                for(var t=0; t<tasks.length; t++) {
-                    let taskID = tasks[t]['id'];
+                for(var taskID in data['response']) {
                     let task = self.tasks[taskID];
                     if(task === undefined) {
                         // new task found
-                        task = new Task(tasks[t], undefined, true, self.showAdminFunctionalities);
+                        task = new Task(data['response'][taskID], undefined, true, self.showAdminFunctionalities);
+                        self.runningTasksContainer.append(task.markup);
                         self.tasks[taskID] = task;
-                        if(task.taskFinished() || task.taskFailed() || task.taskSuccessful()) {
-                            self.finishedTasksContainer.append(task.markup);
+                    } else {
+                        // existing task; update
+                        task.updateStatus(tasks[t]);
+                    }
+
+                    let taskFinished = task.taskFinished();
+                    let taskFailed = task.taskFailed();
+                    let taskSuccessful = task.taskSuccessful();
+                    
+                    if(taskFinished || taskFailed || taskSuccessful) {
+                        if(task.markup.parent().attr('id') !== 'finished-tasks-list') {
+                            task.markup.detach();
+                            self.finishedTasksContainer.prepend(task.markup);
                             task.showDetails(false);
-                        } else {
-                            numActiveTasks++;
-                            self.runningTasksContainer.append(task.markup);
+                        }
+                        if(taskFailed) {
+                            self._call_listener(taskID, 'error', data['response'][taskID]);
+                        } else if(taskSuccessful) {
+                            self._call_listener(taskID, 'success', data['response'][taskID]);
                         }
                     } else {
-                        task.updateStatus(tasks[t]);
-                        if(task.taskFinished() || task.taskFailed() || task.taskSuccessful()) {
-                            if(task.markup.parent().attr('id') !== 'finished-tasks-list') {
-                                task.markup.detach();
-                                self.finishedTasksContainer.prepend(task.markup);
-                                task.showDetails(false);
-                            }
-                        } else {
-                            numActiveTasks++;
-                        }
+                        numActiveTasks++;
+                        self._call_listener(taskID, 'progress', data['response'][taskID]);
                     }
 
                     let taskProgress = task.getProgress();
@@ -605,5 +616,21 @@ class TaskMonitor {
 
     queryNow() {
         return this._do_query();
+    }
+
+    /**
+     * Adds a listener with callbacks for actions to be performed on status updates.
+     * 
+     * @param {*} taskID
+     * @param {*} successHandle 
+     * @param {*} errorHandle 
+     * @param {*} progressHandle 
+     */
+    addTaskListener(taskID, successHandle, errorHandle, progressHandle) {
+        this.taskListeners[taskID] = {
+            'success': successHandle,
+            'error': errorHandle,
+            'progress': progressHandle
+        };
     }
 }

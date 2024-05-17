@@ -28,7 +28,7 @@ test_only=FALSE                     # skip installation and only do checks and t
 # -----------------------------------------------------------------------------
 
 # constants
-INSTALLER_VERSION=3.0.240428
+INSTALLER_VERSION=3.0.240517
 MIN_PG_VERSION=10
 PG_KEY=ACCC4CF8.asc
 DEFAULT_PORT_RABBITMQ=5672
@@ -339,18 +339,20 @@ logFile="install_debian_$(date +'%Y%m%d_%H_%M_%S').log"
 
 # splash screen
 python <<EOF
-print(f'''\033[96m
-#################################       
-                                        installer version $INSTALLER_VERSION
-   ###    #### ########  ########       
-  ## ##    ##  ##     ## ##             
- ##   ##   ##  ##     ## ##             
-##     ##  ##  ##     ## ######  
-#########  ##  ##     ## ##      
-##     ##  ##  ##     ## ##             
-##     ## #### ########  ######## 
-
-#################################\033[0m
+import platform
+print(f'''\033[0;34m\033[1m
+             ████████                   installer version $INSTALLER_VERSION
+         ███████████████                {platform.platform()}
+        ██████████████████              Python {platform.python_version()}
+    ████████████████████████
+ ██████████████████████████████
+████████   ███  █     ███     ████
+███████  █  ██  █  ███  █  ████████
+███████     ██  █  ███  █    ██████
+██████  ███  █  █  ███  █  ████████
+ █████  ███  █  █     ███     ████
+  ███████████████████████████████
+    ███████████████████████████\033[0m
 ''')
 EOF
 
@@ -1372,6 +1374,7 @@ fi
 # installed AI models
 log "Installed AI models..." "FALSE" "TRUE"
     TEST_aic=$($python_exec <<EOF
+import traceback
 from util.configDef import Config
 from modules.Database.app import Database
 from modules.AIController.backend.middleware import AIMiddleware
@@ -1379,11 +1382,12 @@ try:
     config = Config()
     db = Database(config)
     aim = AIMiddleware(config, db, None, True)
-    nMod_pred = len(aim.aiModels['prediction'])
-    nMod_rank = len(aim.aiModels['ranking'])
-    print(f'0 {str(nMod_pred)} {str(nMod_rank)}')
-except Exception as e:
-    print(f'1 0 0 {str(e)}')
+    num_mod_pred = len(aim.ai_models['prediction'])
+    num_mod_rank = len(aim.ai_models['ranking'])
+    print(f'0 {str(num_mod_pred)} {str(num_mod_rank)}')
+except Exception as exc:
+    stack_trace = traceback.format_exc().replace('\n', '; ')
+    print(f'1 0 0 {stack_trace}')
 EOF
 )
 IFS=' ' read -r -a result_aic <<< $TEST_aic
@@ -1393,7 +1397,7 @@ if [ "${result_aic[0]}" = 0 ]; then
     log "\tNumber of ranking models found:      ${result_aic[2]}"
 else
     log "\e[31m[FAIL]\e[0m"
-    msg="${result_aic[3]}"
+    msg="${result_aic[@]:3}"
     if [ ${#msg} -gt 0 ]; then
         log "\tMessage: '$msg'"
     fi

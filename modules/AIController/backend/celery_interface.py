@@ -18,7 +18,7 @@ from util.configDef import Config
 
 # init AIController middleware
 modules = os.environ['AIDE_MODULES']
-passiveMode = (os.environ['PASSIVE_MODE']=='1' if 'PASSIVE_MODE' in os.environ else False) or \
+passive_mode = (os.environ['PASSIVE_MODE']=='1' if 'PASSIVE_MODE' in os.environ else False) or \
                 'aicontroller' not in modules.lower()
 aim = AIControllerWorker(Config(), current_app)
 

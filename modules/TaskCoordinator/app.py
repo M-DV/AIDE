@@ -61,7 +61,9 @@ class TaskCoordinator:
 
             try:
                 # pylint: disable=no-member
-                task_id = request.json.get('taskID', None)
+                task_id = None
+                if request.json is not None:
+                    task_id = request.json.get('taskID', None)
                 status = self.middleware.poll_task_status(project, task_id)
                 return {'response': status}
 

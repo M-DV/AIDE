@@ -12,20 +12,20 @@ from util.helpers import get_class_executable
 
 class AIWorker():
 
-    def __init__(self, config, dbConnector, passiveMode=False, verbose_start=False):
+    def __init__(self, config, db_connector, passive_mode=False, verbose_start=False):
         self.config = config
 
         if verbose_start:
             print('AIWorker'.ljust(LogDecorator.get_ljust_offset()), end='')
 
         try:
-            self.dbConnector = dbConnector
-            self.passiveMode = passiveMode
+            self.db_connector = db_connector
+            self.passive_mode = passive_mode
             self._init_fileserver()
-        except Exception as e:
+        except Exception as exc:
             if verbose_start:
                 LogDecorator.print_status('fail')
-            raise Exception(f'Could not launch AIWorker (message: "{str(e)}").')
+            raise Exception(f'Could not launch AIWorker (message: "{str(exc)}").') from exc
 
         if verbose_start:
             LogDecorator.print_status('ok')
@@ -82,7 +82,7 @@ class AIWorker():
         # create AI model instance
         return modelClass(project=project,
                             config=self.config,
-                            dbConnector=self.dbConnector,
+                            dbConnector=self.db_connector,
                             fileServer=self.fileServer.get_secure_instance(project),
                             options=modelSettings)
         
@@ -133,7 +133,7 @@ class AIWorker():
         # create AI model instance
         return modelClass(project=project,
                             config=self.config,
-                            dbConnector=self.dbConnector,
+                            dbConnector=self.db_connector,
                             fileServer=self.fileServer.get_secure_instance(project),
                             options=alSettings)
 
@@ -149,7 +149,7 @@ class AIWorker():
             SELECT ai_model_library, ai_model_settings, inference_chunk_size FROM aide_admin.project
             WHERE shortname = %s;
         '''
-        result = self.dbConnector.execute(queryStr, (project,), 1)
+        result = self.db_connector.execute(queryStr, (project,), 1)
         modelLibrary = result[0]['ai_model_library']
         modelSettings = (result[0]['ai_model_settings'] if overrideModelSettings is None else overrideModelSettings)
 
@@ -181,7 +181,7 @@ class AIWorker():
             SELECT ai_alCriterion_library, ai_alCriterion_settings FROM aide_admin.project
             WHERE shortname = %s;
         '''
-        result = self.dbConnector.execute(queryStr, (project,), 1)
+        result = self.db_connector.execute(queryStr, (project,), 1)
         modelLibrary = result[0]['ai_alcriterion_library']
         modelSettings = (result[0]['ai_alcriterion_settings'] if overrideModelSettings is None else overrideModelSettings)
 
@@ -197,7 +197,7 @@ class AIWorker():
             Used for AIDE administrative communication between AIController
             and AIWorker(s), e.g. for setting up queues.
         '''
-        if self.passiveMode:
+        if self.passive_mode:
             return
         # not required (yet)
 
@@ -209,7 +209,7 @@ class AIWorker():
         modelInstance, modelLibrary, _ = self._get_model_instance(project, aiModelSettings)
 
         return functional._call_update_model(project, numEpochs, modelInstance, modelLibrary,
-                self.dbConnector)
+                self.db_connector)
 
 
     def call_train(self, data, epoch, numEpochs, project, subset, aiModelSettings=None):
@@ -218,7 +218,7 @@ class AIWorker():
         modelInstance, modelLibrary, _ = self._get_model_instance(project, aiModelSettings)
 
         return functional._call_train(project, data, epoch, numEpochs, subset, modelInstance, modelLibrary,
-                self.dbConnector)
+                self.db_connector)
     
 
 
@@ -228,7 +228,7 @@ class AIWorker():
         modelInstance, modelLibrary, _ = self._get_model_instance(project, aiModelSettings)
         
         return functional._call_average_model_states(project, epoch, numEpochs, modelInstance, modelLibrary,
-                self.dbConnector)
+                self.db_connector)
 
 
 
@@ -241,7 +241,7 @@ class AIWorker():
         return functional._call_inference(project, imageIDs, epoch, numEpochs,
                 modelInstance, modelLibrary,
                 alCriterionInstance,
-                self.dbConnector,
+                self.db_connector,
                 inferenceChunkSize)
 
 
