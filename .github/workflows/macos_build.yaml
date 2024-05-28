@@ -27,7 +27,7 @@ jobs:
       #   uses: jlumbroso/free-disk-space@main
       - name: Install dependencies
         run: |
-          brew update && brew docter && brew tap homebrew/services
+          brew update && brew doctor && brew tap homebrew/services
           brew install wget openssl rust ffmpeg libsm libxext opencv gdal libaec c-blosc libdeflate openjpeg libmagic cython
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@v3.0.4
