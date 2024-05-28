@@ -247,32 +247,32 @@ class DataWorker:
             checked; number of annotations, etc.), as well as limited in length (images are sorted
             by date_added).
         '''
-        queryArgs = []
+        query_args = []
 
         filter_str = ''
         if folder is not None and isinstance(folder, str):
             filter_str += ' filename LIKE %s '
-            queryArgs.append(folder + '%')
+            query_args.append(folder + '%')
         if imageAddedRange is not None:     #TODO
             filter_str += 'AND date_added >= to_timestamp(%s) AND date_added <= to_timestamp(%s) '
-            queryArgs.append(imageAddedRange[0])
-            queryArgs.append(imageAddedRange[1])
+            query_args.append(imageAddedRange[0])
+            query_args.append(imageAddedRange[1])
         if lastViewedRange is not None:     #TODO
             filter_str += 'AND last_viewed >= to_timestamp(%s) AND last_viewed <= to_timestamp(%s) '
-            queryArgs.append(lastViewedRange[0])
-            queryArgs.append(lastViewedRange[1])
+            query_args.append(lastViewedRange[0])
+            query_args.append(lastViewedRange[1])
         if viewcountRange is not None:
             filter_str += 'AND viewcount >= %s AND viewcount <= %s '
-            queryArgs.append(viewcountRange[0])
-            queryArgs.append(viewcountRange[1])
+            query_args.append(viewcountRange[0])
+            query_args.append(viewcountRange[1])
         if numAnnoRange is not None:
             filter_str += 'AND num_anno >= %s AND numAnno <= %s '
-            queryArgs.append(numAnnoRange[0])
-            queryArgs.append(numAnnoRange[1])
+            query_args.append(numAnnoRange[0])
+            query_args.append(numAnnoRange[1])
         if numPredRange is not None:
             filter_str += 'AND num_pred >= %s AND num_pred <= %s '
-            queryArgs.append(numPredRange[0])
-            queryArgs.append(numPredRange[1])
+            query_args.append(numPredRange[0])
+            query_args.append(numPredRange[1])
         if startFrom is not None:
             if not isinstance(startFrom, UUID):
                 try:
@@ -281,7 +281,7 @@ class DataWorker:
                     startFrom = None
             if startFrom is not None:
                 filter_str += ' AND img.id > %s '
-                queryArgs.append(startFrom)
+                query_args.append(startFrom)
         filter_str = filter_str.strip()
         if filter_str.startswith('AND'):
             filter_str = filter_str[3:]
@@ -311,7 +311,7 @@ class DataWorker:
             limit = self.NUM_IMAGES_LIMIT
         limit = max(min(limit, self.NUM_IMAGES_LIMIT), 1)
         limit_str = sql.SQL('LIMIT %s')
-        queryArgs.append(limit)
+        query_args.append(limit)
 
         offset_str = sql.SQL('')
         if isinstance(offset, float):
@@ -326,7 +326,7 @@ class DataWorker:
                 offset = None
         if isinstance(offset, int):
             offset_str = sql.SQL('OFFSET %s')
-            queryArgs.append(offset)
+            query_args.append(offset)
 
         query_str = sql.SQL('''
             SELECT img.id, filename,
@@ -371,7 +371,7 @@ class DataWorker:
             offset=offset_str
         )
 
-        result = self.db_connector.execute(query_str, tuple(queryArgs), 'all')
+        result = self.db_connector.execute(query_str, tuple(query_args), 'all')
         for idx, row in enumerate(result):
             result[idx]['id'] = str(row['id'])
         return result
@@ -402,16 +402,19 @@ class DataWorker:
             Returns the session ID as a response.
         '''
         now = current_time()
-        sessionName = f'upload_{slugify(now)}_{user}'
-        sessionID = hashlib.md5(bytes(sessionName, 'utf-8')).hexdigest()
+        session_name = f'upload_{slugify(now)}_{user}'
+        session_id = hashlib.md5(bytes(session_name, 'utf-8')).hexdigest()
 
         # create temporary file structures and save metadata file
-        tempDir_session = os.path.join(self.temp_dir, project, 'upload_sessions', sessionID)
-        os.makedirs(os.path.join(tempDir_session, 'files'), exist_ok=False)             # temporary location of uploaded files
-        os.makedirs(os.path.join(tempDir_session, 'uploads'), exist_ok=False)           # location to store lists of uploaded files and corresponding AIDE imports
+        tempdir_session = os.path.join(self.temp_dir, project, 'upload_sessions', session_id)
+
+        # temporary location of uploaded files
+        os.makedirs(os.path.join(tempdir_session, 'files'), exist_ok=False)
+        # location to store lists of uploaded files and corresponding AIDE imports
+        os.makedirs(os.path.join(tempdir_session, 'uploads'), exist_ok=False)
 
         # cache project-specific properties
-        projectProps = self.db_connector.execute('''
+        project_props = self.db_connector.execute('''
             SELECT annotationType, band_config
             FROM "aide_admin".project
             WHERE shortname = %s;
@@ -420,27 +423,28 @@ class DataWorker:
         # assertions of session meta parameters
         assert uploadImages or parseAnnotations, \
             'either image upload or annotation parsing (or both) must be enabled'
-        assert not (parseAnnotations and (uploadImages and splitImages and not splitProperties.get('virtualSplit', True))), \
+        assert not (parseAnnotations and \
+            (uploadImages and splitImages and not splitProperties.get('virtualSplit', True))), \
             'cannot both split images into patches and parse annotations'           #TODO: implement
         if parseAnnotations:
-            annotationType = projectProps['annotationtype']
-            assert annotationType in parsers.PARSERS and \
-                (parserID is None or parserID in parsers.PARSERS[annotationType]), \
+            annotation_type = project_props['annotationtype']
+            assert annotation_type in parsers.PARSERS and \
+                (parserID is None or parserID in parsers.PARSERS[annotation_type]), \
                 f'unsupported annotation parser "{parserID}"'
 
         try:
-            bandConfig = json.loads(projectProps['band_config'])
-            bandNum = tuple(set((len(bandConfig),)))
-            customBandConfig = True         # for non-RGB images
+            band_config = json.loads(project_props['band_config'])
+            band_num = tuple(set((len(band_config),)))
+            custom_band_config = True         # for non-RGB images
         except Exception:
-            bandNum = (1,3)
-            customBandConfig = False
+            band_num = (1,3)
+            custom_band_config = False
 
-        sessionMeta = {
+        session_meta = {
             'project': project,
-            'sessionID': sessionID,
-            'sessionName': sessionName,
-            'sessionDir': tempDir_session,
+            'sessionID': session_id,
+            'sessionName': session_name,
+            'sessionDir': tempdir_session,
             'user': user,
             'numFiles': numFiles,
             'uploadImages': uploadImages,
@@ -454,19 +458,22 @@ class DataWorker:
             'parserID': parserID,
             'parserKwargs': parserKwargs,
 
-            'annotationType': projectProps['annotationtype'],
-            'bandNum': bandNum,
+            'annotationType': project_props['annotationtype'],
+            'bandNum': band_num,
             'matchNumBandsPrecisely': match_num_bands_precisely,
-            'customBandConfig': customBandConfig
+            'customBandConfig': custom_band_config
         }
-        tempDir_metaFile = os.path.join(self.temp_dir, project, 'upload_sessions')
-        os.makedirs(tempDir_metaFile, exist_ok=True)
-        json.dump(sessionMeta, open(os.path.join(tempDir_metaFile, sessionID+'.json'), 'w'))
+        tempdir_meta_file = os.path.join(self.temp_dir, project, 'upload_sessions')
+        os.makedirs(tempdir_meta_file, exist_ok=True)
+        with open(os.path.join(tempdir_meta_file, session_id+'.json'),
+                  'w',
+                  encoding='utf-8') as f_session:
+            json.dump(session_meta, f_session)
 
         # cache for faster access
-        self.upload_sessions[sessionID] = sessionMeta
+        self.upload_sessions[session_id] = session_meta
 
-        return sessionID
+        return session_id
 
 
 
@@ -478,11 +485,14 @@ class DataWorker:
         '''
         if sessionID not in self.upload_sessions:
             # check if on disk
-            tempDir_metaFile = os.path.join(self.temp_dir, project, 'upload_sessions', sessionID+'.json')
-            if not os.path.isfile(tempDir_metaFile):
+            tempdir_meta_file = os.path.join(self.temp_dir, project,
+                                             'upload_sessions',
+                                             f'{sessionID}.json')
+            if not os.path.isfile(tempdir_meta_file):
                 return False
             try:
-                meta = json.load(open(tempDir_metaFile, 'r'))
+                with open(tempdir_meta_file, 'r', encoding='utf-8') as f_session:
+                    meta = json.load(f_session)
                 self.upload_sessions[sessionID] = meta    
             except Exception:
                 return False
@@ -1964,8 +1974,12 @@ class DataWorker:
         userStr = sql.SQL('')
         iuStr = sql.SQL('')
         dateStr = sql.SQL('')
-        queryFields = [
-            'filename', 'isGoldenQuestion', 'date_image_added', 'last_requested_image', 'image_corrupt'     # default image fields
+        queryFields = [                 # default image fields
+            'filename',
+            'isGoldenQuestion',
+            'date_image_added',
+            'last_requested_image',
+            'image_corrupt'
         ]
         if dataType == 'annotation':
             iuStr = sql.SQL('''
@@ -1978,7 +1992,7 @@ class DataWorker:
             if len(userList):
                 userStr = sql.SQL('WHERE username IN %s')
                 queryArgs.append(tuple(userList))
-            
+
             queryFields.extend(getattr(QueryStrings_annotation, metaType).value)
             queryFields.extend(['username', 'viewcount', 'last_checked', 'last_time_required']) #TODO: make customizable
 
@@ -2036,7 +2050,7 @@ class DataWorker:
         if is_segmentation:
             mainFile = zipfile.ZipFile(destPath, 'w', zipfile.ZIP_DEFLATED)
         else:
-            mainFile = open(destPath, 'w')
+            mainFile = open(destPath, 'w', encoding='utf-8')
         metaStr = '; '.join(queryFields) + '\n'
 
         allData = self.db_connector.execute(queryStr, tuple(queryArgs), 'all')
@@ -2074,7 +2088,7 @@ class DataWorker:
                         continue
                     metaLine += '{}; '.format(b[field.lower()])
                 metaStr += metaLine + '\n'
-        
+
         if is_segmentation:
             mainFile.writestr('query.txt', metaStr)
         else:
@@ -2108,9 +2122,8 @@ class DataWorker:
 
     def watchImageFolders(self):
         '''
-            Queries all projects that have the image folder watch functionality
-            enabled and updates the projects, one by one, with the latest image
-            changes.
+            Queries all projects that have the image folder watch functionality enabled and updates
+            the projects, one by one, with the latest image changes.
         '''
         projects = self.db_connector.execute('''
                 SELECT shortname, watch_folder_remove_missing_enabled
@@ -2119,23 +2132,24 @@ class DataWorker:
             ''', None, 'all')
 
         if projects is not None and len(projects):
-            for p in projects:
-                pName = p['shortname']
+            for project in projects:
+                project_name = project['shortname']
 
                 # add new images
-                _, imgs_added = self.addExistingImages(pName, None)
+                _, imgs_added = self.addExistingImages(project_name, None)
 
                 # remove orphaned images (if enabled)
-                if p['watch_folder_remove_missing_enabled']:
-                    imgs_orphaned = self.removeOrphanedImages(pName)
-                    if len(imgs_added) or len(imgs_orphaned):
-                        print(f'[Project {pName}] {len(imgs_added)} new images found and added, {len(imgs_orphaned)} orphaned images removed from database.')
+                if project['watch_folder_remove_missing_enabled']:
+                    imgs_orphaned = self.removeOrphanedImages(project_name)
+                    if len(imgs_added) > 0 or len(imgs_orphaned) > 0:
+                        print(f'[Project {project_name}] {len(imgs_added)} new images found and' + \
+                            f' added, {len(imgs_orphaned)} orphaned images removed from database.')
 
-                elif len(imgs_added):
-                    print(f'[Project {pName}] {len(imgs_added)} new images found and added.')
+                elif len(imgs_added) > 0:
+                    print(f'[Project {project_name}] {len(imgs_added)} new images found and added.')
 
 
-    
+
     def deleteProject(self, project, deleteFiles=False):
         '''
             Irreproducibly deletes a project, including all data and metadata, from the database.
@@ -2181,5 +2195,5 @@ class DataWorker:
                     messages.append(str(e))
 
             return messages
-        
+
         return 0

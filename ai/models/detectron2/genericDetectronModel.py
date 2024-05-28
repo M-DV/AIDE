@@ -2,7 +2,7 @@
     Base model trainer for models implemented towards the Detectron2 library
     (https://github.com/facebookresearch/detectron2).
 
-    2020-23 Benjamin Kellenberger
+    2020-24 Benjamin Kellenberger
 '''
 
 import os
@@ -16,10 +16,12 @@ import torch
 from torch.nn.parallel import DistributedDataParallel
 import detectron2
 from detectron2.config import get_cfg, CfgNode
-from detectron2.data import MetadataCatalog, build_detection_train_loader, build_detection_test_loader
+from detectron2.data import (MetadataCatalog,
+                             build_detection_train_loader,
+                             build_detection_test_loader)
 from detectron2.data import transforms as T
 from detectron2.solver import build_lr_scheduler, build_optimizer
-import detectron2.utils.comm as comm
+from detectron2.utils import comm
 from detectron2.utils.events import EventStorage
 from detectron2 import model_zoo
 
@@ -240,6 +242,9 @@ class GenericDetectron2Model(AIModel):
         self.detectron2cfg = self.parse_aide_config(self.options, self.detectron2cfg)
 
         state_dict['detectron2cfg'] = self.detectron2cfg
+
+        # add labelclass map for model initialization
+        self.detectron2cfg.LABELCLASS_MAP = CfgNode(state_dict.get('labelclassMap', None))
 
         # check if CUDA is available; set to CPU temporarily if not
         if not torch.cuda.is_available():
@@ -527,7 +532,7 @@ class GenericDetectron2Model(AIModel):
             num_workers=0
         )
         numImg = len(data['images'])
-        
+
         # train
         model.train()
         optimizer = self._build_optimizer(self.detectron2cfg, model)

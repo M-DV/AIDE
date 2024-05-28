@@ -26,17 +26,41 @@ def aide_internal_notify(message):
 
 
 @current_app.task(name='DataAdministration.verify_images', rate_limit=1)
-def verifyImages(projects, image_list=[], quick_check=True):
-    return worker.verifyImages(projects, image_list, quick_check)
+def verify_images(projects,
+                  image_list=None,
+                  quick_check=True):
+    if image_list is None:
+        image_list = []
+    return worker.verifyImages(projects,
+                               image_list,
+                               quick_check)
 
 
 @current_app.task(name='DataAdministration.list_images')
-def listImages(project, folder=None, imageAddedRange=None, lastViewedRange=None,
-        viewcountRange=None, numAnnoRange=None, numPredRange=None,
-        orderBy=None, order='desc', startFrom=None, limit=None, offset=None):
-    return worker.listImages(project, folder, imageAddedRange, lastViewedRange,
-        viewcountRange, numAnnoRange, numPredRange,
-        orderBy, order, startFrom, limit, offset)
+def list_images(project,
+                folder=None,
+                imageAddedRange=None,
+                lastViewedRange=None,
+                viewcountRange=None,
+                numAnnoRange=None,
+                numPredRange=None,
+                orderBy=None,
+                order='desc',
+                startFrom=None,
+                limit=None,
+                offset=None):
+    return worker.listImages(project,
+                             folder,
+                             imageAddedRange,
+                             lastViewedRange,
+                             viewcountRange,
+                             numAnnoRange,
+                             numPredRange,
+                             orderBy,
+                             order,
+                             startFrom,
+                             limit,
+                             offset)
 
 
 @current_app.task(name='DataAdministration.scan_for_images')
@@ -45,10 +69,16 @@ def scanForImages(project, skipIntegrityCheck=False):
 
 
 @current_app.task(name='DataAdministration.add_existing_images')
-def addExistingImages(project, imageList=None, skipIntegrityCheck=False,
-        createVirtualViews=False, viewParameters=None):
-    return worker.addExistingImages(project, imageList, skipIntegrityCheck=skipIntegrityCheck,
-        createVirtualViews=createVirtualViews, viewParameters=viewParameters)
+def addExistingImages(project,
+                      imageList=None,
+                      skipIntegrityCheck=False,
+                      createVirtualViews=False,
+                      viewParameters=None):
+    return worker.addExistingImages(project,
+                                    imageList,
+                                    skipIntegrityCheck=skipIntegrityCheck,
+                                    createVirtualViews=createVirtualViews,
+                                    viewParameters=viewParameters)
 
 @current_app.task(name='DataAdministration.create_image_overviews')
 def create_image_overviews(image_ids,
@@ -56,17 +86,39 @@ def create_image_overviews(image_ids,
                             scale_factors=(2,4,8,16),
                             method='nearest'):
     return worker.create_image_overviews(image_ids,
-                                        project,
-                                        scale_factors,
-                                        method)
+                                         project,
+                                         scale_factors,
+                                         method)
 
 @current_app.task(name='DataAdministration.remove_images')
-def removeImages(project, imageList, forceRemove=False, deleteFromDisk=False):
-    return worker.removeImages(project, imageList, forceRemove, deleteFromDisk)
+def removeImages(project,
+                 imageList,
+                 forceRemove=False,
+                 deleteFromDisk=False):
+    return worker.removeImages(project,
+                               imageList,
+                               forceRemove,
+                               deleteFromDisk)
 
 @current_app.task(name='DataAdministration.request_annotations')
-def requestAnnotations(project, username, exportFormat, dataType='annotation', authorList=None, dateRange=None, ignoreImported=False, parserArgs={}):
-    return worker.requestAnnotations(project, username, exportFormat, dataType, authorList, dateRange, ignoreImported, parserArgs)
+def requestAnnotations(project,
+                       username,
+                       exportFormat,
+                       dataType='annotation',
+                       authorList=None,
+                       dateRange=None,
+                       ignoreImported=False,
+                       parserArgs=None):
+    if parserArgs is None:
+        parserArgs = {}
+    return worker.requestAnnotations(project,
+                                     username,
+                                     exportFormat,
+                                     dataType,
+                                     authorList,
+                                     dateRange,
+                                     ignoreImported,
+                                     parserArgs)
 
 # deprecated
 @current_app.task(name='DataAdministration.prepare_data_download')

@@ -19,7 +19,7 @@
        it calls the very same function the AIController instance delegated and
        processes it (functions below).
 
-    2019-23 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 '''
 
 import base64
@@ -39,13 +39,12 @@ def __get_message_fun(project, cumulatedTotal=None, offset=0, epoch=None, numEpo
             'project': project,
             'epoch': epoch
         }
-        if (isinstance(done, int) or isinstance(done, float)) and \
-            (isinstance(total, int) or isinstance(total, float)):
-            trueTotal = total + offset
-            if isinstance(cumulatedTotal, int) or isinstance(cumulatedTotal, float):
-                trueTotal = max(trueTotal, cumulatedTotal)
-            meta['done'] = min(done + offset, trueTotal)
-            meta['total'] = max(meta['done'], trueTotal)    #max(done, trueTotal)
+        if isinstance(done, (int, float)) and isinstance(total, (int, float)):
+            true_total = total + offset
+            if isinstance(cumulatedTotal, (int, float)):
+                true_total = max(true_total, cumulatedTotal)
+            meta['done'] = min(done + offset, true_total)
+            meta['total'] = max(meta['done'], true_total)    #max(done, trueTotal)
 
         message_combined = ''
         if isinstance(epoch, int) and isinstance(numEpochs, int) and numEpochs > 1:
@@ -53,8 +52,8 @@ def __get_message_fun(project, cumulatedTotal=None, offset=0, epoch=None, numEpo
 
         if isinstance(message, str):
             message_combined += message
-        
-        if len(message_combined):
+
+        if len(message_combined) > 0:
             meta['message'] = message_combined
         current_task.update_state(
             state=state,
@@ -75,7 +74,7 @@ def __load_model_state(project, modelLibrary, dbConnector):
         ) AS query;
     ''').format(sql.Identifier(project, 'cnnstate'))
     result = dbConnector.execute(queryStr, (modelLibrary,), numReturn=1)     #TODO: issues Celery warning if no state dict found
-    if result is None or not len(result):
+    if result is None or len(result) == 0:
         # force creation of new model
         stateDict = None
         stateDictID = None
@@ -93,16 +92,20 @@ def __load_model_state(project, modelLibrary, dbConnector):
 
 
 
-def __load_metadata(project, dbConnector, imageIDs, loadAnnotations, modelOriginID):
+def __load_metadata(project,
+                    db_connector,
+                    image_ids,
+                    load_annotations,
+                    model_origin_id):
 
     # prepare
     meta = {}
-    if imageIDs is None:
-        imageIDs = []
+    if image_ids is None:
+        image_ids = []
 
     # label names and model-to-project mapping (if present)
     labels = {}
-    queryStr = sql.SQL('''
+    query_str = sql.SQL('''
         SELECT * FROM {id_lc} AS lc
         LEFT OUTER JOIN (
             SELECT * FROM {id_lcmap}
@@ -113,7 +116,7 @@ def __load_metadata(project, dbConnector, imageIDs, loadAnnotations, modelOrigin
         id_lc=sql.Identifier(project, 'labelclass'),
         id_lcmap=sql.Identifier(project, 'model_labelclass')
     )
-    result = dbConnector.execute(queryStr, (modelOriginID,), 'all')
+    result = db_connector.execute(query_str, (model_origin_id,), 'all')
     if result is not None and len(result):
         for r in result:
             labels[r['id']] = r
@@ -121,42 +124,42 @@ def __load_metadata(project, dbConnector, imageIDs, loadAnnotations, modelOrigin
 
     # image format (band configuration)
     #NOTE: we also load the render config for those models that don't specify which bands to take
-    # (i.e., we let the model use the same RGB or grayscale bands as used for the visualizer front-end)
+    # (i.e., we let the model use the same RGB or grayscale bands as for the visualizer front-end)
     try:
-        queryStr = sql.SQL('''
+        query_str = sql.SQL('''
             SELECT band_config, render_config
             FROM aide_admin.project
             WHERE shortname = %s;
         ''')
-        config = dbConnector.execute(queryStr, (project,), 1)
-        bandConfig = json.loads(config[0]['band_config'])
-        if bandConfig is None:
-            raise
+        config = db_connector.execute(query_str, (project,), 1)
+        band_config = json.loads(config[0]['band_config'])
+        if band_config is None:
+            raise ValueError('Invalid band config provided.')
         try:
-            renderConfig = json.loads(config[0]['render_config'])
-            if renderConfig is None:
-                raise
-        except Exception:
+            render_config = json.loads(config[0]['render_config'])
+            if render_config is None:
+                raise ValueError('Invalid reder config provided.')
+        except ValueError:
             # default render configuration; with adjustment to number of bands
-            renderConfig = DEFAULT_RENDER_CONFIG
-            renderConfig['bands']['indices'] = {
+            render_config = DEFAULT_RENDER_CONFIG
+            render_config['bands']['indices'] = {
                 'red': 0,
-                'green': min(1, len(bandConfig)-1),
-                'blue': min(2, len(bandConfig)-1)
+                'green': min(1, len(band_config)-1),
+                'blue': min(2, len(band_config)-1)
             }
     except Exception:
         # fallback to default
-        bandConfig = DEFAULT_BAND_CONFIG
-        renderConfig = DEFAULT_RENDER_CONFIG
-    meta['band_config'] = bandConfig
-    meta['render_config'] = renderConfig
+        band_config = DEFAULT_BAND_CONFIG
+        render_config = DEFAULT_RENDER_CONFIG
+    meta['band_config'] = band_config
+    meta['render_config'] = render_config
 
     # image data
-    imageMeta = {}
-    if len(imageIDs):
-        queryStr = sql.SQL(
+    image_meta = {}
+    if len(image_ids) > 0:
+        query_str = sql.SQL(
             'SELECT * FROM {} WHERE id IN %s').format(sql.Identifier(project, 'image'))
-        result = dbConnector.execute(queryStr, (tuple(imageIDs),), 'all')
+        result = db_connector.execute(query_str, (tuple(image_ids),), 'all')
         if len(result):
             for r in result:
                 # append window to filename for correct loading
@@ -164,66 +167,68 @@ def __load_metadata(project, dbConnector, imageIDs, loadAnnotations, modelOrigin
                     r['filename'] += '?window={},{},{},{}'.format(
                         r['x'], r['y'], r['width'], r['height']
                     )
-                imageMeta[r['id']] = r
+                image_meta[r['id']] = r
 
     # annotations
-    if loadAnnotations and len(imageIDs):
+    if load_annotations and len(image_ids) > 0:
         # get project's annotation type
-        result = dbConnector.execute(sql.SQL('''
+        result = db_connector.execute(sql.SQL('''
                 SELECT annotationType
                 FROM aide_admin.project
                 WHERE shortname = %s;
             '''),
             (project,),
             1)
-        annoType = result[0]['annotationtype']
+        anno_type = result[0]['annotationtype']
 
-        fieldNames = list(getattr(FieldNames_annotation, annoType).value)
-        queryStr = sql.SQL('''
+        field_names = list(getattr(FieldNames_annotation, anno_type).value)
+        query_str = sql.SQL('''
             SELECT id AS annotationID, image, {fieldNames} FROM {id_anno} AS anno
             WHERE image IN %s;
         ''').format(
-            fieldNames=sql.SQL(', ').join([sql.SQL(f) for f in fieldNames]),
+            fieldNames=sql.SQL(', ').join([sql.SQL(f) for f in field_names]),
             id_anno=sql.Identifier(project, 'annotation'))
-        result = dbConnector.execute(queryStr, (tuple(imageIDs),), 'all')
+        result = db_connector.execute(query_str, (tuple(image_ids),), 'all')
         if len(result):
             for r in result:
-                if not 'annotations' in imageMeta[r['image']]:
-                    imageMeta[r['image']]['annotations'] = []
-                imageMeta[r['image']]['annotations'].append(r)
-    meta['images'] = imageMeta
+                if not 'annotations' in image_meta[r['image']]:
+                    image_meta[r['image']]['annotations'] = []
+                image_meta[r['image']]['annotations'].append(r)
+    meta['images'] = image_meta
 
     return meta
 
 
-def __get_ai_library_names(project, dbConnector):
-    model_library, alcriterion_library = None, None
-    try:
-        queryStr = sql.SQL('''
-            SELECT ai_model_library, ai_alcriterion_library
-            FROM "aide_admin".project
-            WHERE shortname = %s;
-        ''')
-        result = dbConnector.execute(queryStr, (project,), 1)
-        model_library = result[0]['ai_model_library']
-        alcriterion_library = result[0]['ai_alcriterion_library']
-    finally:
-        return model_library, alcriterion_library
+def __get_ai_library_names(project, db_connector):
+    query_str = sql.SQL('''
+        SELECT ai_model_library, ai_alcriterion_library
+        FROM "aide_admin".project
+        WHERE shortname = %s;
+    ''')
+    result = db_connector.execute(query_str, (project,), 1)
+    if result is None or len(result) == 0:
+        return None, None
+    model_library = result[0]['ai_model_library']
+    alcriterion_library = result[0]['ai_alcriterion_library']
+    return model_library, alcriterion_library
 
 
 def _call_update_model(project, numEpochs, modelInstance, modelLibrary, dbConnector):
     '''
-        Checks first if any label classes have been added since the last model update.
-        If so, or if a new model has been selected, this calls the model update procedure
-        that is supposed to modify the model to incorporate newly added label classes.
-        Returns the updated model state dict.
+        Checks first if any label classes have been added since the last model update. If so, or if
+        a new model has been selected, this calls the model update procedure that is supposed to
+        modify the model to incorporate newly added label classes. Returns the updated model state
+        dict.
     '''
     update_state = __get_message_fun(project, numEpochs=numEpochs)
 
     # abort if model does not support updating
     if not hasattr(modelInstance, 'update_model'):
-        print(f'[{project} - model update] WARNING: model "{modelLibrary}" does not support modification to new label classes. Skipping...')
-        update_state(state=states.SUCCESS, message=f'[{project} - model update] WARNING: model does not support modification to new label classes and has not been updated.')
+        print(f'[{project} - model update] WARNING: model "{modelLibrary}" does not support ' + \
+              'modification to new label classes. Skipping...')
+        update_state(state=states.SUCCESS,
+                     message=f'[{project} - model update] WARNING: model does not support ' + \
+                             'modification to new label classes and has not been updated.')
         return
 
     print(f'[{project}] Updating model to incorporate potentially new label classes...')
@@ -231,10 +236,13 @@ def _call_update_model(project, numEpochs, modelInstance, modelLibrary, dbConnec
     # load model state
     update_state(state='PREPARING', message=f'[{project} - model update] loading model state')
     try:
-        stateDict, _, modelOriginID, labelclass_autoupdate = __load_model_state(project, modelLibrary, dbConnector)
-    except Exception as e:
-        print(e)
-        raise Exception(f'[{project} - model update] error during model state loading (reason: {str(e)})')
+        stateDict, _, modelOriginID, labelclass_autoupdate = __load_model_state(project,
+                                                                                modelLibrary,
+                                                                                dbConnector)
+    except Exception as exc:
+        print(exc)
+        raise Exception(f'[{project} - model update] error during model state loading ' + \
+                        f'(reason: {str(exc)})')
 
     # check if explicit model updating is enabled
     autoUpdateEnabled = dbConnector.execute(sql.SQL('''
@@ -253,17 +261,17 @@ def _call_update_model(project, numEpochs, modelInstance, modelLibrary, dbConnec
     update_state(state='PREPARING', message=f'[{project} - model update] loading metadata')
     try:
         data = __load_metadata(project, dbConnector, None, True, modelOriginID)
-    except Exception as e:
-        print(e)
-        raise Exception(f'[{project} - model update] error during metadata loading (reason: {str(e)})')
+    except Exception as exc:
+        print(exc)
+        raise Exception(f'[{project} - model update] error during metadata loading (reason: {str(exc)})')
 
     # call update function
     try:
         update_state(state='PREPARING', message=f'[{project} - model update] initiating model update')
         stateDict = modelInstance.update_model(stateDict=stateDict, data=data, updateStateFun=update_state)
-    except Exception as e:
-        print(e)
-        raise Exception(f'[{project} - model update] error during model update (reason: {str(e)})')
+    except Exception as exc:
+        print(exc)
+        raise Exception(f'[{project} - model update] error during model update (reason: {str(exc)})')
 
 
     # commit state dict to database
@@ -275,9 +283,9 @@ def _call_update_model(project, numEpochs, modelInstance, modelLibrary, dbConnec
             VALUES( %s, %s, %s, %s, %s, TRUE )
         ''').format(sql.Identifier(project, 'cnnstate'))
         dbConnector.execute(queryStr, (psycopg2.Binary(stateDict), False, model_library, alcriterion_library, modelOriginID), numReturn=None)
-    except Exception as e:
-        print(e)
-        raise Exception(f'[{project} - model update] error during data committing (reason: {str(e)})')
+    except Exception as exc:
+        print(exc)
+        raise Exception(f'[{project} - model update] error during data committing (reason: {str(exc)})')
 
     update_state(state=states.SUCCESS, message='model updated')
     return

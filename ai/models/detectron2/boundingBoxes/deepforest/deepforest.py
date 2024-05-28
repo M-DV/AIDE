@@ -2,7 +2,7 @@
     DeepForest specifier for Detectron2 model trainer in AIDE:
     https://github.com/weecology/DeepForest
 
-    2022 Benjamin Kellenberger
+    2022-24 Benjamin Kellenberger
 '''
 
 import os
@@ -14,10 +14,11 @@ from ai.models.detectron2.boundingBoxes.deepforest import DEFAULT_OPTIONS, deepf
 from util import optionsHelper
 
 
+
 class DeepForest(GenericDetectron2BoundingBoxModel):
 
     def __init__(self, project, config, dbConnector, fileServer, options):
-        super(DeepForest, self).__init__(project, config, dbConnector, fileServer, options)
+        super().__init__(project, config, dbConnector, fileServer, options)
 
         try:
             if self.detectron2cfg.MODEL.META_ARCHITECTURE != 'DeepForest':
@@ -27,7 +28,8 @@ class DeepForest(GenericDetectron2BoundingBoxModel):
             print('WARNING: provided options are not valid for DeepForest; falling back to defaults.')
             self.options = self.getDefaultOptions()
             self.detectron2cfg = self._get_config()
-            self.detectron2cfg = GenericDetectron2Model.parse_aide_config(self.options, self.detectron2cfg)
+            self.detectron2cfg = GenericDetectron2Model.parse_aide_config(self.options,
+                                                                          self.detectron2cfg)
 
 
     @classmethod
@@ -41,14 +43,15 @@ class DeepForest(GenericDetectron2BoundingBoxModel):
     @staticmethod
     def _add_deepforest_config(cfg):
         cfg.set_new_allowed(True)
-        baseConfigFile = os.path.join(os.getcwd(), 'ai/models/detectron2/_functional/configs/boundingBoxes/deepforest/deepforest.yaml')
+        baseConfigFile = os.path.join(os.getcwd(),
+            'ai/models/detectron2/_functional/configs/boundingBoxes/deepforest/deepforest.yaml')
         cfg.merge_from_file(baseConfigFile)
 
         cfg.MODEL.META_ARCHITECTURE = 'DeepForest'
         cfg.MODEL.BACKBONE.NAME = 'DeepForestBackbone'
         cfg.MODEL.DEEPFOREST_PRETRAINED = 'deepforest'
 
-    
+
     def _get_config(self):
         cfg = get_cfg()
         self._add_deepforest_config(cfg)
@@ -57,7 +60,7 @@ class DeepForest(GenericDetectron2BoundingBoxModel):
         cfg.merge_from_file(configFile)
         return cfg
 
-    
+
     def loadAndAdaptModel(self, stateDict, data, updateStateFun):
         '''
             Loads a model and a labelclass map from a given "stateDict".
@@ -88,10 +91,11 @@ class DeepForest(GenericDetectron2BoundingBoxModel):
             for (key, index) in zip(stateDict['labelclassMap'].keys(), stateDict['labelclassMap'].values()):
                 classVector[index] = key
 
-            cls_layer = model.model.head.classification_head.cls_logits        # layers with n_features x (n_anchors x n_classes)
+            # layers with n_features x (n_anchors x n_classes)
+            cls_layer = model.model.model.head.classification_head.cls_logits
             
             numNeurons = len(cls_layer.bias)
-            numAnchors = len(model.model.head.regression_head.bbox_reg.bias) // 4
+            numAnchors = len(model.model.model.head.regression_head.bbox_reg.bias) // 4
             numClasses_model = numNeurons // numAnchors
 
             # create weights and biases for new classes
@@ -154,9 +158,9 @@ class DeepForest(GenericDetectron2BoundingBoxModel):
                     classVector.insert(0, newClasses[cl])
             
                     # apply updated weights and biases
-                    model.model.head.classification_head.cls_logits.weight = torch.nn.Parameter(weights)
-                    model.model.head.classification_head.cls_logits.bias = torch.nn.Parameter(biases)
-                    model.model.head.classification_head.cls_logits.out_channels = len(biases)
+                    model.model.model.head.classification_head.cls_logits.weight = torch.nn.Parameter(weights)
+                    model.model.model.head.classification_head.cls_logits.bias = torch.nn.Parameter(biases)
+                    model.model.model.head.classification_head.cls_logits.out_channels = len(biases)
 
             # valid = torch.ones(len(biases), dtype=torch.bool)
             classMap_updated = {}
@@ -178,11 +182,12 @@ class DeepForest(GenericDetectron2BoundingBoxModel):
 
 
         # finally, update model and config
-        if len(stateDict['labelclassMap']):
+        if len(stateDict['labelclassMap']) > 0:
             stateDict['detectron2cfg'].MODEL.RETINANET.NUM_CLASSES = len(stateDict['labelclassMap'])
             map_inv = dict([v,k] for k,v in stateDict['labelclassMap'].items())
             mapKeys = list(map_inv)
             mapKeys.sort()
             model.names = [str(map_inv[key]) for key in mapKeys]
+            model.model.config['num_classes'] = len(stateDict['labelclassMap'])
         stateDict['detectron2cfg'].MODEL.DEEPFOREST_PRETRAINED = False
         return model, stateDict

@@ -45,7 +45,7 @@ class DataAdministrationMiddleware:
             integrity.
         '''
         # submit task
-        process = celery_interface.verifyImages.si(project, image_list, quick_check)
+        process = celery_interface.verify_images.si(project, image_list, quick_check)
         task_id = self._submit_task(project, username, process)
         return task_id
 
@@ -99,7 +99,7 @@ class DataAdministrationMiddleware:
             are sorted by date_added).
         '''
         # submit job
-        process = celery_interface.listImages.si(project, folder, imageAddedRange,
+        process = celery_interface.list_images.si(project, folder, imageAddedRange,
                                                 lastViewedRange, viewcountRange,
                                                 numAnnoRange, numPredRange,
                                                 orderBy, order, startFrom,
