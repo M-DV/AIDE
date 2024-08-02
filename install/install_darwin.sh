@@ -29,14 +29,14 @@ test_only=false                     # skip installation and only do checks and t
 # -----------------------------------------------------------------------------
 
 # constants
-INSTALLER_VERSION=3.0.240517
+INSTALLER_VERSION=3.0.240802
 PYTHON_VERSION=3.9
 MIN_PG_VERSION=10
 DEFAULT_PORT_RABBITMQ=5672
 DEFAULT_PORT_REDIS=6379
-LAUNCHD_TARGET_SERVER=com.microsoft.aide.server.plist                  # for AIDE Web server: $HOME/Library/LaunchAgents/$LAUNCHD_TARGET_SERVER.service
-LAUNCHD_TARGET_WORKER=com.microsoft.aide.worker.plist                   # for AIWorker:        $HOME/Library/LaunchAgents/$LAUNCHD_TARGET_WORKER.service
-LAUNCHD_TARGET_WORKER_BEAT=com.microsoft.aide.worker_beat.plist         # for AIWorker (Celerybeat): $HOME/Library/LaunchAgents/$LAUNCHD_TARGET_WORKER_BEAT.service
+LAUNCHD_TARGET_SERVER=org.bkellenb.aide.server.plist                  # for AIDE Web server: $HOME/Library/LaunchAgents/$LAUNCHD_TARGET_SERVER.service
+LAUNCHD_TARGET_WORKER=org.bkellenb.aide.worker.plist                   # for AIWorker:        $HOME/Library/LaunchAgents/$LAUNCHD_TARGET_WORKER.service
+LAUNCHD_TARGET_WORKER_BEAT=org.bkellenb.aide.worker_beat.plist         # for AIWorker (Celerybeat): $HOME/Library/LaunchAgents/$LAUNCHD_TARGET_WORKER_BEAT.service
 # LAUNCHD_CONFIG_WORKER=/etc/default/celeryd_aide     # for AIWorker: config script for Celery daemon
 TMPFILES_VOLATILE_DIR=/etc/tmpfiles.d/              # for setting permissions on volatile files required by Celery daemon
 
@@ -261,9 +261,10 @@ ${ESC}[1mEXIT STATUS${ESC}[0m
     ${ESC}[1m8${ESC}[0m Remote PostgreSQL server cannot be contacted. Make sure current machine and account have access permissions to database and server.
 
 ${ESC}[1mHISTORY${ESC}[0m
+    Aug 02, 2024: Fixed installation in case of existing PostgreSQL server
     Jul 23, 2024: Added PostGIS installation
     Apr 26, 2024: Implemented auto-query option for PyTorch versions
-    Dec 31, 2022: Initial macOS installer release by Benjamin Kellenberger (benjamin.kellenberger@yale.edu), based off Debian installer
+    Dec 31, 2022: Initial macOS installer release by Benjamin Kellenberger (b.kellenberger@ucl.ac.edu), based off Debian installer
 
 $INSTALLER_VERSION                  https://github.com/bkellenb/AIDE              
 EOF
@@ -1067,7 +1068,6 @@ if [[ $install_database = true ]]; then
     # check if psql and Postgres server already installed (and fetch version)
     psqlV=-1
     psqlInstalled=false
-    postgresInstalled=false
     pg_path=$homebrew_path/opt/postgresql@$pg_version
     psql_exec=$(command -v psql);
     if [ "${#psql_exec}" -eq 0 ]; then
@@ -1079,22 +1079,52 @@ if [[ $install_database = true ]]; then
         log "Existing PostgreSQL client version $psqlV found."
         psqlInstalled=true
     fi
-    if [[ $psqlInstalled = true && $postgresInstalled = true ]]; then
-        #TODO: try to connect
-        install_database=false
+    if [[ $psqlInstalled = true ]]; then
+        # check and modify installed Postgres version if needed
+        pg_version_existing="$(pg_config --version | grep -o -E '([0-9]+)\.[ |\s]*' | grep -o -E '[0-9]+')"
+        if [ "${#pg_version_existing}" -eq 0 ]; then
+            # unable to determine version; query from Postgres install path (TODO: dodgy)
+            pg_version_existing="$(ls -d -1 $homebrew_path/opt/* | grep -o -E '\w?postgresql@([0-9]+)' | grep -o -E '[0-9]+' | sort -n | tail -1)";
+        fi
+
+        if (( $(echo "$pg_version_existing < $MIN_PG_VERSION" |bc -l) )); then
+            log "Existing PostgreSQL server version is too old for AIDE ($pg_version_existing < $MIN_PG_VERSION); will install new PostgreSQL version $pg_version alongside existing one."
+            install_database=true
+        else
+            log "Existing PostgreSQL server version $pg_version_existing found."
+            pg_version=$pg_version_existing
+            pg_path=$homebrew_path/opt/postgresql@$pg_version
+            psql_exec=$(command -v psql);
+            if [ "${#psql_exec}" -eq 0 ]; then
+                psql_exec=$pg_path/bin/psql
+            fi
+
+            # check port
+            pgConfFile="$($psql_exec -U postgres -c 'SHOW config_file' | grep -o -E '.*\.conf' | xargs)"
+            pgPort="$(cat $pgConfFile | grep -o -E '[ |\s]*port[ |\s]*=[ |\s]*[0-9]*' | tr -dc '0-9')"
+            if (( $dbPort != $pgPort )); then
+                warn "Existing PostgreSQL database is configured to listen to different port than specified ($pgPort != $dbPort).\nInstallation will continue with currently set port $pgPort."
+                echo "WARNING: existing PostgreSQL database is configured to listen to different port than specified ($pgPort != $dbPort)." | tee -a $logFile
+                dbPort=$pgPort
+            fi
+
+            install_database=false
+        fi
     fi
 
-    if [[ $test_only = false && $install_database = true ]]; then
-        log "Installing PostgreSQL server version $pg_version..."
+    pg_conf_file=$homebrew_path/var/postgresql@$pg_version/postgresql.conf;
+    pg_hba_file=$homebrew_path/var/postgresql@$pg_version/pg_hba.conf;
 
-        # install and configure PostgreSQL
-        brew install postgresql@$pg_version | tee -a $log;
-        brew install postgis | tee -a $log;
-        sudo initdb $homebrew_dir/var/postgresql@$pg_version | tee -a $log;
-        $pg_path/bin/createuser -s postgres
+    if [[ $test_only = false ]]; then
+        if [[ $install_database = true ]]; then
+            log "Installing PostgreSQL server version $pg_version..."
 
-        pg_conf_file=$homebrew_path/var/postgresql@$pg_version/postgresql.conf
-        pg_hba_file=$homebrew_path/var/postgresql@$pg_version/pg_hba.conf;
+            # install and configure PostgreSQL
+            brew install postgresql@$pg_version | tee -a $log;
+            brew install postgis | tee -a $log;
+            initdb $homebrew_dir/var/postgresql@$pg_version | tee -a $log;
+            $pg_path/bin/createuser -s postgres;
+        fi
 
         # modify authentication
         dbAuth=$dbUser
@@ -1118,23 +1148,8 @@ if [[ $install_database = true ]]; then
         # # start cluster
         # pg_data_path=$($pg_path/bin/psql -U postgres -tA -c "SHOW data_directory;")
         # $pg_path/bin/pg_ctl --pgdata=$pg_data_path start
-    else
-        # check version
-        if (( $(echo "$psqlV < $MIN_PG_VERSION" |bc -l) )); then
-            abort 8 "Outdated PostgreSQL database found ($psqlV < 9.5). You will not be able to use this version with AIDE.\nPlease manually upgrade to a newer version (9.5 or greater)."
-        else
-            # check port
-            pgConfFile="$($psql_exec -U postgres -c 'SHOW config_file' | grep -o -E '.*\.conf' | xargs)"
-            pgPort="$(cat $pgConfFile | grep -o -E '[ |\s]*port[ |\s]*=[ |\s]*[0-9]*' | tr -dc '0-9')"
-            if (( $dbPort != $pgPort )); then
-                warn "Existing PostgreSQL database is configured to listen to different port than specified ($pgPort != $dbPort).\nInstallation will continue with currently set port $pgPort."                echo "WARNING: existing PostgreSQL database is configured to listen to different port than specified ($pgPort != $dbPort)." | tee -a $logFile
-                dbPort=$pgPort
-            fi
-        fi
-    fi
 
-    # setup database
-    if ! $test_only ; then
+        # setup database
         log "Creating user..."
         $psql_exec -U postgres -p $dbPort -c "CREATE USER \"$dbUser\" WITH PASSWORD '$dbPassword';" | tee -a $logFile
         log "Creating database..."

@@ -262,7 +262,7 @@ while [[ $# -gt 0 ]]; do
     Oct 6, 2022: Implemented more failsafety checks, pip executable lookup, PyTorch pre-installation with CUDA/CPU check
     Aug 12, 2022: Implemented fallback for non-systemd setups (e.g., WSL); changed Postgres authentication from md5 to scram-sha-256; DB init bug fixes
     Apr 12, 2022: Various bug fixes on PostgreSQL installation and daemonization routines; made installer compatible with exotic account and machine names
-    Aug 4, 2021: Initial installer release by Benjamin Kellenberger (benjamin.kellenberger@yale.edu)
+    Aug 4, 2021: Initial installer release by Benjamin Kellenberger (b.kellenberger@ucl.ac.uk)
 
 $INSTALLER_VERSION                  https://github.com/bkellenb/AIDE              
 EOF
