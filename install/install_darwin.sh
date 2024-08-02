@@ -261,6 +261,7 @@ ${ESC}[1mEXIT STATUS${ESC}[0m
     ${ESC}[1m8${ESC}[0m Remote PostgreSQL server cannot be contacted. Make sure current machine and account have access permissions to database and server.
 
 ${ESC}[1mHISTORY${ESC}[0m
+    Jul 23, 2024: Added PostGIS installation
     Apr 26, 2024: Implemented auto-query option for PyTorch versions
     Dec 31, 2022: Initial macOS installer release by Benjamin Kellenberger (benjamin.kellenberger@yale.edu), based off Debian installer
 
@@ -1088,7 +1089,8 @@ if [[ $install_database = true ]]; then
 
         # install and configure PostgreSQL
         brew install postgresql@$pg_version | tee -a $log;
-        initdb $homebrew_dir/var/postgresql@$pg_version | tee -a $log;
+        brew install postgis | tee -a $log;
+        sudo initdb $homebrew_dir/var/postgresql@$pg_version | tee -a $log;
         $pg_path/bin/createuser -s postgres
 
         pg_conf_file=$homebrew_path/var/postgresql@$pg_version/postgresql.conf
@@ -1134,15 +1136,17 @@ if [[ $install_database = true ]]; then
     # setup database
     if ! $test_only ; then
         log "Creating user..."
-        $psql_exec -U postgres -c "CREATE USER \"$dbUser\" WITH PASSWORD '$dbPassword';" | tee -a $logFile
+        $psql_exec -U postgres -p $dbPort -c "CREATE USER \"$dbUser\" WITH PASSWORD '$dbPassword';" | tee -a $logFile
         log "Creating database..."
-        $psql_exec -U postgres -c "CREATE DATABASE \"$dbName\" WITH OWNER \"$dbUser\" CONNECTION LIMIT -1;" | tee -a $logFile
+        $psql_exec -U postgres -p $dbPort -c "CREATE DATABASE \"$dbName\" WITH OWNER \"$dbUser\" CONNECTION LIMIT -1;" | tee -a $logFile
         log "Granting connection to database..."
-        $psql_exec -U postgres -d $dbName -c "GRANT CREATE, CONNECT ON DATABASE \"$dbName\" TO \"$dbUser\";" | tee -a $logFile
+        $psql_exec -U postgres -p $dbPort -d $dbName -c "GRANT CREATE, CONNECT ON DATABASE \"$dbName\" TO \"$dbUser\";" | tee -a $logFile
         log "Creating UUID extension..."
-        $psql_exec -U postgres -d $dbName -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";" | tee -a $logFile
+        $psql_exec -U postgres -p $dbPort -d $dbName -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";" | tee -a $logFile
+        log "Creating PostGIS extension..."
+        $psql_exec -d $dbName -p $dbPort -c "CREATE EXTENSION IF NOT EXISTS postgis;" | tee -a $logFile
         log "Granting table privileges..."
-        $psql_exec -U postgres -d $dbName -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"$dbUser\";" | tee -a $logFile
+        $psql_exec -U postgres -d $dbName -p $dbPort -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"$dbUser\";" | tee -a $logFile
 
         log "Initializing AIDE database schema..."
         $python_exec $aide_root/setup/setup_database.py | tee -a $logFile
