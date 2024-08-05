@@ -28,7 +28,7 @@ test_only=FALSE                     # skip installation and only do checks and t
 # -----------------------------------------------------------------------------
 
 # constants
-INSTALLER_VERSION=3.0.240723
+INSTALLER_VERSION=3.0.240805
 MIN_PG_VERSION=10
 PG_KEY=ACCC4CF8.asc
 DEFAULT_PORT_RABBITMQ=5672
@@ -256,6 +256,7 @@ while [[ $# -gt 0 ]]; do
     \e[1m8\e[0m Remote PostgreSQL server cannot be contacted. Make sure current machine and account have access permissions to database and server.
 
 \e[1mHISTORY\e[0m
+    Aug 05, 2024: Added routine to wait for PostgreSQL server to fully boot up
     Jul 23, 2024: Added PostGIS installation
     Apr 26, 2024: Implemented auto-query option for PyTorch versions
     Dec 30, 2022: Code cleanups, better failsafety
@@ -1071,6 +1072,12 @@ if [[ $install_database == true ]]; then
         if [[ $SYSTEMD_AVAILABLE > 0 ]]; then
             sudo systemctl enable postgresql
         fi
+
+        # wait until database has started successfully
+        until pg_isready -h $dbHost -p $dbPort 2>/dev/null; do
+            >&2 echo "Postgres is unavailable - sleeping for 5 seconds"
+            sleep 5
+        done
 
         # start cluster
         if [[ $SYSTEMD_AVAILABLE > 0 ]]; then

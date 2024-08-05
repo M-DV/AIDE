@@ -29,7 +29,7 @@ test_only=false                     # skip installation and only do checks and t
 # -----------------------------------------------------------------------------
 
 # constants
-INSTALLER_VERSION=3.0.240802
+INSTALLER_VERSION=3.0.240805
 PYTHON_VERSION=3.9
 MIN_PG_VERSION=10
 DEFAULT_PORT_RABBITMQ=5672
@@ -250,9 +250,9 @@ ${ESC}[1mEXIT STATUS${ESC}[0m
 
     ${ESC}[1m3${ESC}[0m Attempt to run installer from non-Linux operating system.
 
-    ${ESC}[1m4${ESC}[0m Missing package manager "aptitude" ("apt", "apt-get").
+    ${ESC}[1m4${ESC}[0m Missing Homebrew (https://brew.sh/).
 
-    ${ESC}[1m5${ESC}[0m Outdated Python executable specified. Make sure to run installer in Python environment with Python version 3.5 or greater.
+    ${ESC}[1m5${ESC}[0m Outdated Python executable specified. Make sure to run installer in Python environment with Python version 3.9 or greater.
 
     ${ESC}[1m6${ESC}[0m Cannot find AIDE installation directory. Make sure to leave this installer in the original place in the AIDE code base.
 
@@ -261,6 +261,7 @@ ${ESC}[1mEXIT STATUS${ESC}[0m
     ${ESC}[1m8${ESC}[0m Remote PostgreSQL server cannot be contacted. Make sure current machine and account have access permissions to database and server.
 
 ${ESC}[1mHISTORY${ESC}[0m
+    Aug 05, 2024: Added routine to wait for PostgreSQL server to fully boot up
     Aug 02, 2024: Fixed installation in case of existing PostgreSQL server
     Jul 23, 2024: Added PostGIS installation
     Apr 26, 2024: Implemented auto-query option for PyTorch versions
@@ -999,11 +1000,6 @@ else
     export CPPFLAGS="-I$homebrew_path/opt/openssl/include"
     export PKG_CONFIG_PATH="$homebrew_path/opt/openssl/lib/pkgconfig"
 
-    # #TODO
-    # sudo add-apt-repository -y ppa:ubuntugis/ppa | tee -a $log;
-    # sudo apt-get update | tee -a $log;
-    # sudo apt-get install -y build-essential wget libpq-dev python-dev ffmpeg libsm6 libxext6 python3-opencv python3-pip gdal-bin libgdal-dev | tee -a $log;
-    
     log "Removing potential previous libraries requiring compilation..."
     #TODO
     $python_exec -m pip uninstall -y torch torchvision torchaudio detectron2 yolov5 deepforest | tee -a $log;
@@ -1144,6 +1140,13 @@ if [[ $install_database = true ]]; then
         brew services stop postgresql@$pg_version
         rm -f $homebrew_path/var/postgresql@$pg_version/postmaster.pid
         brew services start postgresql@$pg_version
+
+        # wait until database has started successfully
+        until pg_isready -h $dbHost -p $dbPort 2>/dev/null; do
+            >&2 echo "PostgreSQL is unavailable, retrying in 5 seconds..." | tee -a $log
+            brew services start postgresql@$pg_version
+            sleep 5
+        done
 
         # # start cluster
         # pg_data_path=$($pg_path/bin/psql -U postgres -tA -c "SHOW data_directory;")
@@ -1465,7 +1468,7 @@ fi
 
 # installed AI models
 log "Installed AI models..." "FALSE" "TRUE"
-    TEST_aic=$($python_exec <<EOF
+TEST_aic=$($python_exec <<EOF
 import traceback
 from util.configDef import Config
 from modules.Database.app import Database
@@ -1484,19 +1487,21 @@ EOF
 )
 if [ $IS_ZSH = 1 ]; then
     IFS=' ' read -r -A result_aic <<< $TEST_aic
+    idx_offset=1
 else
     IFS=' ' read -r -a result_aic <<< $TEST_aic
+    idx_offset=0
 fi
-if [ "${result_aic[0]}" = 0 ]; then
+if [ "${result_aic[$idx_offset]}" = 0 ]; then
     log "\e[32m[ OK ]\e[0m"
-    log "\tNumber of prediction models found:   ${result_aic[1]}"
-    log "\tNumber of ranking models found:      ${result_aic[2]}"
+    log "\tNumber of prediction models found:   ${result_aic[$idx_offset+1]}"
+    log "\tNumber of ranking models found:      ${result_aic[$idx_offset+2]}"
 else
     log "\e[31m[FAIL]\e[0m"
     if [ $IS_ZSH = 1 ]; then
-        msg="${result_aic[@]:3:-1}"
+        msg="${result_aic[@]:$idx_offset+3:-1}"
     else
-        msg="${result_aic[@]:3}"
+        msg="${result_aic[@]:$idx_offset+3}"
     fi
     if [ ${#msg} -gt 0 ]; then
         log "\tMessage: '$msg'"
