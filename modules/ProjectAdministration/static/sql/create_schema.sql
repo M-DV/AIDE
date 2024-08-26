@@ -4,7 +4,7 @@
     Requires substitutions for identifiers and annotation/prediction
     type fields.
 
-    2019-23 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 */
 
 
@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS {id_annotation} (
     timeCreated TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     timeRequired BIGINT,
     unsure boolean NOT NULL DEFAULT false,
+    shared boolean,
     {annotation_fields},
     PRIMARY KEY (id),
     FOREIGN KEY (username) REFERENCES aide_admin.user(name),

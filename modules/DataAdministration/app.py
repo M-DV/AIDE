@@ -27,8 +27,8 @@ class DataAdministrator(Module):
         Frontend interface for data administration (file up-/download).
     '''
     DEFAULT_SPLIT_PROPERTIES = {
-        'patchSize': [800, 600],
-        'stride': [800, 600],
+        'patchSize': [600, 800],
+        'stride': [600, 800],
         'tight': True,
         'virtualSplit': True
     }

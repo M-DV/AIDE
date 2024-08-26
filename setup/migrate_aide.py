@@ -379,7 +379,8 @@ MODIFICATIONS_sql = [
     END $$;
   ''',
   'ALTER TABLE "{schema}".image ADD COLUMN IF NOT EXISTS affine_transform REAL[];',
-  'ALTER TABLE "aide_admin".project ADD COLUMN IF NOT EXISTS mapserver_settings JSON;'
+  'ALTER TABLE "aide_admin".project ADD COLUMN IF NOT EXISTS mapserver_settings JSON;',
+  'ALTER TABLE "{schema}".annotation ADD COLUMN IF NOT EXISTS shared BOOLEAN;'      # default FALSE
 ]
 
 

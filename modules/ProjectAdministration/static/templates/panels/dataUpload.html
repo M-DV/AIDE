@@ -506,8 +506,8 @@
             formData.append('splitImages', doSplitPatches);
             if(doSplitPatches) {
                 let splitParams = {
-                    'patchSize': [parseInt($('#patch-size-width').val()), parseInt($('#patch-size-height').val())],
-                    'stride': [parseInt($('#patch-stride-width').val()), parseInt($('#patch-stride-height').val())],
+                    'patchSize': [parseInt($('#patch-size-height').val()), parseInt($('#patch-size-width').val())],
+                    'stride': [parseInt($('#patch-stride-height').val()), parseInt($('#patch-stride-width').val())],
                     'tight': $('#patch-tight-chck').prop('checked'),
                     'virtualSplit': virtualSplit
                 }

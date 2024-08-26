@@ -39,6 +39,9 @@ class YOLOparser(AbstractAnnotationParser):
             <div>
                 <input type="checkbox" id="skip_empty_images" />
                 <label for="skip_empty_images">skip images without annotations</label>
+                <br />
+                <input type="checkbox" id="annotations_shared" />
+                <label for="annotations_shared">make annotations visible for all users</label>
             </div>
             '''
         return ''
@@ -121,6 +124,7 @@ class YOLOparser(AbstractAnnotationParser):
 
         # args setup
         skipEmptyImages = kwargs.get('skip_empty_images', False)    # if True, images with zero annotations will not be added to the "image_user" relation
+        annotations_shared = kwargs.get('annotations_shared', False)    # if True, annotations are visible from any user account
 
         now = helpers.current_time()
 
@@ -345,7 +349,7 @@ class YOLOparser(AbstractAnnotationParser):
                             break
 
                 insertVals.append((
-                    targetAccount, imgID, now, -1, False,
+                    targetAccount, imgID, now, -1, annotations_shared, False,
                     label, *bbox
                 ))
                 imgIDs_added.add(imgID)
@@ -353,7 +357,7 @@ class YOLOparser(AbstractAnnotationParser):
             # add annotations to database
             if len(insertVals) > 0:
                 result = self.dbConnector.insert(sql.SQL('''
-                    INSERT INTO {} (username, image, timeCreated, timeRequired,
+                    INSERT INTO {} (username, image, timeCreated, timeRequired, shared,
                                     unsure, label, x, y, width, height)
                     VALUES %s
                     RETURNING image, id;

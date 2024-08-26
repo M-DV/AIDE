@@ -60,8 +60,12 @@ class SegmentationFileParser(AbstractAnnotationParser):
                 and compared against target image sizes.
                 This may be more accurate, but significantly slower.
             </p>
+            <br />
+            <input type="checkbox" id="annotations_shared" />
+            <label for="annotations_shared">make annotations visible for all users</label>
             '''
 
+        # export
         return '''
         <div>
             <fieldset>
@@ -120,6 +124,8 @@ class SegmentationFileParser(AbstractAnnotationParser):
         verify_image_size = kwargs.get('verify_image_size', False)
         # if True, empty segmentation masks will be skipped
         skip_empty_images = kwargs.get('skip_empty_images', False)
+        # if True, annotations are visible from any user account
+        annotations_shared = kwargs.get('annotations_shared', False)
 
         now = helpers.current_time()
 
@@ -327,6 +333,7 @@ class SegmentationFileParser(AbstractAnnotationParser):
                         entry['id'],
                         now,
                         -1,
+                        annotations_shared,
                         False,
                         b64str,
                         arr_out.shape[0],       #TODO: order
@@ -336,7 +343,8 @@ class SegmentationFileParser(AbstractAnnotationParser):
             # insert
             if len(imgs_insert) > 0:
                 db_insert = self.dbConnector.insert(sql.SQL('''
-                    INSERT INTO {} (username, image, timeCreated, timeRequired, unsure, segmentationMask, width, height)
+                    INSERT INTO {} (username, image, timeCreated, timeRequired,
+                        shared, unsure, segmentationMask, width, height)
                     VALUES %s
                     RETURNING image, id;
                 ''').format(sql.Identifier(self.project, 'annotation')),

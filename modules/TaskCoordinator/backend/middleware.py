@@ -258,16 +258,17 @@ class TaskCoordinatorMiddleware:
                 if task_id not in self.task_watchdog.tasks:
                     # task in database but not active anymore
                     tasks_orphaned.append(task_id)      #TODO: check if not already completed
-
-                # get submission details from watchdog
-                submission_details = self.task_watchdog.tasks[task_id]
+                    submission_details = {}             #TODO
+                else:
+                    # get submission details from watchdog
+                    submission_details = self.task_watchdog.tasks[task_id]
 
                 # get current status from backend
                 msg = self.celery_app.backend.get_task_meta(str(task_id))
                 status = {
                     'status': msg['status'],
-                    'name': submission_details['name'],
-                    'worker': submission_details['worker_id']
+                    'name': submission_details.get('name', '(unknown task)'),           #TODO
+                    'worker': submission_details.get('worker_id', '(unknown worker)')   #TODO
                 }
                 if msg['status'] == celery.states.FAILURE:
                     # append failure message

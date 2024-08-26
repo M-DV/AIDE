@@ -49,6 +49,10 @@ class COCOparser(AbstractAnnotationParser):
                 </p>
                 <input type="checkbox" id="mark_iscrowd_as_unsure" />
                 <label for="mark_iscrowd_as_unsure">mark 'iscrowd' annotations as unsure</label>
+                <br />
+                <input type="checkbox" id="annotations_shared" />
+                <label for="annotations_shared">make annotations visible for all users</label>
+                
             </div>
             '''
         return '''
@@ -112,6 +116,7 @@ class COCOparser(AbstractAnnotationParser):
         skipEmptyImages = kwargs.get('skip_empty_images', False)    # if True, images with zero annotations will not be added to the "image_user" relation
         verifyImageSize = kwargs.get('verify_image_size', False)    # if True, image sizes will be retrieved from files, not just from COCO metadata
         unsure = kwargs.get('mark_iscrowd_as_unsure', False)        # if True, annotations with attribute "iscrowd" will be marked as "unsure" in AIDE
+        annotations_shared = kwargs.get('annotations_shared', False)    # if True, annotations are visible from any user account
 
         now = helpers.current_time()
 
@@ -368,24 +373,24 @@ class COCOparser(AbstractAnnotationParser):
 
             # update LUT
             self._init_labelclasses()
-                
+
             if len(imgs_valid) > 0:
                 for i in range(len(imgs_valid)):
                     # replace label class names with UUIDs
                     labelName = labelClasses[imgs_valid[i][2]][0]
                     labelUUID = self.labelClasses[labelName]
                     imgs_valid[i][2] = labelUUID
-                
+
                 # finally, add annotations to database
                 result = self.dbConnector.insert(sql.SQL('''
-                    INSERT INTO {id_anno} (username, image, timeCreated, timeRequired, unsure, label, {annoFields})
+                    INSERT INTO {id_anno} (username, image, timeCreated, timeRequired, shared, unsure, label, {annoFields})
                     VALUES %s
                     RETURNING image, id;
                 ''').format(
                     id_anno=sql.Identifier(self.project, 'annotation'),
                     annoFields=sql.SQL(','.join(dbFieldNames))
                 ),
-                tuple((targetAccount, i[0], now, -1, i[1],
+                tuple((targetAccount, i[0], now, -1, annotations_shared, i[1],
                     *i[2:]) for i in imgs_valid), 'all')
                 for row in result:
                     importedAnnotations[row[0]].append(row[1])
@@ -398,9 +403,9 @@ class COCOparser(AbstractAnnotationParser):
                     ON CONFLICT (username, image) DO UPDATE
                     SET last_time_required = -1;
                 ''').format(sql.Identifier(self.project, 'image_user')),
-                tuple([(targetAccount, i, now, -1) for i in imgIDs]))
-            
-            if markAsGoldenQuestions and len(imgIDs):
+                tuple((targetAccount, i, now, -1) for i in imgIDs))
+
+            if markAsGoldenQuestions and len(imgIDs) > 0:
                 self.dbConnector.insert(sql.SQL('''
                     UPDATE {}
                     SET isGoldenQuestion = TRUE

@@ -257,6 +257,41 @@ class LabelUI(Module):
             return time_range
 
 
+        @self.app.get('/<project>/getImageCardinalDirection')
+        def get_images_cardinal_direction(project: str) -> response:
+            # pylint: disable=no-member
+
+            if not self.login_check(project=project):
+                abort(401, 'unauthorized')
+
+            # check if user requests to see other user names; only permitted if admin
+            # also, by default we limit labels to the current user, even for admins, to provide a
+            # consistent experience.
+            username = html.escape(request.get_cookie('username'))
+
+            if not self.login_check(project=project, admin=True):
+                # user no admin: can only query their own labels
+                hide_golden_question_info = True
+
+            elif not self.login_check(project=project):
+                # not logged in, resp. not authorized for project
+                abort(401, 'unauthorized')
+
+            else:
+                hide_golden_question_info = False
+
+            current_image_id = request.query.get('ci', None)
+            cardinal_direction = request.query.get('cd', None)
+
+            # query and return
+            batch = self.middleware.get_image_cardinal_direction(project,
+                                                                 username,
+                                                                 current_image_id,
+                                                                 cardinal_direction,
+                                                                 hide_golden_question_info)
+            return batch
+
+
         @self.app.get('/<project>/getSampleData')
         @self.app.post('/<project>/getSampleData')
         def get_sample_data(project: str) -> dict:

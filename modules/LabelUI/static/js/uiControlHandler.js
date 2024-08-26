@@ -2,7 +2,7 @@
     Manages functionalities around the UI/viewport/canvas,
     such as control buttons (select, add, zoom, etc.).
 
-    2019-21 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 */
 
 
@@ -671,8 +671,8 @@ class UIControlHandler {
         }
 
         // next and previous batch buttons
-        var nextBatchCallback = function() {
-            self.dataHandler.nextBatch();
+        var nextBatchCallback = function(cardinalDirection) {
+            self.dataHandler.nextBatch(cardinalDirection);
             update_undo_redo_buttons();
         }
         var prevBatchCallback = function() {
@@ -692,6 +692,37 @@ class UIControlHandler {
         nextBatchBtn.click(nextBatchCallback);
         interfaceControls.append(nextBatchBtn);
 
+
+        if(window.numImagesPerBatch === 1) {
+            // buttons for spatial navigation in image tiles
+            //TODO: disable when not an image tile
+            let dirButtons = $(`
+                <div class="float-right" style="display:flex;height:32px;margin-left:8px;">
+                    <button id="next-button-w" class="btn btn-sm btn-primary"
+                        style="font-size:8pt;"
+                        title="next tile west (alt+left arrow)">W</button>
+                    <div>
+                        <button id="next-button-n" class="btn btn-sm btn-primary"
+                            style="height:16px;vertical-align:top;padding-top:0;font-size:8pt;"
+                            title="next tile north (alt+up arrow)">N</button>
+                        <br />
+                        <button id="next-button-s" class="btn btn-sm btn-primary"
+                            style="height:16px;vertical-align:top;margin-top:-8px;padding-top:0;font-size:8pt;"
+                            title="next tile south (alt+down arrow)">S</button>
+                    </div>
+                    <button id="next-button-e" class="btn btn-sm btn-primary"
+                        style="font-size:8pt;"
+                        title="next tile east (alt+right arrow)">E</button>
+                </div>
+            `);
+            interfaceControls.append(dirButtons);
+            ['w', 'n', 's', 'e'].forEach((x, i) => {
+                $(`#next-button-${x}`).click(function() {
+                    self.dataHandler.nextBatch(x);
+                    update_undo_redo_buttons();
+                });
+            });
+        }
 
 
         /*
@@ -724,11 +755,22 @@ class UIControlHandler {
 
             } else if(event.which === 37) {
                 // left arrow key
-                prevBatchCallback();
+                if(event.altKey) {
+                    nextBatchCallback('w');
+                } else {
+                    prevBatchCallback();
+                }
+            } else if(event.which === 38 && event.altKey) {
+                // alt + up arrow key
+                nextBatchCallback('n');
 
             } else if(event.which === 39) {
                 // right arrow key
-                nextBatchCallback();
+                nextBatchCallback(event.altKey? 'e' : undefined);
+
+            } else if(event.which === 40 && event.altKey) {
+                // alt + down arrow key
+                nextBatchCallback('s');
 
             } else if(event.which === 46 || event.which === 8) {
                 // Del/backspace key

@@ -417,10 +417,13 @@ class DBMiddleware():
         uuids = []
         imgs_malformed = []
         for img_id in image_ids:
-            try:
-                uuids.append(UUID(img_id))
-            except Exception:
-                imgs_malformed.append(img_id)
+            if not isinstance(img_id, UUID):
+                try:
+                    uuids.append(UUID(img_id))
+                except Exception:
+                    imgs_malformed.append(img_id)
+            else:
+                uuids.append(img_id)
         uuids = tuple(uuids)
 
         if len(uuids) == 0:
@@ -617,6 +620,40 @@ class DBMiddleware():
         return {
             'error': 'no annotations made'
         }
+
+
+    def get_image_cardinal_direction(self,
+                                     project: str,
+                                     username: str,
+                                     current_image_id: Union[str, UUID],
+                                     cardinal_direction: str,
+                                     hide_golden_question_info: bool=True) -> dict:
+        '''
+            Returns the next image in given cardinal direction, based on the current one. Only works
+            if the following criteria are met:
+                1. The current image is a tile of a bigger one (i.e., it has x, y, width, height
+                   defined in the database entry)
+                2. There actually is another tile in given cardinal direction
+
+            If any of the criteria is not fulfilled, an empty dict is returned.
+
+            #TODO: also return info on whether there is a next tile in N, S, W, E
+        '''
+        if isinstance(current_image_id, str):
+            current_image_id = UUID(current_image_id)
+
+        # get UUID of next tile in direction
+        query_str = sql_string_builder.get_next_tile_cardinal_direction_query_str(project,
+                                                                                cardinal_direction)
+        next_uuid = self.db_connector.execute(query_str,
+                                              (current_image_id,),
+                                              1)
+        if next_uuid is None or len(next_uuid) == 0:
+            return {'entries': {}}
+        return self.get_batch_fixed(project,
+                                    username,
+                                    (next_uuid[0]['id'],),
+                                    hide_golden_question_info)
 
 
     def get_sample_data(self, project: str) -> dict:

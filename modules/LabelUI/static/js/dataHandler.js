@@ -1,7 +1,7 @@
 /*
     Maintains the data entries currently on display.
 
-    2019-22 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 */
 
 class DataHandler {
@@ -374,15 +374,30 @@ class DataHandler {
         }
     }
 
-    _loadNextBatch() {
+    _loadNextBatch(cardinalDirection) {
         var self = this;
 
         var url = 'getLatestImages?order=unlabeled&subset=default&limit=' + this.numImagesPerBatch;
+
+        if(typeof(cardinalDirection) === 'string') {
+            // get next image in cardinal direction of current tile instead of regular next batch
+            if(this.dataEntries.length === 0) {
+                return;
+            }
+            let currentImageID = this.dataEntries[0].entryID;
+            url = `getImageCardinalDirection?cd=${cardinalDirection}&ci=${currentImageID}`;
+        }
+
         return $.ajax({
             url: url,
             dataType: 'json',
             success: function(data) {
                 // clear current entries
+                if(typeof(cardinalDirection) === 'string' &&
+                    Object.keys(data['entries']).length === 0) {
+                    // no image in cardinal direction found; do nothing
+                    return;
+                }
                 self.parentDiv.empty();
                 self.dataEntries = [];
 
@@ -450,7 +465,7 @@ class DataHandler {
             error: function(xhr, status, error) {
                 if(error == 'Unauthorized') {
                     // ask user to provide password again
-                    window.verifyLogin((self._loadNextBatch).bind(self));
+                    window.verifyLogin((self._loadNextBatch(cardinalDirection)).bind(self));
                 }
             }
         });
@@ -759,7 +774,7 @@ class DataHandler {
         }
     }
 
-    nextBatch() {
+    nextBatch(cardinalDirection) {
         if(window.uiBlocked) return;
 
         var self = this;
@@ -781,7 +796,7 @@ class DataHandler {
                     self._rebuild_entry_lut();
                     self.resetActionStack();
                 } else {
-                    self._loadNextBatch();
+                    self._loadNextBatch(cardinalDirection);
                 }
             }
 
@@ -789,10 +804,10 @@ class DataHandler {
             var _next_batch = function() {
                 // add current image IDs to history
                 var historyEntry = [];
-                for(var i=0; i<this.dataEntries.length; i++) {
-                    historyEntry.push(this.dataEntries[i]['entryID']);
+                for(var i=0; i<self.dataEntries.length; i++) {
+                    historyEntry.push(self.dataEntries[i]['entryID']);
                 }
-                this.prevBatchStack.push(historyEntry);
+                self.prevBatchStack.push(historyEntry);
 
                 var callback = function() {
                     if(self.nextBatchStack.length > 0) {
@@ -801,13 +816,14 @@ class DataHandler {
                     } else {
                         //TODO: temporary mode to ensure compatibility with running instances
                         try {
-                            if($('#imorder-review').prop('checked')) {
+                            if($('#imorder-review').prop('checked') && 
+                                typeof(cardinalDirection) !== 'string') {
                                 self._loadReviewBatch();
                             } else {
-                                self._loadNextBatch();
+                                self._loadNextBatch(cardinalDirection);
                             }
                         } catch {
-                            self._loadNextBatch();
+                            self._loadNextBatch(cardinalDirection);
                         }
                     }
                 };
@@ -815,14 +831,14 @@ class DataHandler {
                 // check if annotation commitment is enabled
                 var doSubmit = $('#imorder-auto').prop('checked') || $('#review-enable-editing').prop('checked');
                 if(doSubmit) {
-                    this._submitAnnotations().done(callback);
+                    self._submitAnnotations().done(callback);
                 } else {
                     // only go to next batch, don't submit annotations
                     callback();
                 }
             }
         }
-        this._showConfirmationDialog((_next_batch).bind(this));
+        this._showConfirmationDialog((() => {_next_batch(cardinalDirection)}).bind(this));
     }
 
 

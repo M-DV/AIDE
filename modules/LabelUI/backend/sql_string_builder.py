@@ -188,7 +188,7 @@ def get_next_batch_query_str(project: str,
     order_spec_a += ', timeCreated DESC'
     order_spec_b += ', timeCreated DESC'
 
-    username_str = 'WHERE username = %s'
+    username_str = 'WHERE username = %s OR shared = TRUE'
     if demo_mode:
         username_str = ''
         order_spec_a = 'ORDER BY last_checked ASC, RANDOM()'
@@ -278,6 +278,43 @@ def get_next_batch_query_str(project: str,
         usernameString=sql.SQL(username_str)
     )
 
+    return query_str
+
+
+
+def get_next_tile_cardinal_direction_query_str(project: str,
+                                               cardinal_direction: str) -> sql.SQL:
+    '''
+        Receives a project, current image UUID, and cardinal direction, and returns the UUID of the
+        next image in given cardinal direction relative to the current one, or None if there is
+        none.
+    '''
+    cardinal_direction = cardinal_direction.strip().lower()
+    coord = 'x' if cardinal_direction in ('w', 'e') else 'y'
+    coord_other = 'y' if coord == 'x' else 'x'
+    dir_str = '<' if cardinal_direction in ('w', 's') else '>'
+    order_str = 'DESC' if dir_str == '<' else 'ASC'
+
+    query_str = sql.SQL('''
+            WITH currImg AS (
+            SELECT x, y, filename
+            FROM {id_img}
+            WHERE id = %s
+        )
+        SELECT id
+        FROM {id_img}
+        WHERE {coord} {dir_str} (SELECT {coord} FROM currImg)
+        AND {coord_other} = (SELECT {coord_other} FROM currImg)
+        AND filename = (SELECT filename FROM currImg)
+        ORDER BY {coord} {order_str}
+        LIMIT 1;
+        ''').format(
+            id_img=sql.Identifier(project, 'image'),
+            coord=sql.SQL(coord),
+            coord_other=sql.SQL(coord_other),
+            dir_str=sql.SQL(dir_str),
+            order_str=sql.SQL(order_str)
+    )
     return query_str
 
 

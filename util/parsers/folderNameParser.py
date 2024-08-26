@@ -1,12 +1,11 @@
 '''
-    Label folder name parser. Extracts the topmost or one of the topmost folder
-    names of a list of image files and uses them for label classes. The precise
-    hierarchy level used depends on a combination of image file names as
-    registered in the database, correlation of retrieved folder names with
-    existing label classes in the project, as well as the number of unique
-    folder names retrieved (should be minimal).
+    Label folder name parser. Extracts the topmost or one of the topmost folder names of a list of
+    image files and uses them for label classes. The precise hierarchy level used depends on a
+    combination of image file names as registered in the database, correlation of retrieved folder
+    names with existing label classes in the project, as well as the number of unique folder names
+    retrieved (should be minimal).
 
-    2022 Benjamin Kellenberger
+    2022-24 Benjamin Kellenberger
 '''
 
 import os
@@ -16,7 +15,20 @@ from util.parsers.abstractParser import AbstractAnnotationParser
 
 class FolderNameParser(AbstractAnnotationParser):
 
-    ANNOTATION_TYPES = ('labels')
+    ANNOTATION_TYPES = ('labels',)
+
+
+    @classmethod
+    def get_html_options(cls, method):
+        if method == 'import':
+            return '''
+            <div>
+                <input type="checkbox" id="annotations_shared" />
+                <label for="annotations_shared">make annotations visible for all users</label>
+            </div>
+            '''
+        return ''
+
 
     def _determine_folder_level(self, fileList):
         '''
@@ -39,7 +51,7 @@ class FolderNameParser(AbstractAnnotationParser):
         for f in fileList:
             parent, _ = os.path.split(f)
             parent = parent.strip(os.sep)
-            if not len(parent):
+            if len(parent) == 0:
                 folders.append([])
             else:
                 folders.append(parent.split(os.sep))
@@ -54,7 +66,7 @@ class FolderNameParser(AbstractAnnotationParser):
             keys = set([f[currentLevel] for f in folders if currentLevel < len(f)])
             if len(keys) == 0:
                 break
-            elif len(keys) > 1:
+            if len(keys) > 1:
                 if len(self.labelClasses):
                     # test against existing label classes
                     numMatches = len(keys.intersection(set(self.labelClasses.keys())))
@@ -96,9 +108,13 @@ class FolderNameParser(AbstractAnnotationParser):
             label class names can be found.
         '''
         return self._determine_folder_level(list(fileDict.values()))[0] is not None
-    
+
 
     def import_annotations(self, fileDict, targetAccount, skipUnknownClasses, markAsGoldenQuestions, **kwargs):
+
+        # if True, annotations are visible from any user account
+        annotations_shared = kwargs.get('annotations_shared', False)
+
         warnings = []
 
         # verify files for validity
@@ -122,7 +138,7 @@ class FolderNameParser(AbstractAnnotationParser):
                 'warnings': warnings,
                 'errors': ['No common folder hierarchy level found for valid class names.']
             }
-        
+
         # find matching images for file names
         imgs_match = self.match_filenames(fileList)
 
@@ -145,12 +161,11 @@ class FolderNameParser(AbstractAnnotationParser):
                 if skipUnknownClasses:
                     warnings.append(f'"{fileList[idx]}": class "{className}" not present in project.')
                     continue
-                else:
-                    lc_new.add(className)
+                lc_new.add(className)
 
             # image exists and class name is valid
             imgs_valid.append([img[0], className])      # image ID, class name
-        
+
         # add new label classes
         if not skipUnknownClasses and len(lc_new):
             self.dbConnector.insert(sql.SQL('''
@@ -162,7 +177,7 @@ class FolderNameParser(AbstractAnnotationParser):
             # update LUT
             self._init_labelclasses()
 
-        if len(imgs_valid):
+        if len(imgs_valid) > 0:
             # replace label class names with IDs
             for l in range(len(imgs_valid)):
                 className = imgs_valid[l][1]
@@ -170,11 +185,11 @@ class FolderNameParser(AbstractAnnotationParser):
 
             # finally, add annotations to database
             result = self.dbConnector.insert(sql.SQL('''
-                INSERT INTO {} (image, label, username)
+                INSERT INTO {} (image, label, username, shared)
                 VALUES %s
                 RETURNING id, image;
             ''').format(sql.Identifier(self.project, 'annotation')),
-            [(i[0], i[1], targetAccount) for i in imgs_valid], 'all')
+            [(i[0], i[1], targetAccount, annotations_shared) for i in imgs_valid], 'all')
             ids_inserted = [r[0] for r in result]
 
             # mark as golden questions if needed
@@ -186,6 +201,8 @@ class FolderNameParser(AbstractAnnotationParser):
                     WHERE id IN %s;
                 ''').format(sql.Identifier(self.project, 'image')),
                 (tuple(ids_image),), None)
+        else:
+            ids_inserted = []
 
         return {
             'ids': ids_inserted,
