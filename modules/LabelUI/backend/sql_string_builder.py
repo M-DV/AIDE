@@ -76,9 +76,10 @@ def get_fixed_images_query_str(project: str,
     '''
     fields_anno, fields_pred, fields_union = _assemble_colnames(annotation_type, prediction_type)
 
-    username_str = 'WHERE username = %s'
+    username_str_iu = 'WHERE username = %s'
+    username_str = username_str_iu + ' OR shared = TRUE'
     if demo_mode:
-        username_str = ''
+        username_str, username_str_iu = '', ''
 
     query_str = sql.SQL('''
         SELECT id, image, cType, viewcount, EXTRACT(epoch FROM last_checked) as last_checked,
@@ -102,7 +103,7 @@ def get_fixed_images_query_str(project: str,
             )
         ) AS contents ON img.image = contents.imID
         LEFT OUTER JOIN (SELECT image AS iu_image, viewcount, last_checked, username FROM {id_iu}
-        {usernameString}) AS iu ON img.image = iu.iu_image
+        {usernameString_iu}) AS iu ON img.image = iu.iu_image
         LEFT OUTER JOIN (
             SELECT image AS bmImg, true AS bookmark
             FROM {id_bookmark}
@@ -117,7 +118,8 @@ def get_fixed_images_query_str(project: str,
         allCols=sql.SQL(', ').join(fields_union),
         annoCols=sql.SQL(', ').join(fields_anno),
         predCols=sql.SQL(', ').join(fields_pred),
-        usernameString=sql.SQL(username_str)
+        usernameString=sql.SQL(username_str),
+        usernameString_iu=sql.SQL(username_str_iu)
     )
 
     return query_str
