@@ -282,40 +282,60 @@ def get_next_batch_query_str(project: str,
 
 
 
-def get_next_tile_cardinal_direction_query_str(project: str,
-                                               cardinal_direction: str) -> sql.SQL:
+def get_next_tile_cardinal_direction_query_str(project: str) -> sql.SQL:
     '''
-        Receives a project, current image UUID, and cardinal direction, and returns the UUID of the
-        next image in given cardinal direction relative to the current one, or None if there is
-        none.
+        Assembles string to query next image tiles in all four cardinal direction, based on current
+        one.
     '''
-    cardinal_direction = cardinal_direction.strip().lower()
-    coord = 'x' if cardinal_direction in ('w', 'e') else 'y'
-    coord_other = 'y' if coord == 'x' else 'x'
-    dir_str = '<' if cardinal_direction in ('w', 's') else '>'
-    order_str = 'DESC' if dir_str == '<' else 'ASC'
-
-    query_str = sql.SQL('''
-            WITH currImg AS (
+    return sql.SQL('''
+        WITH currImg AS (
             SELECT x, y, filename
-            FROM {id_img}
+            FROM {id_image}
             WHERE id = %s
+        ),
+        imgPool AS (
+            SELECT id, x, y
+            FROM {id_image}
+            WHERE filename = (SELECT filename FROM currImg)
         )
-        SELECT id
-        FROM {id_img}
-        WHERE {coord} {dir_str} (SELECT {coord} FROM currImg)
-        AND {coord_other} = (SELECT {coord_other} FROM currImg)
-        AND filename = (SELECT filename FROM currImg)
-        ORDER BY {coord} {order_str}
-        LIMIT 1;
-        ''').format(
-            id_img=sql.Identifier(project, 'image'),
-            coord=sql.SQL(coord),
-            coord_other=sql.SQL(coord_other),
-            dir_str=sql.SQL(dir_str),
-            order_str=sql.SQL(order_str)
+        SELECT * FROM (
+            SELECT id, x, y, 'w' AS cd
+            FROM imgPool
+            WHERE x < (SELECT x FROM currImg)
+            AND y = (SELECT y FROM currImg)
+            ORDER BY x DESC
+            LIMIT 1
+        ) AS west
+        UNION ALL
+        SELECT * FROM (
+            SELECT id, x, y, 'e' AS cd
+            FROM imgPool
+            WHERE x > (SELECT x FROM currImg)
+            AND y = (SELECT y FROM currImg)
+            ORDER BY x ASC
+            LIMIT 1
+        ) AS east
+        UNION ALL
+        SELECT * FROM (
+            SELECT id, x, y, 's' AS cd
+            FROM imgPool
+            WHERE y < (SELECT y FROM currImg)
+            AND x = (SELECT x FROM currImg)
+            ORDER BY y DESC
+            LIMIT 1
+        ) AS south
+        UNION ALL
+        SELECT * FROM (
+            SELECT id, x, y, 'n' AS cd
+            FROM imgPool
+            WHERE y > (SELECT y FROM currImg)
+            AND x = (SELECT x FROM currImg)
+            ORDER BY y ASC
+            LIMIT 1
+        ) AS north
+    ''').format(
+        id_image=sql.Identifier(project, 'image')
     )
-    return query_str
 
 
 

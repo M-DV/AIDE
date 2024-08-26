@@ -93,7 +93,7 @@ class DataHandler {
             actionEntries[entries.entryID] = entries.getActionState();
         }
         this.actionUndoStack.push({'action': actionName,
-                                    'dataEntries': JSON.stringify(actionEntries)});
+                                   'dataEntries': JSON.stringify(actionEntries)});
     }
 
     undo() {
@@ -110,7 +110,7 @@ class DataHandler {
         }
         this.renderAll();
         this.actionRedoStack.push({'action': action['action'],
-                                    'dataEntries': JSON.stringify(redoActionEntries)});
+                                   'dataEntries': JSON.stringify(redoActionEntries)});
     }
 
     redo() {
@@ -127,7 +127,7 @@ class DataHandler {
         }
         this.renderAll();
         this.actionUndoStack.push({'action': action['action'],
-                                    'dataEntries': JSON.stringify(undoActionEntries)});
+                                   'dataEntries': JSON.stringify(undoActionEntries)});
     }
 
     get_undo_redo_stats() {
@@ -393,10 +393,17 @@ class DataHandler {
             dataType: 'json',
             success: function(data) {
                 // clear current entries
-                if(typeof(cardinalDirection) === 'string' &&
-                    Object.keys(data['entries']).length === 0) {
-                    // no image in cardinal direction found; do nothing
-                    return;
+                if(typeof(cardinalDirection) === 'string' && data.hasOwnProperty('cd')) {
+                    // update cardinal direction buttons
+                    let cdBtns = data['cd'];
+                    ['w', 'n', 's', 'e'].forEach((x, i) => {
+                        $(`#next-button-${x}`).prop('disabled', !cdBtns.hasOwnProperty(x));
+                    });
+                    
+                    if(Object.keys(data['entries']).length === 0) {
+                        // no image in cardinal direction found
+                        return;
+                    }
                 }
                 self.parentDiv.empty();
                 self.dataEntries = [];

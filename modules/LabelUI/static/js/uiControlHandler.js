@@ -695,7 +695,7 @@ class UIControlHandler {
 
         if(window.numImagesPerBatch === 1) {
             // buttons for spatial navigation in image tiles
-            //TODO: disable when not an image tile
+            //TODO: query available buttons upon first image already
             let dirButtons = $(`
                 <div class="float-right" style="display:flex;height:32px;margin-left:8px;">
                     <button id="next-button-w" class="btn btn-sm btn-primary"

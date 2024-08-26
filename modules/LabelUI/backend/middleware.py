@@ -637,23 +637,34 @@ class DBMiddleware():
 
             If any of the criteria is not fulfilled, an empty dict is returned.
 
-            #TODO: also return info on whether there is a next tile in N, S, W, E
+            Also returns image UUIDs in all four cardinal directions in general.
         '''
         if isinstance(current_image_id, str):
             current_image_id = UUID(current_image_id)
 
         # get UUID of next tile in direction
-        query_str = sql_string_builder.get_next_tile_cardinal_direction_query_str(project,
-                                                                                cardinal_direction)
-        next_uuid = self.db_connector.execute(query_str,
-                                              (current_image_id,),
-                                              1)
-        if next_uuid is None or len(next_uuid) == 0:
-            return {'entries': {}}
-        return self.get_batch_fixed(project,
-                                    username,
-                                    (next_uuid[0]['id'],),
-                                    hide_golden_question_info)
+        query_str = sql_string_builder.get_next_tile_cardinal_direction_query_str(project)
+        next_uuids = self.db_connector.execute(query_str,
+                                               (current_image_id,),
+                                               4)
+        next_uuids = dict([row['cd'], str(row['id'])] for row in next_uuids)
+        cardinal_direction = cardinal_direction.strip().lower()
+        if cardinal_direction not in next_uuids:
+            entries = {}
+        else:
+            # re-query available cardinal directions for next image
+            next_uuid = next_uuids[cardinal_direction]
+            next_uuids = self.db_connector.execute(query_str,
+                                                   (next_uuid,),
+                                                   4)
+            next_uuids = dict([row['cd'], str(row['id'])] for row in next_uuids)
+
+            entries = self.get_batch_fixed(project,
+                                           username,
+                                           (next_uuid,),
+                                           hide_golden_question_info)
+        entries['cd'] = next_uuids
+        return entries
 
 
     def get_sample_data(self, project: str) -> dict:
