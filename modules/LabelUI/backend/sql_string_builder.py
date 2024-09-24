@@ -321,18 +321,18 @@ def get_next_tile_cardinal_direction_query_str(project: str) -> sql.SQL:
         SELECT * FROM (
             SELECT id, x, y, 's' AS cd
             FROM imgPool
-            WHERE y < (SELECT y FROM currImg)
+            WHERE y > (SELECT y FROM currImg)
             AND x = (SELECT x FROM currImg)
-            ORDER BY y DESC
+            ORDER BY y ASC
             LIMIT 1
         ) AS south
         UNION ALL
         SELECT * FROM (
             SELECT id, x, y, 'n' AS cd
             FROM imgPool
-            WHERE y > (SELECT y FROM currImg)
+            WHERE y < (SELECT y FROM currImg)
             AND x = (SELECT x FROM currImg)
-            ORDER BY y ASC
+            ORDER BY y DESC
             LIMIT 1
         ) AS north
     ''').format(
