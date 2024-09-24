@@ -267,7 +267,9 @@ class LabelUI(Module):
             # check if user requests to see other user names; only permitted if admin
             # also, by default we limit labels to the current user, even for admins, to provide a
             # consistent experience.
-            username = html.escape(request.get_cookie('username'))
+            username = request.get_cookie('username')
+            if isinstance(username, str):
+                username = html.escape(username)
 
             if not self.login_check(project=project, admin=True):
                 # user no admin: can only query their own labels
