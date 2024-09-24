@@ -294,5 +294,5 @@ if __name__ == '__main__':
         host = server_config.get_property('Server', 'host')
         port = server_config.get_property('Server', 'port')
         aide_app.run(host=host, port=port)
-    else:
-        sys.exit(0)
+    # else:
+    #     sys.exit(0)

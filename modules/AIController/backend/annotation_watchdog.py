@@ -29,6 +29,7 @@ class Watchdog(Thread):
 
         self.timer = Event()
         self._stop_event = Event()
+        self.setDaemon(True)            # required to enable external shutdown of thread
 
         # waiting times (seconds)
         self.max_wait_time = 1800

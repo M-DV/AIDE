@@ -2,7 +2,6 @@
     2024 Benjamin Kellenberger
 '''
 
-from typing import Iterable
 from threading import Thread, Event
 from celery import current_app
 
@@ -18,6 +17,7 @@ class TaskWatchdog(Thread):
         self.tasks = {}             # task_id: task_meta
         self.timer = Event()
         self._stop_event = Event()
+        self.setDaemon(True)        # required to enable external shutdown of thread
 
 
     def _check_ongoing_tasks(self) -> None:

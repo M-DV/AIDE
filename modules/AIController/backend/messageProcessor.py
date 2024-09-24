@@ -35,6 +35,7 @@ class MessageProcessor(Thread):
         
         self.celery_app = celery_app
         self._stop_event = Event()
+        self.setDaemon(True)        # required to enable external shutdown of thread
 
         # job store
         self.jobs = {}          # dict of lists (one list for each project)
