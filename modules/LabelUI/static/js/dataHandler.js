@@ -402,7 +402,7 @@ class DataHandler {
                         numDisabled += !cdBtns.hasOwnProperty(x);
                     });
                     
-                    if(Object.keys(data['entries']).length === 0) {
+                    if(!data.hasOwnProperty('entries') || Object.keys(data['entries']).length === 0) {
                         // no image in cardinal direction found
                         if(numDisabled === 4) {
                             // project has no registration of cardinal directions; get regular next
