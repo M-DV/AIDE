@@ -395,14 +395,23 @@ class DataHandler {
                 // clear current entries
                 if(typeof(cardinalDirection) === 'string' && data.hasOwnProperty('cd')) {
                     // update cardinal direction buttons
+                    let numDisabled = 0;
                     let cdBtns = data['cd'];
                     ['w', 'n', 's', 'e'].forEach((x, i) => {
                         $(`#next-button-${x}`).prop('disabled', !cdBtns.hasOwnProperty(x));
+                        numDisabled += !cdBtns.hasOwnProperty(x);
                     });
                     
                     if(Object.keys(data['entries']).length === 0) {
                         // no image in cardinal direction found
-                        return;
+                        if(numDisabled === 4) {
+                            // project has no registration of cardinal directions; get regular next
+                            // batch instead
+                            // ugly solution, but works for the time being
+                            return self._loadNextBatch();
+                        } else {
+                            return;
+                        }
                     }
                 }
                 self.parentDiv.empty();
