@@ -2,7 +2,7 @@
  * Tools for showing a general overlay over the UI, e.g.
  * for session renewal.
  * 
- * 2020-22 Benjamin Kellenberger
+ * 2020-24 Benjamin Kellenberger
  */
 
 
@@ -137,7 +137,11 @@ window.showVerificationOverlay = function(callback) {
         return $.ajax({
             url: window.baseURL + 'doLogin',
             method: 'post',
-            data: {username: username, password: password},
+            data: {
+                username: username,
+                password: password,
+                _csrf_token: $('#_csrf').val()
+            },
             success: function(response) {
                 window.showOverlay(null);
                 if(typeof(callback) === 'function')

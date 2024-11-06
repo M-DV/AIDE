@@ -89,6 +89,7 @@ class AIDEAdmin(Module):
 
 
         @self.app.route('/admin')
+        @self.user_handler.middleware.csrf_token
         def send_aide_admin_page():
             if not self.login_check():
                 return redirect('/login?redirect=/admin')
@@ -105,7 +106,8 @@ class AIDEAdmin(Module):
 
             return self.admin_template.render(
                     version=AIDE_VERSION,
-                    username=username)
+                    username=username,
+                    _csrf_token=request.csrf_token)
 
 
         @self.app.get('/getServiceDetails')

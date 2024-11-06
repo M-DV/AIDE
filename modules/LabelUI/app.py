@@ -81,6 +81,7 @@ class LabelUI(Module):
             self.interface_template = SimpleTemplate(f_template.read())
 
         @self.app.route('/<project>/interface')
+        @self.user_handler.middleware.csrf_token
         def interface(project: str) -> response:
             # check if user logged in
             if not self.login_check(project=project):
@@ -105,7 +106,8 @@ class LabelUI(Module):
                                                   version=AIDE_VERSION,
                                                   projectShortname=project,
                                                   projectTitle=project_data['projectName'],
-                                                  projectDescr=project_data['projectDescription'])
+                                                  projectDescr=project_data['projectDescription'],
+                                                  _csrf_token=request.csrf_token)
 
 
         @self.app.get('/<project>/getProjectInfo')
@@ -365,10 +367,10 @@ class LabelUI(Module):
                 if username is None:
                     abort(403, 'forbidden')
                 return self.middleware.get_bookmarks(project, username)
-            except Exception as e:
+            except Exception as exc:
                 return {
                     'status': 1,
-                    'message': str(e)
+                    'message': str(exc)
                 }
 
 
@@ -391,3 +393,38 @@ class LabelUI(Module):
                     'status': 1,
                     'message': str(exc)
                 }
+
+
+        # @self.app.get('/<project>/getFolders')
+        # def get_folders(project: str) -> dict:
+        #     if not self.login_check(project=project):
+        #         abort(403, 'forbidden')
+        #     try:
+        #         username = html.escape(request.get_cookie('username'))
+        #         if username is None:
+        #             abort(403, 'forbidden')
+        #         return self.middleware.get_folders(project)
+        #     except Exception as exc:
+        #         return {
+        #             'status': 1,
+        #             'message': str(exc)
+        #         }
+
+
+        # @self.app.post('/<project>/saveFolders')
+        # def save_folders(project: str) -> dict:
+        #     if not self.login_check(project=project):
+        #         abort(403, 'forbidden')
+        #     try:
+        #         username = html.escape(request.get_cookie('username', ''))
+        #         if len(username.strip()) == 0:
+        #             # 100% failsafety for projects in demo mode
+        #             raise ValueError('no username provided')
+
+        #         folders = request.json['folders']
+        #         return self.middleware.edit_folders(project, folders)
+        #     except Exception as exc:
+        #         return {
+        #             'status': 1,
+        #             'message': str(exc)
+        #         }

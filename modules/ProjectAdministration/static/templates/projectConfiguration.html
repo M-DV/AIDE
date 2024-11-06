@@ -268,6 +268,7 @@
                             <div class="navigation-entry" id="projectSettings">Project settings</div>
                             <div class="navigation-entry navigation-sub-entry" id="general">General</div>
                             <div class="navigation-entry navigation-sub-entry" id="labelClasses">Label classes</div>
+                            <!-- <div class="navigation-entry navigation-sub-entry" id="folders">Folders</div> -->
                             <div class="navigation-entry navigation-sub-entry" id="userInterface">Interface</div>
                             <div class="navigation-entry navigation-sub-entry" id="accessControl">Access control</div>
                             <div class="navigation-entry" id="dataManagement">Data management</div>
@@ -320,5 +321,6 @@
 
         <!-- messaging overlay -->
         <div id="messager-container" class="messager-container"></div>
+        <input type="hidden" id="_csrf" value="{{ _csrf_token }}" />
     </body>
 </html>

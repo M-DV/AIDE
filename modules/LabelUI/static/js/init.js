@@ -1,7 +1,7 @@
 /*
     Sets up the frontend and loads all required parameters in correct order.
 
-    2019-23 Benjamin Kellenberger
+    2019-24 Benjamin Kellenberger
 */
 
 $(document).ready(function() {
@@ -315,7 +315,11 @@ $(document).ready(function() {
                 $.ajax({
                     url: 'doLogin',
                     method: 'post',
-                    data: {username: username, password: password},
+                    data: {
+                        username: username,
+                        password: password,
+                        _csrf_token: $('#_csrf').val()
+                    },
                     success: function(response) {
                         window.showOverlay(null);
                         if(typeof(callback) === 'function')
