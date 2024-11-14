@@ -39,11 +39,17 @@
                         <option value="" disabled>Choose:</option>
                         <option value="golden_question_yes">set as golden questions</option>
                         <option value="golden_question_no">unset golden questions</option>
+                        <option value="set_tags">set tags</option>
                         <!-- <option value="remove_annotations_all">remove all users' annotations</option>
                         <option value="remove_predictions_all">remove all model predictions</option> -->
                         <option value="verify_integrity">verify image integrity</option>
                         <option value="delete_images">delete</option>
                     </select>
+                    <div id="tag-options" style="display:none">
+                        <div id="tags-column-actions"></div>
+                        <input type="checkbox" id="clear-existing-tags-chck" />
+                        <label for="clear-existing-tags-chck">Replace existing tag associations</label>
+                    </div>
                     <div id="delete-options" style="display:none">
                         <input type="checkbox" id="force-delete" />
                         <label for="force-delete" style="margin-bottom:0">Force delete</label>
@@ -60,15 +66,26 @@
     </div>
     <div class="file-navigator" style="flex-grow:1">
         <div>
+            <div>Tags</div>
+            <div id="tags-column-browser"></div>
             <div>Folders</div>
             <div id="file-directory-browser"></div>
         </div>
         <div id="file-browser"></div>
     </div>
 </div>
+<link rel="stylesheet" href="/static/general/css/tags.css?v={{ version }}" />
 <link rel="stylesheet" href="/static/general/css/fileDirectoryBrowser.css?v={{ version }}" />
 <link rel="stylesheet" href="/static/dataAdmin/css/imageBrowser.css?v={{ version }}" />
 <style>
+    #tags-column-browser {
+        border: 1px solid #aaa;
+        margin-top: 9px;
+        margin-right: 15px;
+        padding: 15px;
+        overflow: auto;
+    }
+
     .file-navigator {
         display: flex;
         flex-direction: row;
@@ -112,10 +129,15 @@
     }
 </style>
 <script src="/static/dataAdmin/js/imageBrowser.js?v={{ version }}"></script>
+<script src="/static/general/js/tags.js?v={{ version }}"></script>
 <script src="/static/general/js/fileDirectoryBrowser.js?v={{ version }}"></script>
 <script src="/static/taskCoordinator/js/taskPolling.js?v={{ version }}"></script>
 <script src="/static/general/js/tableWidthAdjuster.js?v={{ version }}"></script>
 <script type="text/javascript">
+
+    // we need two TagHandler instances: one for the browser, one for setting tags.
+    let tagHandler_browser = undefined;
+    let tagHandler_actions = undefined;
 
     window.save = undefined;
 
@@ -131,12 +153,28 @@
                 '180px',
                 '70px',
                 '70px',
+                '50px',
                 '30px'
             ],
             true,
             false,
             true
         );
+
+        // init TagHandlers
+        tagHandler_browser = new TagHandler($('#tags-column-browser'),
+                                            false,
+                                            true,
+                                            true,
+                                            true);
+        tagHandler_browser.on('check', function(checkedTags) {
+            updateImageBrowser(true, false);
+        });
+        tagHandler_browser.loadTags();
+        tagHandler_actions = new TagHandler($('#tags-column-actions'),
+                                            false,
+                                            true);
+        tagHandler_actions.loadTags();
 
         // general functions
         function onClickMore(event) {
@@ -177,6 +215,7 @@
                     {'last_viewed': 'Last viewed'},
                     {'num_anno': '# Anno'},
                     {'num_pred': '# Pred'},
+                    {'tags': 'Tags'},
                     {'golden_question': '<img title="golden question" src="/static/interface/img/controls/flag_active.svg" height="16px" />'},
                     {'link': 'View'}
                 ]
@@ -219,9 +258,11 @@
                     if(folder.length === 0) folder = null;
                 }
             }
+            let tags = tagHandler_browser.getCheckedTags();
 
             let params = {
                 folder: folder,
+                tags: tags,
                 orderBy: orderBy,
                 order: order,
                 limit: limitTo
@@ -252,6 +293,10 @@
                     if(window_box.every(function(x){return Number.isInteger(x)})) {
                         url += '?window=' + window_box;
                     }
+                    let tag_markup = '';
+                    if(typeof(data[idx]['tags']) === 'string') {
+                        tag_markup = tagHandler_browser.getTagBlobs(data[idx]['tags'].split(','));
+                    }
                     images.push({
                         'id': id,
                         'url': url,
@@ -259,6 +304,7 @@
                         'last_viewed': lastViewed,
                         'num_anno': data[idx]['num_anno'],
                         'num_pred': data[idx]['num_pred'],
+                        'tags': tag_markup,
                         'golden_question': (data[idx]['isgoldenquestion'] ? 
                                 '<img src="/static/interface/img/controls/flag_active.svg" height="16px" />' :
                                 '<img src="/static/interface/img/controls/flag.svg" height="16px" />'),
@@ -340,6 +386,21 @@
             } else if(action === 'remove_annotations') {
                 error('Not yet supported.');
 
+            } else if(action === 'set_tags') {
+                let tags = tagHandler_actions.getCheckedTags();
+                data = [];
+                for(var i=0; i<checked.length; i++) {
+                    var id = checked[i].id;
+                    data.push(id);
+                }
+                data = {
+                    'image_list': data,
+                    'tags': tags,
+                    'clear_existing': $('#clear-existing-tags-chck').prop('checked')
+                };
+                url = 'setTags';
+                actionText = 'Successfully set tags for ' + checked.length + ' images.';
+
             } else if(action === 'delete_images') {
                 //TODO: show confirmation dialog
                 var imgs_del = [];
@@ -366,8 +427,8 @@
                     contentType: 'application/json; charset=utf-8',
                     dataType: 'json',
                     success: function(response) {
-                        if(action === 'delete_images') {
-                            // images deleted; refresh folders in parallel
+                        if(['delete_images', 'set_tags'].includes(action)) {
+                            // refresh folders in parallel
                             initializeDirectoryBrowser();
                         }
 
@@ -401,8 +462,10 @@
             $('.list-container').css('height', height);
             $('.thumbs-container').css('height', height);
 
-            // also for directory browser
-            $('#file-directory-browser').css('height', height);
+            // also for tags and directory browser (TODO)
+            let remainder = (height - 100) / 2;
+            $('.tags-container').css('height', remainder);
+            $('#file-directory-browser').css('height', remainder);
         }
 
         // get data server URI
@@ -421,11 +484,17 @@
                 updateImageBrowser(true, true);
             });
             $('#action-select').on('change', function() {
+                // toggle extra options
                 if($(this).val() === 'delete_images') {
-                    // show extra options
+                    $('#tag-options').hide();
                     $('#delete-options').show();
                     $('#do-action').addClass('btn-danger');
+                } else if($(this).val() === 'set_tags') {
+                    $('#tag-options').show();
+                    $('#delete-options').hide();
+                    $('#do-action').removeClass('btn-danger');
                 } else {
+                    $('#tag-options').hide();
                     $('#delete-options').hide();
                     $('#do-action').removeClass('btn-danger');
                 }

@@ -77,7 +77,7 @@ class UserHandler:
         @self.app.route('/<project>/doLogin', method='POST')
         def do_login(project=None):
             #TODO: causes issues with Mapserver
-            self.middleware.csrf_check(request.forms['_csrf_token'])
+            self.middleware.csrf_check(request.forms.get('_csrf_token'))
 
             # check provided credentials
             try:
@@ -200,7 +200,7 @@ class UserHandler:
 
         @self.app.route('/doCreateAccount', method='POST')
         def create_account():
-            self.middleware.csrf_check(request.forms['_csrf_token'], regenerate=False)
+            self.middleware.csrf_check(request.forms.get('_csrf_token'), regenerate=False)
 
             #TODO: make secret token match
             try:
@@ -260,7 +260,7 @@ class UserHandler:
 
         @self.app.route('/accountExists', method='POST')
         def check_account_exists():
-            self.middleware.csrf_check(request.forms['_csrf_token'], regenerate=False)
+            self.middleware.csrf_check(request.forms.get('_csrf_token'), regenerate=False)
             username = ''
             email = ''
             try:

@@ -380,7 +380,25 @@ MODIFICATIONS_sql = [
   ''',
   'ALTER TABLE "{schema}".image ADD COLUMN IF NOT EXISTS affine_transform REAL[];',
   'ALTER TABLE "aide_admin".project ADD COLUMN IF NOT EXISTS mapserver_settings JSON;',
-  'ALTER TABLE "{schema}".annotation ADD COLUMN IF NOT EXISTS shared BOOLEAN;'      # default FALSE
+  'ALTER TABLE "{schema}".annotation ADD COLUMN IF NOT EXISTS shared BOOLEAN;',     # default FALSE
+
+  # image tags
+  '''
+    CREATE TABLE IF NOT EXISTS "{schema}".tag (
+        id uuid NOT NULL DEFAULT uuid_generate_v4(),
+        name VARCHAR NOT NULL,
+        color VARCHAR,
+        PRIMARY KEY (id)
+    );
+
+    CREATE TABLE IF NOT EXISTS "{schema}".tag_image (
+        tag_id uuid NOT NULL,
+        image_id uuid NOT NULL,
+        PRIMARY KEY (tag_id, image_id),
+        FOREIGN KEY (tag_id) REFERENCES "{schema}".tag (id),
+        FOREIGN KEY (image_id) REFERENCES "{schema}".image (id)
+    );
+  '''
 ]
 
 

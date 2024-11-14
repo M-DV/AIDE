@@ -192,3 +192,19 @@ CREATE TABLE IF NOT EXISTS {id_taskHistory} (
     FOREIGN KEY (launchedBy) REFERENCES aide_admin.user (name),
     FOREIGN KEY (abortedBy) REFERENCES aide_admin.user (name)
 );
+
+/* image tags */
+CREATE TABLE IF NOT EXISTS {id_tag} (
+    id uuid NOT NULL DEFAULT uuid_generate_v4(),
+    name VARCHAR NOT NULL,
+    color VARCHAR,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS {id_tagImage} (
+    tag_id uuid NOT NULL,
+    image_id uuid NOT NULL,
+    PRIMARY KEY (tag_id, image_id),
+    FOREIGN KEY (tag_id) REFERENCES {id_tag} (id),
+    FOREIGN KEY (image_id) REFERENCES {id_image} (id)
+);

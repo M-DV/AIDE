@@ -1,0 +1,165 @@
+<div>
+    <h2>Tags</h2>
+    <div id="tags-div">
+        <!-- <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Color</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="tags-tbody"></tbody>
+        </table>
+        <button class="btn btn-primary" id="add-new">+</button> -->
+    </div>
+
+    <!-- Save button -->
+    <!-- <div>
+        <button id="save-button" class="btn btn-primary" style="float:right">Save</button>
+    </div> -->
+</div>
+<link rel="stylesheet" href="/static/general/css/tags.css?v={{ version }}" />
+<script src="/static/projectAdmin/js/jscolor.js?v={{ version }}"></script>
+<script src="/static/general/js/tags.js?v={{ version }}"></script>
+<script type="text/javascript">
+    let tagHandler = undefined;
+
+    function loadTags() {
+        $('#tags-tbody').empty();
+        return $.ajax({
+            url: window.baseURL + 'getTags',
+            method: 'GET',
+            success: function(data) {
+                if(data.hasOwnProperty('tags')) {
+                    for(var f=0; f<data['tags'].length; f++) {
+                        let tag = data['tags'][f];
+                        addTag(tag['id'], tag['name'], tag['color']);
+                    }
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error(error);
+                if(typeof(xhr) === 'object' && xhr.hasOwnProperty('status') && xhr['status'] !== 401) {
+                    window.messager.addMessage('An error occurred while trying to get project tags (message: "' + error + '").', 'error', 0);
+                }
+            },
+            statusCode: {
+                401: function(xhr) {
+                    return window.renewSessionRequest(xhr, function() {
+                        return loadDataManagementSettings();
+                    });
+                }
+            }
+        });
+    }
+
+    function saveTags() {
+        let self = this;
+        let tagDefs = [];
+        let tags = $('#tags-tbody').children();
+        for(var i=0; i<tags.length; i++) {
+            var fid = tags[i].id;
+            var tagDef = {
+                'name': $(`#${fid}_name`).val(),
+                'color': window.rgbToHex($(`#${fid}_color`).css('background-color'))
+            }
+            if(!fid.startsWith('tag_temp')) {
+                // previously existing id
+                tagDef['id'] = fid;
+            }
+            tagDefs.push(tagDef);
+        }
+
+        return $.ajax({
+            url: window.baseURL + 'saveTags',
+            method: 'POST',
+            contentType: 'application/json; charset=utf-8',
+            dataType: 'json',
+            data: JSON.stringify({
+                tags: tagDefs
+            }),
+            success: function(data) {
+                let message = '';
+                if(data.hasOwnProperty('tags_new') &&
+                    Object.keys(data['tags_new']).length > 0) {
+                    message += `Added ${Object.keys(data['tags_new']).length} new tag(s). `
+                }
+                if(data.hasOwnProperty('tags_edited') &&
+                    Object.keys(data['tags_edited']).length > 0) {
+                    message += `Edited ${Object.keys(data['tags_edited']).length} tag(s). `
+                }
+                if(data.hasOwnProperty('tags_deleted') &&
+                    Object.keys(data['tags_deleted']).length > 0) {
+                    message += `Deleted ${Object.keys(data['tags_deleted']).length} tag(s).`
+                }
+                if(message.length > 0) {
+                    window.messager.addMessage(message);
+                }
+                loadTags();
+            },
+            error: function(xhr, status, error) {
+                console.error(error);
+                window.messager.addMessage('An error occurred while saving tags (message: "'+error+'").', 'error', 0);
+            },
+            statusCode: {
+                401: function(xhr) {
+                    return window.renewSessionRequest(xhr, function() {
+                        self.saveTags();
+                    });
+                }
+            }
+        })
+    }
+
+    function addTag(tagID, name, color) {
+        if(tagID === undefined) {
+            tagID = `tag_temp_${new Date().getTime()}`;
+        }
+        if(name === undefined) {
+            name = 'New Tag';
+        }
+        $('#tags-tbody').append($(`
+            <tr id="${tagID}">
+                <td>
+                    <input type="text" id="${tagID}_name" value="${name}" />
+                </td>
+                <td>
+                    <input class="jscolor" data-jscolor="{required:false}" id="${tagID}_color" />
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-danger" id="${tagID}_remove">-</button>
+                </td>
+            </tr>
+        `));
+        let colorpicker = new jscolor($(`#${tagID}_color`)[0]);
+        if(color !== undefined) {
+            colorpicker.fromString(color);
+        }
+        $(`#${tagID}_remove`).click(function() {
+            removeTag(tagID);
+        });
+    }
+
+    function removeTag(tid) {
+        $('#tags-tbody').find(`#${tid}`).remove();
+    }
+
+    window.save = function() {
+        return tagHandler.saveTags();
+    }
+
+    $(document).ready(function() {
+        jscolor.installByClassName('jscolor');
+
+        tagHandler = new TagHandler($('#tags-div'), true, false);
+        var promise = tagHandler.loadTags();
+
+        // var promise = loadTags();
+
+        promise = promise.done(function() {
+            $('#add-new').click(function() {addTag()});
+            window.showLoadingOverlay(false);
+        });
+    });
+</script>

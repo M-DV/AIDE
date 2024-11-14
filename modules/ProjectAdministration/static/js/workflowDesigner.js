@@ -1,5 +1,5 @@
 /*
- * 2020-21 Benjamin Kellenberger
+ * 2020-24 Benjamin Kellenberger
  */
 
 
@@ -408,6 +408,29 @@ class DefaultNode extends AbstractNode {
         this.nodeTitleMarkup = $('<span class="node-title">'+NODE_NAMES[this.nodeType]+'</span>');
         this.markup.append(this.nodeTitleMarkup);
     }
+
+    _attach_tagHandler(container) {
+        if(typeof(TagHandler) !== 'undefined') {
+            let tagDiv = $('<div></div>');
+            container.append(tagDiv);
+            tagDiv.append($('<div>Tags:</div>'));
+            let tagContainer = $('<div></div>');
+            tagDiv.append(tagContainer);
+            this.tagHandler = new TagHandler(tagContainer,
+                                            false,
+                                            true,
+                                            true,
+                                            true);
+            this.tagHandler.loadTags();
+        }
+    }
+
+    _get_checked_tags() {
+        if(this.tagHandler !== 'undefined') {
+            return this.tagHandler.getCheckedTags();
+        }
+        return undefined;
+    }
 }
 
 
@@ -418,7 +441,8 @@ class TrainNode extends DefaultNode {
         'include_golden_questions': false,
         'max_num_images': 0,
         'max_num_workers': 0,
-        'ai_model_settings': null
+        'ai_model_settings': null,
+        'tags': null
     }
 
     constructor(parent, params, position, aiModelMeta) {
@@ -527,6 +551,9 @@ class TrainNode extends DefaultNode {
             });
             this.propertiesMarkup.append(showModelOptionsOverride);
         }
+
+        // tags
+        this._attach_tagHandler(this.propertiesMarkup);
     }
 
     toJSON() {
@@ -543,6 +570,7 @@ class TrainNode extends DefaultNode {
         this.params['max_num_images'] = this.maxNumImgs.val();
         this.params['max_num_workers'] = this.maxNumWorkers.val();
         this.params['ai_model_settings'] = this.aiModelOptions;
+        this.params['tags'] = this._get_checked_tags();
         return super.toJSON();
     }
 }
@@ -555,7 +583,8 @@ class InferenceNode extends DefaultNode {
         'max_num_images': 0,
         'max_num_workers': 0,
         'ai_model_settings': null,
-        'alcriterion_settings': null
+        'alcriterion_settings': null,
+        'tags': null
     }
 
     constructor(parent, params, position, aiModelMeta, alCriterionMeta) {
@@ -644,6 +673,9 @@ class InferenceNode extends DefaultNode {
             });
             this.propertiesMarkup.append(showModelOptionsOverride);
         }
+
+        // tags
+        this._attach_tagHandler(this.propertiesMarkup);
     }
 
     toJSON() {
@@ -654,6 +686,7 @@ class InferenceNode extends DefaultNode {
         this.params['max_num_workers'] = this.maxNumWorkers.val();
         this.params['ai_model_settings'] = this.aiModelOptions;
         this.params['alcriterion_settings'] = this.alCriterionOptions;
+        this.params['tags'] = this._get_checked_tags();
         return super.toJSON();
     }
 }

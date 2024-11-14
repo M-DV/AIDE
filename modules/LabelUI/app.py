@@ -395,36 +395,60 @@ class LabelUI(Module):
                 }
 
 
-        # @self.app.get('/<project>/getFolders')
-        # def get_folders(project: str) -> dict:
-        #     if not self.login_check(project=project):
-        #         abort(403, 'forbidden')
-        #     try:
-        #         username = html.escape(request.get_cookie('username'))
-        #         if username is None:
-        #             abort(403, 'forbidden')
-        #         return self.middleware.get_folders(project)
-        #     except Exception as exc:
-        #         return {
-        #             'status': 1,
-        #             'message': str(exc)
-        #         }
+        @self.app.get('/<project>/getTags')
+        def get_tags(project: str) -> dict:
+            if not self.login_check(project=project):
+                abort(403, 'forbidden')
+            try:
+                username = html.escape(request.get_cookie('username'))
+                if username is None:
+                    abort(403, 'forbidden')
+                return self.middleware.get_tags(project)
+            except Exception as exc:
+                return {
+                    'status': 1,
+                    'message': str(exc)
+                }
 
 
-        # @self.app.post('/<project>/saveFolders')
-        # def save_folders(project: str) -> dict:
-        #     if not self.login_check(project=project):
-        #         abort(403, 'forbidden')
-        #     try:
-        #         username = html.escape(request.get_cookie('username', ''))
-        #         if len(username.strip()) == 0:
-        #             # 100% failsafety for projects in demo mode
-        #             raise ValueError('no username provided')
+        @self.app.post('/<project>/saveTags')
+        def save_tags(project: str) -> dict:
+            if not self.login_check(project=project):
+                abort(403, 'forbidden')
+            try:
+                username = html.escape(request.get_cookie('username', ''))
+                if len(username.strip()) == 0:
+                    # 100% failsafety for projects in demo mode
+                    raise ValueError('no username provided')
 
-        #         folders = request.json['folders']
-        #         return self.middleware.edit_folders(project, folders)
-        #     except Exception as exc:
-        #         return {
-        #             'status': 1,
-        #             'message': str(exc)
-        #         }
+                tags = request.json['tags']
+                return self.middleware.save_tags(project, tags)
+            except Exception as exc:
+                return {
+                    'status': 1,
+                    'message': str(exc)
+                }
+
+
+        @self.app.post('/<project>/setTags')
+        def set_tags(project: str) -> dict:
+            if not self.login_check(project=project):
+                abort(403, 'forbidden')
+            try:
+                username = html.escape(request.get_cookie('username', ''))
+                if len(username.strip()) == 0:
+                    # 100% failsafety for projects in demo mode
+                    raise ValueError('no username provided')
+
+                tags = request.json['tags']
+                images = request.json['image_list']
+                clear_existing = request.json.get('clear_existing', False)
+                return self.middleware.set_tags(project,
+                                                tags,
+                                                images,
+                                                clear_existing)
+            except Exception as exc:
+                return {
+                    'status': 1,
+                    'message': str(exc)
+                }

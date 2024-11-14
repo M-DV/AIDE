@@ -203,6 +203,7 @@ def get_training_signature(project: str,
                            'num_epochs': num_epochs,
                            'min_timestamp': task_args['min_timestamp'],
                            'include_golden_questions': task_args['include_golden_questions'],
+                           'tags': task_args['tags'],
                            'min_num_anno_per_image': min_num_anno_per_image,
                            'max_num_images': max_num_images,
                            'num_workers': num_workers}
@@ -294,6 +295,7 @@ def get_inference_signature(project: str,
         img_task_kwargs = {'project': project,
                            'epoch': epoch,
                            'num_epochs': num_epochs,
+                           'tags': task_args['tags'],
                            'golden_questions_only': task_args['golden_questions_only'],
                            'max_num_images': max_num_images,
                            'num_workers': num_workers}
@@ -440,6 +442,19 @@ class WorkflowDesigner:
         }
 
 
+    def _get_project_tags(self, project: str) -> frozenset:
+        '''
+            Queries available tags in project.
+        '''
+        tags = self.db_connector.execute(
+            sql.SQL('SELECT id FROM {id_tags};').format(id_tags=sql.Identifier(project, 'tag')),
+            None,
+            'all')
+        if tags is None:
+            return frozenset()
+        return frozenset(str(tag['id']) for tag in tags)
+
+
     def parse_workflow(self,
                        project: str, workflow: Union[dict,str],
                        verify_only: bool=False) -> Union[celery.chain,bool]:
@@ -466,6 +481,8 @@ class WorkflowDesigner:
 
         # get default project settings for some of the parameters
         project_defaults = self._get_project_defaults(project)
+
+        project_tags = self._get_project_tags(project)
 
         # initialize model instance to verify options if possible
         try:
@@ -583,6 +600,13 @@ class WorkflowDesigner:
                 )
             else:
                 task_description['kwargs']['max_num_workers'] = default_args['max_num_workers']
+
+            tags = task_description['kwargs'].get('tags', None)
+            if tags is not None and len(tags) > 0:
+                tags = project_tags.intersection(frozenset(tags))
+                task_description['kwargs']['tags'] = tags
+            else:
+                task_description['kwargs']['tags'] = frozenset()
 
             task_description['kwargs']['epoch'] = epoch
             if task_name.lower() == 'train':

@@ -42,6 +42,7 @@ class AIControllerWorker:
                             epoch: int=None,
                             num_epochs: int=None,
                             min_timestamp: Union[datetime,str]='lastState',
+                            tags: Iterable=None,
                             include_golden_questions: bool=True,
                             min_num_anno_per_image: int=0,
                             max_num_images: int=None,

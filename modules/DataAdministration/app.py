@@ -190,6 +190,7 @@ class DataAdministrator(Module):
             params = request.json
 
             folder = params.get('folder', None)
+            tags = params.get('tags', None)
 
             image_added_range = self._parse_range(params,
                                                   'imageAddedRange',
@@ -226,6 +227,7 @@ class DataAdministrator(Module):
             result = self.middleware.listImages(project,
                                                 username,
                                                 folder,
+                                                tags,
                                                 image_added_range,
                                                 last_viewed_range,
                                                 viewcount_range,
@@ -298,19 +300,45 @@ class DataAdministrator(Module):
                     parser_id.lower() in ('null', 'none', 'undefined'):
                     parser_id = None
                 parser_kwargs = json.loads(request.params.get('parserArgs', '{}'))
+                share_annotations = request.params.get('shareAnnotations', False)
+                use_for_training = request.params.get('useAnnotationsForTraining', True)
+
+                tags = request.params.get('tags', None)
+                if tags is not None:
+                    tags = tags.strip()
+                    if len(tags) > 0:
+                        tags = json.loads(tags)
+                    else:
+                        tags = None
+
+                session_data = {
+                    'project': project,
+                    'user': username,
+                    'numFiles': num_files,
+                    'uploadImages': upload_images,
+                    'existingFiles': existing_files,
+                    'splitImages': split_patches,
+                    'splitProperties': split_props,
+                    'convertUnsupported': convert_unsupported,
+                    'parseAnnotations': parse_annotations,
+                    'skipUnknownClasses': skip_unknown_classes,
+                    'markAsGoldenQuestions': mark_golden_questions,
+                    'parserID': parser_id,
+                    'parserKwargs': parser_kwargs,
+                    'matchNumBandsPrecisely': match_num_bands_precisely,
+                    'shareAnnotations': share_annotations,
+                    'useAnnotationsForTraining': use_for_training,
+                    'tags': tags
+                }
 
                 # create session
-                session_id = self.middleware.createUploadSession(project, username, num_files,
-                                                    upload_images, existing_files,
-                                                    match_num_bands_precisely,
-                                                    split_patches, split_props,
-                                                    convert_unsupported, parse_annotations,
-                                                    skip_unknown_classes, mark_golden_questions,
-                                                    parser_id, parser_kwargs)
+                session_id = self.middleware.create_upload_session(project,
+                                                                   username,
+                                                                   session_data)
                 return {'session_id': session_id}
 
-            except Exception as e:
-                return {'status': 1, 'message': str(e)}
+            except Exception as exc:
+                return {'status': 1, 'message': str(exc)}
 
 
         @enable_cors

@@ -1,7 +1,6 @@
 '''
-    Bottle routings for the ProjectConfigurator web frontend,
-    handling project setup, data import requests, etc.
-    Also handles creation of new projects.
+    Bottle routings for the ProjectConfigurator web frontend, handling project setup, data import
+    requests, etc. Also handles creation of new projects.
 
     2019-24 Benjamin Kellenberger
 '''
@@ -105,6 +104,7 @@ class ProjectConfigurator(Module):
 
         @self.app.route('/<project>')
         @self.app.route('/<project>/')
+        @self.user_handler.middleware.csrf_token
         def send_project_overview(project):
 
             # get project data (and check if project exists)
@@ -132,10 +132,12 @@ class ProjectConfigurator(Module):
                 projectShortname=project,
                 projectTitle=project_data['name'],
                 projectDescription=project_data['description'],
-                username=username)
+                username=username,
+                _csrf_token=request.csrf_token)
 
 
         @self.app.route('/<project>/setup')
+        @self.user_handler.middleware.csrf_token
         def send_project_setup_page(project):
 
             #TODO
@@ -165,10 +167,12 @@ class ProjectConfigurator(Module):
                     version=AIDE_VERSION,
                     projectShortname=project,
                     projectTitle=project_data['name'],
-                    username=username)
+                    username=username,
+                    _csrf_token=request.csrf_token)
 
 
         @self.app.route('/<project>/configuration/<panel>')
+        @self.user_handler.middleware.csrf_token
         def send_project_config_panel(project, panel=None):
             #TODO
             if not self.login_check():
@@ -201,7 +205,8 @@ class ProjectConfigurator(Module):
                     panel=panel,
                     projectShortname=project,
                     projectTitle=project_data['name'],
-                    username=username)
+                    username=username,
+                    _csrf_token=request.csrf_token)
 
 
         @self.app.route('/<project>/configuration')
@@ -405,6 +410,7 @@ class ProjectConfigurator(Module):
             self.new_project_template = SimpleTemplate(f_template.read())
 
         @self.app.route('/newProject')
+        @self.user_handler.middleware.csrf_token
         def new_project_page():
             if not self.login_check():
                 return redirect('/')
@@ -417,7 +423,8 @@ class ProjectConfigurator(Module):
                 username=username,
                 data_server_uri=self.config.get_property('Server',
                                                          'dataServer_uri',
-                                                         fallback='/')
+                                                         fallback='/'),
+                _csrf_token=request.csrf_token
             )
 
 

@@ -1,0 +1,28 @@
+/*
+ *  2024 Benjamin Kellenberger
+ */
+
+.tag-color-blob-row {
+   display: flex;
+   flex-direction: row;
+   overflow-x: auto;
+   max-width: 50px;
+}
+
+.tag-color-blob {
+   background: #2cff5d;
+   width: 20px;
+   height: 20px;
+   border-radius: 10px;
+   margin-right: 8px;
+   float: left;
+}
+
+.tag-color-blob:first-child {
+   margin-left: 0 !important;
+}
+
+.tag-color-blob-row .tag-color-blob {
+   margin-left: -20px;
+}
+ 

@@ -1046,3 +1046,140 @@ class DBMiddleware():
             response['bookmarks_error'] = imgs_error
 
         return response
+
+
+    def get_tags(self, project: str) -> dict:
+        '''
+            Returns all the tags created for a given project.
+        '''
+        tags = self.db_connector.execute(sql.SQL('''
+                SELECT * FROM {id_tag} AS f
+                LEFT OUTER JOIN (
+                    SELECT tag_id, COUNT(*) AS num_img
+                    FROM {id_tagImage}
+                    GROUP BY tag_id
+                ) AS f_count
+                ON f.id = f_count.tag_id;
+            ''').format(id_tag=sql.Identifier(project, 'tag'),
+                        id_tagImage=sql.Identifier(project, 'tag_image')),
+            None,
+            'all')
+        tags = [{'id': str(row['id']),
+                 'name': row['name'],
+                 'color': row['color'],
+                 'num_img': row['num_img']}
+                for row in tags] if tags is not None else []
+        return {
+            'status': 0,
+            'tags': tags
+        }
+
+
+    def save_tags(self,
+                  project: str,
+                  tags: Iterable[dict]) -> dict:
+        '''
+            Receives an Iterable of tag properties and saves them for a given project. Removes
+            tags (and associated images) not present in the list.
+        '''
+        result = {}
+
+        # get all existing tag IDs
+        tags_project = dict([tag['id'], tag] for tag in self.get_tags(project)['tags'])
+
+        # split into new, to edit, and to delete tags
+        tags_new, tags_edit = [], []
+        for tag_meta in tags:
+            fid = tag_meta.get('id', None)
+            fname = tag_meta.get('name', '').strip()
+            if fid is not None:
+                assert fid in tags_project, \
+                    f'Error: tag id "{fid}" could not be found in project.'
+                assert len(fname) > 0, f'Error: empty name for tag with id "{fid}".'
+                if tags_project[fid]['name'] != tag_meta['name'] or \
+                    tags_project[fid]['color'] != tag_meta['color']:
+                    tags_edit.append(tag_meta)
+            else:
+                assert len(fname) > 0, f'Error: empty name for tag with id "{fid}".'
+                tags_new.append((fname, tag_meta.get('color', None)))
+
+        # apply the changes
+        if len(tags_new) > 0:
+            result_new = self.db_connector.insert(sql.SQL('''
+                INSERT INTO {id_tag} (name, color)
+                VALUES %s
+                RETURNING id, name;
+                ''').format(id_tag=sql.Identifier(project, 'tag')),
+                tags_new,
+                'all')
+            result['tags_new'] = dict([str(row['id']), row['name']] for row in result_new)
+
+        if len(tags_edit) > 0:
+            # apply changes separately for name and color
+            edit_vals = [(UUID(entry['id']), entry['name'], entry['color'])
+                         for entry in tags_edit]
+
+            query_str = sql.SQL('''
+                UPDATE {id_tag} AS f
+                SET name=e.name, color=e.color
+                FROM (VALUES %s) AS e(id, name, color)
+                WHERE e.id = f.id
+                RETURNING e.id, e.name
+            ''').format(id_tag=sql.Identifier(project, 'tag'))
+            result_edit = self.db_connector.insert(query_str,
+                                                   edit_vals,
+                                                   'all')
+
+            result['tags_edited'] = dict([str(row[0]), row[1]] for row in result_edit)
+
+        # delete tags not present in the list
+        tags_delete = frozenset(tags_project.keys()).difference(
+                            frozenset(tag['id'] for tag in tags))
+        if len(tags_delete) > 0:
+            tags_delete = [(UUID(tag),) for tag in tags_delete]
+            self.db_connector.insert(sql.SQL('''
+                DELETE FROM {id_tagImage}
+                WHERE tag_id IN %s;
+                ''').format(id_tagImage=sql.Identifier(project, 'tag_image')),
+                tags_delete)
+            result_delete = self.db_connector.insert(sql.SQL('''
+                DELETE FROM {id_tag}
+                WHERE id IN %s
+                RETURNING id, name;
+                ''').format(id_tag=sql.Identifier(project, 'tag')),
+                tags_delete,
+                'all')
+            result['tags_deleted'] = dict([str(row[0]), row[1]] for row in result_delete)
+        return result
+
+
+    def set_tags(self,
+                 project: str,
+                 tags: Iterable[Union[str,UUID]],
+                 image_ids: Iterable[Union[str,UUID]],
+                 clear_existing: bool=False) -> dict:
+        '''
+            Receives an Iterable of tag IDs and an Iterable of image IDs and sets tags for given
+            images accordingly. If "tags" is empty or None, tag associations will be removed for
+            given images. If "clear_existing" is True, any previously created image-to-tag
+            associations will be cleared first.
+        '''
+        image_ids = [(UUID(iid) if isinstance(iid, str) else iid,) for iid in image_ids]
+
+        if clear_existing or tags is None or len(tags) == 0:
+            self.db_connector.insert(sql.SQL('''
+                DELETE FROM {id_tag_image}
+                WHERE image_id IN (%s);
+            ''').format(id_tag_image=sql.Identifier(project, 'tag_image')),
+            image_ids)
+
+        if tags is not None and len(tags) > 0:
+            tags = [UUID(tid) if isinstance(tid, str) else tid for tid in tags]
+            data = [(tag, image_id,) for image_id in image_ids for tag in tags]
+            self.db_connector.insert(sql.SQL('''
+                INSERT INTO {id_tag_image} (tag_id, image_id)
+                VALUES %s
+                ON CONFLICT(tag_id, image_id) DO NOTHING;
+            ''').format(id_tag_image=sql.Identifier(project, 'tag_image')),
+            data)
+        return {'status': 0}

@@ -179,7 +179,8 @@ class ImageEntry {
                 if(value === undefined || value === null) {
                     value = '';
                 }
-                var td = $('<td class="' + view.varOrder[j] + '">' + value + '</td>');
+                var td = $(`<td class="${view.varOrder[j]}"></td>`);
+                td.append(value);
                 td.on('click', function(event) {
                     self.parent._on_entry_click(event, self);
                 });

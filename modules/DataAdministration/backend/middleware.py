@@ -84,7 +84,7 @@ class DataAdministrationMiddleware:
 
 
 
-    def listImages(self, project, username, folder=None, imageAddedRange=None, lastViewedRange=None,
+    def listImages(self, project, username, folder=None, tags=None, imageAddedRange=None, lastViewedRange=None,
             viewcountRange=None, numAnnoRange=None, numPredRange=None,
             orderBy=None, order='desc', startFrom=None, limit=None, offset=None):
         '''
@@ -99,7 +99,7 @@ class DataAdministrationMiddleware:
             are sorted by date_added).
         '''
         # submit job
-        process = celery_interface.list_images.si(project, folder, imageAddedRange,
+        process = celery_interface.list_images.si(project, folder, tags, imageAddedRange,
                                                 lastViewedRange, viewcountRange,
                                                 numAnnoRange, numPredRange,
                                                 orderBy, order, startFrom,
@@ -110,14 +110,10 @@ class DataAdministrationMiddleware:
 
 
 
-    def createUploadSession(self, project, user, numFiles, uploadImages=True,
-        existingFiles='keepExisting',
-        match_num_bands_precisely: bool=False,
-        splitImages=False, splitProperties=None,
-        convertUnsupported=True,
-        parseAnnotations=False,
-        skipUnknownClasses=False, markAsGoldenQuestions=False,
-        parserID=None, parserKwargs={}):
+    def create_upload_session(self,
+                              project: str,
+                              user: str,
+                              session_kwargs: dict) -> str:
         '''
             Creates a new session of image and/or label files upload.
             Receives metadata regarding the upload (whether to import
@@ -133,14 +129,9 @@ class DataAdministrationMiddleware:
 
             Returns the session ID as a response.
         '''
-        return self.dataWorker.createUploadSession(project, user, numFiles, uploadImages,
-                                            existingFiles,
-                                            match_num_bands_precisely,
-                                            splitImages, splitProperties,
-                                            convertUnsupported,
-                                            parseAnnotations,
-                                            skipUnknownClasses, markAsGoldenQuestions,
-                                            parserID, parserKwargs)
+        return self.dataWorker.create_upload_session(project,
+                                                     user,
+                                                     session_kwargs)
 
 
 

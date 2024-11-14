@@ -134,8 +134,8 @@ class COCOparser(AbstractAnnotationParser):
         imgs_valid = []
 
         # get valid COCO files
-        cocoFiles = self._get_coco_files(fileDict, self.tempDir)
-        if not len(cocoFiles):
+        coco_files = self._get_coco_files(fileDict, self.tempDir)
+        if len(coco_files) == 0:
             return {
                 'result': {},
                 'warnings': [],
@@ -143,8 +143,9 @@ class COCOparser(AbstractAnnotationParser):
             }
 
         # iterate over identified COCO files
-        for cf in cocoFiles:
-            meta = json.load(open(cf, 'r'))
+        for cf in coco_files:
+            with open(cf, 'r', encoding='utf-8') as f_meta:
+                meta = json.load(f_meta)
 
             # gather label classes. Format: COCO id: (name, supercategory (if present))
             labelClasses = dict(zip([c['id'] for c in meta['categories']],

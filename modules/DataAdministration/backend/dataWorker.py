@@ -13,6 +13,7 @@ import shutil
 import glob
 import tempfile
 import zipfile
+import itertools
 from uuid import UUID
 from collections import defaultdict
 from datetime import datetime
@@ -34,6 +35,7 @@ from util.imageSharding import get_split_positions, split_image
 from util import drivers, parsers, geospatial
 
 
+
 class DataWorker:
     '''
         Main class implementation for data manipulation tasks.
@@ -47,6 +49,26 @@ class DataWorker:
 
     # number of images to verify at a time
     VERIFICATION_BATCH_SIZE = 1024
+
+    # defaults for upload session parameters (extended & overridden during session creation)
+    UPLOAD_SESSION_DATA = {
+        'numFiles': 0,
+        'uploadImages': False,
+        'existingFiles': 'skip',
+        'splitImages': False,
+        'splitProperties': None,
+        'convertUnsupported': True,
+        'parseAnnotations': False,
+        'shareAnnotations': False,
+        'useAnnotationsForTraining': True,
+        'skipUnknownClasses': True,
+        'markAsGoldenQuestions': False,
+        'parserID': None,
+        'parserKwargs': {},
+        'matchNumBandsPrecisely': False,
+        'bandNum': (1,3),
+        'customBandConfig': False
+    }
 
     def __init__(self, config, db_connector, passive_mode=False):
         self.config = config
@@ -230,6 +252,7 @@ class DataWorker:
     def listImages(self,
                    project: str,
                    folder: str=None,
+                   tags: Iterable[Union[UUID,str]]=None,
                    imageAddedRange: Tuple[datetime]=None,
                    lastViewedRange: Tuple[datetime]=None,
                    viewcountRange: Tuple[int]=None,
@@ -253,6 +276,22 @@ class DataWorker:
         if folder is not None and isinstance(folder, str):
             filter_str += ' filename LIKE %s '
             query_args.append(folder + '%')
+        if tags is not None:
+            if isinstance(tags, str):
+                tags = [tags]
+            if len(tags) > 0:
+                if 'none' in tags:
+                    # select only images without any tags
+                    filter_str += 'AND img.id NOT IN (SELECT image_id FROM {id_tag_image}) '
+                else:
+                    filter_str += '''AND img.id IN (
+                            SELECT image_id
+                            FROM {id_tag_image}
+                            WHERE tag_id::uuid IN %s
+                        )
+                    '''
+                    tags = tuple([UUID(tag) if isinstance(tag, str) else tag for tag in tags])
+                    query_args.append(tags)
         if imageAddedRange is not None:     #TODO
             filter_str += 'AND date_added >= to_timestamp(%s) AND date_added <= to_timestamp(%s) '
             query_args.append(imageAddedRange[0])
@@ -287,7 +326,7 @@ class DataWorker:
             filter_str = filter_str[3:]
         if len(filter_str.strip()) > 0:
             filter_str = 'WHERE ' + filter_str
-        filter_str = sql.SQL(filter_str)
+        filter_str = sql.SQL(filter_str).format(id_tag_image=sql.Identifier(project, 'tag_image'))
 
         order_str = sql.SQL('ORDER BY img.id ASC')
         if orderBy is not None:
@@ -336,8 +375,16 @@ class DataWorker:
                 EXTRACT(epoch FROM last_viewed) AS last_viewed,
                 COALESCE(num_anno, 0) AS num_anno,
                 COALESCE(num_pred, 0) AS num_pred,
-                img.isGoldenQuestion
+                img.isGoldenQuestion,
+                STRING_AGG(tag_id, ',' ORDER BY tag_id) AS tags
             FROM {id_img} AS img
+            LEFT OUTER JOIN (
+                SELECT image_id, tag_id::text
+                FROM {id_tag_image} AS timg
+                JOIN {id_tag} AS tag
+                ON timg.tag_id = tag.id
+            ) AS tags
+            ON img.id = tags.image_id
             FULL OUTER JOIN (
                 SELECT image, COUNT(*) AS viewcount, MAX(last_checked) AS last_viewed
                 FROM {id_iu}
@@ -357,6 +404,7 @@ class DataWorker:
             ) AS pred
             ON img.id = pred.image
             {filter}
+            GROUP BY id, viewcount, last_viewed, num_anno, num_pred
             {order}
             {limit}
             {offset}
@@ -365,6 +413,8 @@ class DataWorker:
             id_iu=sql.Identifier(project, 'image_user'),
             id_anno=sql.Identifier(project, 'annotation'),
             id_pred=sql.Identifier(project, 'prediction'),
+            id_tag_image=sql.Identifier(project, 'tag_image'),
+            id_tag=sql.Identifier(project, 'tag'),
             filter=filter_str,
             order=order_str,
             limit=limit_str,
@@ -372,20 +422,18 @@ class DataWorker:
         )
 
         result = self.db_connector.execute(query_str, tuple(query_args), 'all')
+        if result is None:
+            return []
         for idx, row in enumerate(result):
             result[idx]['id'] = str(row['id'])
         return result
 
 
 
-    def createUploadSession(self, project, user, numFiles, uploadImages=True,
-        existingFiles='keepExisting',
-        match_num_bands_precisely: bool=False,
-        splitImages=False, splitProperties=None,
-        convertUnsupported=True,
-        parseAnnotations=False,
-        skipUnknownClasses=False, markAsGoldenQuestions=False,
-        parserID=None, parserKwargs={}):
+    def create_upload_session(self,
+                              project: str,
+                              user: str,
+                              session_kwargs: dict) -> str:
         '''
             Creates a new session of image and/or label files upload.
             Receives metadata regarding the upload (whether to import
@@ -420,17 +468,25 @@ class DataWorker:
             WHERE shortname = %s;
         ''', (project,), 1)[0]
 
+        session_meta = self.UPLOAD_SESSION_DATA.copy()
+        session_meta.update(**session_kwargs)
+
         # assertions of session meta parameters
-        assert uploadImages or parseAnnotations, \
+        upload_images = session_meta['uploadImages']
+        parse_annotations = session_meta['parseAnnotations']
+        split_images = session_meta['splitImages']
+        split_props = session_meta['splitProperties']
+        parser_id = session_meta['parserID']
+        assert upload_images or parse_annotations, \
             'either image upload or annotation parsing (or both) must be enabled'
-        assert not (parseAnnotations and \
-            (uploadImages and splitImages and not splitProperties.get('virtualSplit', True))), \
+        assert not (parse_annotations and \
+            (upload_images and split_images and not split_props.get('virtualSplit', True))), \
             'cannot both split images into patches and parse annotations'           #TODO: implement
-        if parseAnnotations:
-            annotation_type = project_props['annotationtype']
+        annotation_type = project_props['annotationtype']
+        if parse_annotations:
             assert annotation_type in parsers.PARSERS and \
-                (parserID is None or parserID in parsers.PARSERS[annotation_type]), \
-                f'unsupported annotation parser "{parserID}"'
+                (parser_id is None or parser_id in parsers.PARSERS[annotation_type]), \
+                f'unsupported annotation parser "{parser_id}"'
 
         try:
             band_config = json.loads(project_props['band_config'])
@@ -440,29 +496,13 @@ class DataWorker:
             band_num = (1,3)
             custom_band_config = False
 
-        session_meta = {
-            'project': project,
-            'sessionID': session_id,
-            'sessionName': session_name,
+        session_meta.update({
+            'annotationType': annotation_type,
             'sessionDir': tempdir_session,
-            'user': user,
-            'numFiles': numFiles,
-            'uploadImages': uploadImages,
-            'existingFiles': existingFiles,
-            'splitImages': splitImages,
-            'splitProperties': splitProperties,
-            'convertUnsupported': convertUnsupported,
-            'parseAnnotations': parseAnnotations,
-            'skipUnknownClasses': skipUnknownClasses,
-            'markAsGoldenQuestions': markAsGoldenQuestions,
-            'parserID': parserID,
-            'parserKwargs': parserKwargs,
-
-            'annotationType': project_props['annotationtype'],
             'bandNum': band_num,
-            'matchNumBandsPrecisely': match_num_bands_precisely,
             'customBandConfig': custom_band_config
-        }
+        })
+
         tempdir_meta_file = os.path.join(self.temp_dir, project, 'upload_sessions')
         os.makedirs(tempdir_meta_file, exist_ok=True)
         with open(os.path.join(tempdir_meta_file, session_id+'.json'),
@@ -887,6 +927,7 @@ class DataWorker:
                             }
 
             # save data to project folder
+            ids_path = os.path.join(meta['sessionDir'], now+'_imageIDs.txt')
             for sub_key, sub_img in images_save.items():
                 img = sub_img['image']
                 new_filename = sub_img['filename']
@@ -964,72 +1005,76 @@ class DataWorker:
             if len(imgs_valid) > 0:
                 if srid is not None:
                     # retrieve geospatial information
-                    for img_key, img_valid in imgs_valid.items():
-                        if img_valid.get('filename', None) is None or \
-                            not img_valid.get('register', True):
-                            continue
-                        window = None
-                        if 'x' in img_valid:
-                            window = [
-                                img_valid['x'], img_valid['y'],
-                                img_valid['width'], img_valid['height']
-                            ]
-                        file_path = os.path.join(destFolder, img_valid['filename'])
-                        transform, extent, img_size, img_crs = self._get_geospatial_metadata(srid,
-                                                                                        file_path,
-                                                                                        window)
-                        if not geospatial.crs_match(srid, img_crs):
-                            # CRS mismatch
-                            #TODO: remove from imgs_valid
-                            imgs_error[img_key] = {
-                                'filename': img_valid['filename'],
-                                'message': \
-                                    f'Spatial reference system mismatch ({img_crs} != {srid})',
-                                'status': 3
-                            }
-                            continue
+                    with open(ids_path, 'a', encoding='utf-8') as f_ids:
+                        for img_key, img_valid in imgs_valid.items():
+                            if img_valid.get('filename', None) is None or \
+                                not img_valid.get('register', True):
+                                continue
+                            window = None
+                            if 'x' in img_valid:
+                                window = [
+                                    img_valid['x'], img_valid['y'],
+                                    img_valid['width'], img_valid['height']
+                                ]
+                            file_path = os.path.join(destFolder, img_valid['filename'])
+                            transform, extent, img_size, img_crs = self._get_geospatial_metadata(
+                                                                            srid,
+                                                                            file_path,
+                                                                            window)
+                            if not geospatial.crs_match(srid, img_crs):
+                                # CRS mismatch
+                                #TODO: remove from imgs_valid
+                                imgs_error[img_key] = {
+                                    'filename': img_valid['filename'],
+                                    'message': \
+                                        f'Spatial reference system mismatch ({img_crs} != {srid})',
+                                    'status': 3
+                                }
+                                continue
 
-                        if any(item is None for item in (transform, extent, img_size)):
-                            # no geospatial image
-                            #TODO: remove from imgs_valid
-                            imgs_error[img_key] = {
-                                'filename': img_valid['filename'],
-                                'message': 'No or incomplete spatial information',
-                                'status': 3
-                            }
-                            continue
+                            if any(item is None for item in (transform, extent, img_size)):
+                                # no geospatial image
+                                #TODO: remove from imgs_valid
+                                imgs_error[img_key] = {
+                                    'filename': img_valid['filename'],
+                                    'message': 'No or incomplete spatial information',
+                                    'status': 3
+                                }
+                                continue
 
-                        # valid geodata; add image
-                        img_valid['width'] = img_size[0]
-                        img_valid['height'] = img_size[1]
+                            # valid geodata; add image
+                            img_valid['width'] = img_size[0]
+                            img_valid['height'] = img_size[1]
 
-                        query_str = sql.SQL('''
-                            INSERT INTO {id_img}
-                            (filename, x, y, width, height, affine_transform, extent)
-                            VALUES (%s, %s, %s, %s, %s, %s,
-                                ST_MakeEnvelope(%s, %s, %s, %s, %s)
+                            query_str = sql.SQL('''
+                                INSERT INTO {id_img}
+                                (filename, x, y, width, height, affine_transform, extent)
+                                VALUES (%s, %s, %s, %s, %s, %s,
+                                    ST_MakeEnvelope(%s, %s, %s, %s, %s)
+                                )
+                                ON CONFLICT (filename, x, y, width, height) DO UPDATE
+                                SET x=EXCLUDED.x, y=EXCLUDED.y,
+                                    width=EXCLUDED.width, height=EXCLUDED.height,
+                                    affine_transform=EXCLUDED.affine_transform,
+                                    extent=EXCLUDED.extent
+                                RETURNING id;
+                            ''').format(
+                                id_img=sql.Identifier(project, 'image')
                             )
-                            ON CONFLICT (filename, x, y, width, height) DO UPDATE
-                            SET x=EXCLUDED.x, y=EXCLUDED.y,
-                                width=EXCLUDED.width, height=EXCLUDED.height,
-                                affine_transform=EXCLUDED.affine_transform,
-                                extent=EXCLUDED.extent;
-                        ''').format(
-                            id_img=sql.Identifier(project, 'image')
-                        )
-                        self.db_connector.execute(query_str,
-                            (
-                                img_valid['filename'],
-                                img_valid.get('x', None),
-                                img_valid.get('y', None),
-                                img_valid.get('width', None),
-                                img_valid.get('height', None),
-                                transform,
-                                *extent,
-                                srid
+                            image_ids = self.db_connector.execute(query_str,
+                                (
+                                    img_valid['filename'],
+                                    img_valid.get('x', None),
+                                    img_valid.get('y', None),
+                                    img_valid.get('width', None),
+                                    img_valid.get('height', None),
+                                    transform,
+                                    *extent,
+                                    srid
+                                ),
+                                'all'
                             )
-                        )
-    
+                            f_ids.write('\n'.join([str(iid[0]) for iid in image_ids]) + '\n')
                 else:
                     # register valid images in database without geospatial info
                     query_str = sql.SQL('''
@@ -1037,11 +1082,12 @@ class DataWorker:
                         VALUES %s
                         ON CONFLICT (filename, x, y, width, height) DO UPDATE
                         SET x=EXCLUDED.x, y=EXCLUDED.y,
-                            width=EXCLUDED.width, height=EXCLUDED.height;
+                            width=EXCLUDED.width, height=EXCLUDED.height
+                        RETURNING id;
                     ''').format(
                         id_img=sql.Identifier(project, 'image')
                     )
-                    self.db_connector.insert(query_str,
+                    image_ids = self.db_connector.insert(query_str,
                         [
                             (
                                 img_val['filename'],
@@ -1053,9 +1099,11 @@ class DataWorker:
                             for img_val in imgs_valid.values()
                             if img_val['filename'] is not None \
                                 and img_val.get('register', True)
-                        ]
+                        ],
+                        'all'
                     )
-
+                    with open(ids_path, 'a', encoding='utf-8') as f_ids:
+                        f_ids.write('\n'.join([str(iid[0]) for iid in image_ids]) + '\n')
             for key, img_meta in imgs_valid.items():
                 result[key] = img_meta
                 result[key]['status'] = 0
@@ -1106,10 +1154,7 @@ class DataWorker:
                 dest = '-1'
                 if key in images_save:
                     dest = images_save[key]['filename']
-                f_upload.write('{};;{}\n'.format(
-                    item['orig'],
-                    dest
-                ))
+                f_upload.write(f'{item["orig"]};;{dest}\n')
 
 
         # count number of files uploaded and check if it matches the expected number.
@@ -1123,24 +1168,41 @@ class DataWorker:
 
         if len(filesUploaded) >= meta['numFiles']:
             # all files seem to have been uploaded
+            if meta.get('tags', None) is not None and os.path.exists(ids_path):
+                # assign tags to uploaded images
+                tags = [UUID(tag) for tag in meta['tags']]
+                with open(ids_path, 'r', encoding='utf-8') as f_ids:
+                    image_ids = [UUID(line.strip()) for line in f_ids.readlines() \
+                                 if len(line.strip()) > 0]
+                image_tag_vals = [(image_id, tag_id,) for image_id in image_ids
+                                  for tag_id in tags]
+                self.db_connector.insert(sql.SQL('''
+                    INSERT INTO {id_tag_image} (image_id, tag_id)
+                    VALUES %s
+                    ON CONFLICT(image_id, tag_id) DO NOTHING;                         
+                ''').format(id_tag_image=sql.Identifier(project, 'tag_image')),
+                image_tag_vals)
+
             if meta['parseAnnotations']:
                 if meta['parserID'] is None:
-                    parserID = parsers.auto_detect_parser(filesUploaded, meta['annotationType'], tempRoot)
-                    if parserID is None:
+                    parser_id = parsers.auto_detect_parser(filesUploaded,
+                                                           meta['annotationType'],
+                                                           tempRoot)
+                    if parser_id is None:
                         # no parser found
                         msg = 'Files do not contain parseable annotations.'
                         if meta['uploadImages']:
                             msg += '\nImages may have been uploaded.'
                         raise Exception(msg)
                 else:
-                    parserID = meta['parserID']
-                    msg = f'Unknown annotation parser "{parserID}".'
+                    parser_id = meta['parserID']
+                    msg = f'Unknown annotation parser "{parser_id}".'
                     if meta['uploadImages']:
                         msg += '\nImages may have been uploaded.'
-                    assert parserID in parsers.PARSERS[meta['annotationType']], msg
+                    assert parser_id in parsers.PARSERS[meta['annotationType']], msg
 
                 # parse
-                parser_class = parsers.PARSERS[meta['annotationType']][parserID]
+                parser_class = parsers.PARSERS[meta['annotationType']][parser_id]
                 parser = parser_class(self.config,
                                       self.db_connector,
                                       project,
@@ -1154,6 +1216,20 @@ class DataWorker:
                                                         **meta['parserKwargs'])
 
                 if len(parseResult['result']) > 0:
+                    # set shared and training flags if needed
+                    if meta['shareAnnotations'] or not meta['useAnnotationsForTraining']:
+                        anno_ids = list(itertools.chain.from_iterable(
+                            parseResult['result'].values()))
+                        self.db_connector.execute(sql.SQL('''
+                            UPDATE {id_anno}
+                            SET shared = %s, useForTraining = %s
+                            WHERE id IN %s;
+                        ''').format(
+                            id_anno=sql.Identifier(project, 'annotation')
+                        ), (meta['shareAnnotations'],
+                            meta['useAnnotationsForTraining'],
+                            tuple((anno_id,) for anno_id in anno_ids),))
+
                     # retrieve file names for images annotations were imported for & append messages
                     fileNames = self.db_connector.execute(sql.SQL('''
                         SELECT id, filename, x, y, width, height FROM {}
@@ -1502,36 +1578,38 @@ class DataWorker:
 
             Returns a list of images that were deleted.
         '''
-        
-        imageList = tuple([(UUID(i),) for i in imageList])
 
-        queryArgs = []
-        deleteArgs = []
+        imageList = tuple((UUID(i),) for i in imageList)
+
+        query_args = []
+        delete_args = []
         if forceRemove:
-            queryStr = sql.SQL('''
+            query_str = sql.SQL('''
                 SELECT id, filename
                 FROM {id_img}
                 WHERE id IN %s;
             ''').format(
                 id_img=sql.Identifier(project, 'image')
             )
-            queryArgs = tuple([imageList])
+            query_args = tuple([imageList])
 
-            deleteStr = sql.SQL('''
+            delete_str = sql.SQL('''
                 DELETE FROM {id_iu} WHERE image IN %s;
                 DELETE FROM {id_anno} WHERE image IN %s;
                 DELETE FROM {id_pred} WHERE image IN %s;
+                DELETE FROM {id_tag_img} WHERE image_id IN %s;
                 DELETE FROM {id_img} WHERE id IN %s;
             ''').format(
                 id_iu=sql.Identifier(project, 'image_user'),
                 id_anno=sql.Identifier(project, 'annotation'),
                 id_pred=sql.Identifier(project, 'prediction'),
+                id_tag_img=sql.Identifier(project, 'tag_image'),
                 id_img=sql.Identifier(project, 'image')
             )
-            deleteArgs = tuple([imageList] * 4)
-        
+            delete_args = tuple([imageList] * 5)
+
         else:
-            queryStr = sql.SQL('''
+            query_str = sql.SQL('''
                 SELECT id, filename
                 FROM {id_img}
                 WHERE id IN %s
@@ -1551,9 +1629,10 @@ class DataWorker:
                 id_anno=sql.Identifier(project, 'annotation'),
                 id_pred=sql.Identifier(project, 'prediction')
             )
-            queryArgs = tuple([imageList] * 4)
+            query_args = tuple([imageList] * 4)
 
-            deleteStr = sql.SQL('''
+            delete_str = sql.SQL('''
+                DELETE FROM {id_tag_img} WHERE image_id IN %s;
                 DELETE FROM {id_img}
                 WHERE id IN %s
                 AND id NOT IN (
@@ -1567,27 +1646,32 @@ class DataWorker:
                     WHERE image IN %s
                 );
             ''').format(
+                id_tag_img=sql.Identifier(project, 'tag_image'),
                 id_img=sql.Identifier(project, 'image'),
                 id_iu=sql.Identifier(project, 'image_user'),
                 id_anno=sql.Identifier(project, 'annotation'),
                 id_pred=sql.Identifier(project, 'prediction')
             )
-            deleteArgs = tuple([imageList] * 4)
+            delete_args = tuple([imageList] * 5)
 
         # retrieve images to be deleted
-        imgs_del = self.db_connector.execute(queryStr, queryArgs, 'all')
+        imgs_del = self.db_connector.execute(query_str,
+                                             query_args,
+                                             'all')
 
         if imgs_del is None:
             imgs_del = []
 
         if len(imgs_del):
             # delete images
-            self.db_connector.execute(deleteStr, deleteArgs, None)
+            self.db_connector.execute(delete_str,
+                                      delete_args,
+                                      None)
 
             if deleteFromDisk:
                 project_folder = os.path.join(self.config.get_property('FileServer',
                                                                        'staticfiles_dir'),
-                                             project)
+                                              project)
                 if os.path.isdir(project_folder) or os.path.islink(project_folder):
                     for i in imgs_del:
                         file_path = os.path.join(project_folder, i['filename'])
