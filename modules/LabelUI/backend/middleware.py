@@ -1092,15 +1092,12 @@ class DBMiddleware():
         for tag_meta in tags:
             fid = tag_meta.get('id', None)
             fname = tag_meta.get('name', '').strip()
-            if fid is not None:
-                assert fid in tags_project, \
-                    f'Error: tag id "{fid}" could not be found in project.'
-                assert len(fname) > 0, f'Error: empty name for tag with id "{fid}".'
+            assert len(fname) > 0, f'Error: empty name for tag with id "{fid}".'
+            if fid is not None and fid in tags_project:
                 if tags_project[fid]['name'] != tag_meta['name'] or \
                     tags_project[fid]['color'] != tag_meta['color']:
                     tags_edit.append(tag_meta)
             else:
-                assert len(fname) > 0, f'Error: empty name for tag with id "{fid}".'
                 tags_new.append((fname, tag_meta.get('color', None)))
 
         # apply the changes

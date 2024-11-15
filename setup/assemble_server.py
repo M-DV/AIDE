@@ -138,7 +138,7 @@ def assemble_server(verbose_start=True,
             LogDecorator.print_status('ok')
 
 
-    if migrate_database:
+    if migrate_database or force_migrate:
         # bring AIDE up-to-date
         print('Updating database...'.ljust(status_offset), end='')
         warnings, errors = migrate_aide(force_migrate)

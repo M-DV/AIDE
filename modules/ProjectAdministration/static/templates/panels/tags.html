@@ -133,8 +133,10 @@
             </tr>
         `));
         let colorpicker = new jscolor($(`#${tagID}_color`)[0]);
-        if(color !== undefined) {
+        try {
             colorpicker.fromString(color);
+        } catch(err) {
+            // ignore
         }
         $(`#${tagID}_remove`).click(function() {
             removeTag(tagID);

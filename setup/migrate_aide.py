@@ -7,8 +7,12 @@
 
 import os
 import argparse
+from typing import Tuple, List
+from tqdm import tqdm
 from psycopg2 import sql
+
 from constants import version
+
 
 
 MODIFICATIONS_sql = [
@@ -403,109 +407,139 @@ MODIFICATIONS_sql = [
 
 
 
-def migrate_aide(forceMigrate=False):
+def migrate_aide(force_migrate: bool=False) -> Tuple[List[str], List[str]]:
+    '''
+        Migrates AIDE database schemata with latest changes if needed.
+
+        Args:
+            - "force_migrate":  bool, set to True to issue SQL commands even if AIDE version numbers
+                                between code & database match.
+
+        Returns:
+            - list, warnings that occurred during update
+            - list, errors that occurred during update
+    '''
     from modules import Database, UserHandling
     from util.configDef import Config
 
     config = Config()
-    dbConn = Database(config)
-    if not dbConn.canConnect():
+    db_conn = Database(config)
+    if not db_conn.canConnect():
         raise Exception('Error connecting to database.')
-    
-    warnings = []
-    errors = []
+
+    warnings, errors = [], []
 
     # skip if not forced and if database has same version
-    doMigrate = True
-    
+    do_migrate = True
+
     # check if DB has version already implemented
-    dbVersion = None
-    hasVersion = dbConn.execute('''
+    db_version = None
+    has_version = db_conn.execute('''
         SELECT EXISTS (
             SELECT FROM information_schema.tables 
             WHERE  table_schema = 'aide_admin'
             AND    table_name   = 'version'
         ) AS hasVersion;
     ''', None, 1)
-    if hasVersion[0]['hasversion']:
+    if has_version[0]['hasversion']:
         # check DB version
-        dbVersion = dbConn.execute('SELECT version FROM aide_admin.version;', None, 1)
-        if dbVersion is not None and len(dbVersion):
-            dbVersion = dbVersion[0]['version']
-            needsUpdate = version.compare_versions(version.AIDE_VERSION, dbVersion)
-            if needsUpdate is not None:
-                if needsUpdate < 0:
+        db_version = db_conn.execute('SELECT version FROM aide_admin.version;', None, 1)
+        if db_version is not None and len(db_version):
+            db_version = db_version[0]['version']
+            needs_update = version.compare_versions(version.AIDE_VERSION, db_version)
+            if needs_update is not None:
+                if needs_update < 0:
                     # running an older version of AIDE with a newer DB version
-                    warnings.append(f'WARNING: local AIDE version ({version.AIDE_VERSION}) is older than the one in the database ({dbVersion}); please update your installation.')
-                elif needsUpdate == 0:
-                    doMigrate = False
+                    warnings.append(f'''WARNING: local AIDE version ({version.AIDE_VERSION}) is 
+older than the one in the database ({db_version}); please update your installation.''')
+                elif needs_update == 0:
+                    do_migrate = False
                 else:
-                    doMigrate = True
+                    do_migrate = True
 
-    if not doMigrate and not forceMigrate:
+    if not do_migrate and not force_migrate:
         return warnings, errors
 
     # bring all projects up-to-date (if registered within AIDE)
-    projects = dbConn.execute('SELECT shortname FROM aide_admin.project;', None, 'all')
-    if projects is not None and len(projects):
+    projects = db_conn.execute('SELECT shortname FROM aide_admin.project;',
+                               None,
+                               'all')
+    if projects is not None and len(projects) > 0:
 
         # get all schemata and check if project still exists
-        schemata = dbConn.execute('SELECT schema_name FROM information_schema.schemata', None, 'all')
-        if schemata is not None and len(schemata):
-            schemata = set([s['schema_name'].lower() for s in schemata])
-            for p in projects:
-                try:
-                    pName = p['shortname']
+        schemata = db_conn.execute('SELECT schema_name FROM information_schema.schemata',
+                                   None,
+                                   'all')
+        if schemata is not None and len(schemata) > 0:
+            schemata = set(s['schema_name'].lower() for s in schemata)
+            with tqdm(projects, position=tqdm._get_free_pos()) as pbar_proj:
+                for project in pbar_proj:
+                    try:
+                        project_name = project['shortname']
+                        pbar_proj.set_description(project_name)
 
-                    # check if project still exists
-                    if not pName.lower() in schemata:
-                        warnings.append(f'WARNING: project "{pName}" is registered but does not exist in database.')
-                        #TODO: option to auto-remove?
-                        continue
+                        # check if project still exists
+                        if project_name.lower() not in schemata:
+                            warnings.append(f'WARNING: project "{project_name}" is registered ' + \
+                                            'but does not exist in database.')
+                            #TODO: option to auto-remove?
+                            continue
 
-                    # special modification for CNN-to-labelclass map: drop only dep. on version (remove ancient tests)
-                    if version.compare_versions(version.AIDE_VERSION, dbVersion) in (-1, None):
-                        dbConn.execute(sql.SQL('DROP TABLE IF EXISTS {};').format(
-                            sql.Identifier(pName, 'cnn_labelclass')
-                        ), None)
+                        # special modification for CNN-to-labelclass map: drop only dep. on version
+                        # (remove ancient tests)
+                        if version.compare_versions(version.AIDE_VERSION, db_version) in (-1, None):
+                            db_conn.execute(sql.SQL('DROP TABLE IF EXISTS {};').format(
+                                sql.Identifier(project_name, 'cnn_labelclass')
+                            ), None)
 
-                    # make modifications one at a time
-                    for mod in MODIFICATIONS_sql:
-                        dbConn.execute(mod.format(schema=pName), None, None)
+                        # make modifications one at a time
+                        with tqdm(MODIFICATIONS_sql,
+                                  position=tqdm._get_free_pos()) as pbar_commands:
+                            for mod in pbar_commands:
+                                db_conn.execute(mod.format(schema=project_name), None, None)
 
-                    # pre-official 2.0: mark existing CNN states as "labelclass_autoupdate" (as this was the default behavior)
-                    if version.compare_versions(dbVersion, '2.0.210514') == -1:
-                        dbConn.execute(sql.SQL('''
-                            UPDATE {}
-                            SET labelclass_autoupdate = TRUE;
-                        ''').format(sql.Identifier(pName, 'cnnstate')), None)
+                        # pre-official 2.0: mark existing CNN states as "labelclass_autoupdate" (as
+                        # this was the default behavior)
+                        if version.compare_versions(db_version, '2.0.210514') == -1:
+                            db_conn.execute(sql.SQL('''
+                                UPDATE {}
+                                SET labelclass_autoupdate = TRUE;
+                            ''').format(sql.Identifier(project_name, 'cnnstate')), None)
 
-                except Exception as e:
-                    errors.append(str(e))
+                    except Exception as exc:
+                        errors.append(str(exc))
         else:
             warnings.append('WARNING: no project schemata found within database.')
     else:
         warnings.append('WARNING: no project registered within AIDE.')
 
     # update DB version accordingly
-    dbConn.execute('''
+    db_conn.execute('''
         DELETE FROM aide_admin.version;
         INSERT INTO aide_admin.version (version)
         VALUES (%s);
     ''', (version.AIDE_VERSION, ))
 
+    pbar_proj.close()
+    pbar_commands.close()
+
     return warnings, errors
-    
 
 
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Update AIDE database structure.')
-    parser.add_argument('--force', type=int, default=0,
-                    help='Set to 1 to force migration, even if AIDE versions already match.')
-    parser.add_argument('--settings_filepath', type=str, default='config/settings.ini', const=1, nargs='?',
-                    help='Manual specification of the directory of the settings.ini file; only considered if environment variable unset (default: "config/settings.ini").')
+    parser.add_argument('--force',
+                        type=int,
+                        default=0,
+                        help='Set to 1 to force migration, even if AIDE versions already match.')
+    parser.add_argument('--settings_filepath',
+                        type=str,
+                        default='config/settings.ini',
+                        help='Manual specification of the directory of the settings.ini file; ' + \
+                             'only considered if environment variable unset ' + \
+                              '(default: "config/settings.ini").')
     args = parser.parse_args()
 
     if not 'AIDE_CONFIG_PATH' in os.environ:
@@ -513,19 +547,20 @@ if __name__ == '__main__':
     if not 'AIDE_MODULES' in os.environ:
         os.environ['AIDE_MODULES'] = ''     # for compatibility with Celery worker import
 
-    
-    warnings, errors = migrate_aide(args.force)
 
-    if not len(warnings) and not len(errors):
+    warnings_out, errors_out = migrate_aide(args.force)
+
+    if len(warnings_out) == 0 and len(errors_out) == 0:
         print(f'AIDE is now up-to-date with the latest version ({version.AIDE_VERSION})')
     else:
-        print(f'Warnings and/or errors occurred while updating AIDE to the latest version ({version.AIDE_VERSION}):')
-        if len(warnings):
+        print('Warnings and/or errors occurred while updating AIDE to the latest version ' + \
+              f'({version.AIDE_VERSION}):')
+        if len(warnings_out) > 0:
             print('\nWarnings:')
-            for w in warnings:
-                print(f'\t"{w}"')
-            
-        if len(errors):
+            for warning in warnings_out:
+                print(f'\t"{warning}"')
+
+        if len(errors_out) > 0:
             print('\nErrors:')
-            for e in errors:
-                print(f'\t"{e}"')
+            for error in errors_out:
+                print(f'\t"{error}"')
