@@ -28,7 +28,7 @@ test_only=FALSE                     # skip installation and only do checks and t
 # -----------------------------------------------------------------------------
 
 # constants
-INSTALLER_VERSION=3.0.240805
+INSTALLER_VERSION=3.0.241120
 MIN_PG_VERSION=10
 PG_KEY=ACCC4CF8.asc
 DEFAULT_PORT_RABBITMQ=5672
@@ -256,6 +256,7 @@ while [[ $# -gt 0 ]]; do
     \e[1m8\e[0m Remote PostgreSQL server cannot be contacted. Make sure current machine and account have access permissions to database and server.
 
 \e[1mHISTORY\e[0m
+    Nov 20, 2024: Fixed formatting issues with Systemd daemon process configurations
     Aug 05, 2024: Added routine to wait for PostgreSQL server to fully boot up
     Jul 23, 2024: Added PostGIS installation
     Apr 26, 2024: Implemented auto-query option for PyTorch versions
@@ -1583,6 +1584,8 @@ CELERYD_PID_FILE="$tempDir/celeryd_aide.pid"
 CELERYD_LOG_FILE="/var/log/celery/celeryd_aide.log"
 CELERYD_OPTS=""
 CELERY_CREATE_DIRS=1
+CELERYBEAT_PID_FILE="$tempDir/celerybeat_aide.pid"
+CELERYBEAT_LOG_FILE="/var/log/celery/celerybeat_aide.log"
 CELERYBEAT_CHDIR="$aide_root"
 CELERYBEAT_OPTS="-s $tempDir/celerybeat_aide.db"
 
@@ -1616,7 +1619,7 @@ ExecStart=$python_exec \${CELERY_BIN} -A \$CELERY_APP multi start \$CELERYD_NODE
     --pidfile=\${CELERYD_PID_FILE} --logfile=\${CELERYD_LOG_FILE} \
     --loglevel="\${CELERYD_LOG_LEVEL}" \$CELERYD_OPTS
 ExecStop=$python_exec \${CELERY_BIN} multi stopwait \$CELERYD_NODES \
-    --pidfile=${CELERYD_PID_FILE} --loglevel="\${CELERYD_LOG_LEVEL}"
+    --pidfile=\${CELERYD_PID_FILE} --loglevel="\${CELERYD_LOG_LEVEL}"
 ExecReload=$python_exec \${CELERY_BIN} -A \$CELERY_APP multi restart \$CELERYD_NODES \
     --pidfile=\${CELERYD_PID_FILE} --logfile=\${CELERYD_LOG_FILE} \
     --loglevel="\${CELERYD_LOG_LEVEL}" \$CELERYD_OPTS
@@ -1654,9 +1657,9 @@ User=$aide_daemon_user
 Group=$aide_group
 EnvironmentFile=$SYSTEMD_CONFIG_WORKER
 WorkingDirectory=$aide_root
-ExecStart=/bin/sh -c '${CELERY_BIN} -A ${CELERY_APP} beat  \
-    --pidfile=${CELERYBEAT_PID_FILE} \
-    --logfile=${CELERYBEAT_LOG_FILE} --loglevel=${CELERYD_LOG_LEVEL}'
+ExecStart=/bin/sh -c '\${CELERY_BIN} -A \${CELERY_APP} beat  \
+    --pidfile=\${CELERYBEAT_PID_FILE} \
+    --logfile=\${CELERYBEAT_LOG_FILE} --loglevel=\${CELERYD_LOG_LEVEL} \$CELERYBEAT_OPTS'
 Restart=always
 
 [Install]
