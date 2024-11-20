@@ -31,16 +31,14 @@ class MapserverMiddleware:
         self.config = config
         self.db_connector = db_connector
 
+        self.services, self.project_meta, self.user_access = {}, {}, {}
+
         self.postgis_version = geospatial.get_postgis_version(self.db_connector)
 
-        self.services = {}
-        self._init_services()
-
-        self.project_meta = {}
-        self.get_project_meta()
-
-        self.user_access = {}
-        self.get_user_access()
+        if self.postgis_version is not None:
+            self._init_services()
+            self.get_project_meta()
+            self.get_user_access()
 
 
     def _init_services(self) -> None:
@@ -103,8 +101,11 @@ class MapserverMiddleware:
                         'projects': {}
                     }
                 project = row['project']
-                if (row['admitted_until'] is None or (row['admitted_until'] >= now)) and \
-                    (row['blocked_until'] is None or (row['blocked_until'] < now)):
+
+                # check project access
+                admitted_until, blocked_until = row['admitted_until'], row['blocked_until']
+                if (admitted_until is None or admitted_until.timestamp() >= now) and \
+                    (blocked_until is None or blocked_until.timestamp() < now):
                     # user has access to project
                     self.user_access[row['username']]['projects'][project] = {
                         'is_member': True,
@@ -183,8 +184,9 @@ class MapserverMiddleware:
                     }
 
                 # check member list
-                if (item['admitted_until'] is None or (item['admitted_until'] >= now)) and \
-                    (item['blocked_until'] is None or (item['blocked_until'] < now)):
+                admitted_until, blocked_until = item['admitted_until'], item['blocked_until']
+                if (admitted_until is None or admitted_until.timestamp() >= now) and \
+                    (blocked_until is None or blocked_until.timestamp() < now):
                     # user has access to project
                     user_name = item['username']
                     self.project_meta[proj_name]['users'][user_name] = {

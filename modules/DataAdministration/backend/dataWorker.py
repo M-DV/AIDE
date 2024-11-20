@@ -290,7 +290,7 @@ class DataWorker:
                             WHERE tag_id::uuid IN %s
                         )
                     '''
-                    tags = tuple([UUID(tag) if isinstance(tag, str) else tag for tag in tags])
+                    tags = tuple(UUID(tag) if isinstance(tag, str) else tag for tag in tags)
                     query_args.append(tags)
         if imageAddedRange is not None:     #TODO
             filter_str += 'AND date_added >= to_timestamp(%s) AND date_added <= to_timestamp(%s) '

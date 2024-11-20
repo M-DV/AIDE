@@ -60,25 +60,61 @@ class AIControllerWorker:
         # query image IDs
         query_vals = []
 
-        if min_timestamp is None:
-            timestamp_str = sql.SQL('')
-        elif min_timestamp == 'lastState':
-            timestamp_str = sql.SQL('''
-            WHERE iu.last_checked > COALESCE(to_timestamp(0),
-            (SELECT MAX(timecreated) FROM {id_cnnstate}))''').format(
-                id_cnnstate=sql.Identifier(project, 'cnnstate')
-            )
+        subset_str = []
+        if min_timestamp == 'lastState':
+            subset_str.append('''
+            iu.last_checked > COALESCE(to_timestamp(0),
+            (SELECT MAX(timecreated) FROM {id_cnnstate}))''')
         elif isinstance(min_timestamp, datetime):
-            timestamp_str = sql.SQL('WHERE iu.last_checked > COALESCE(to_timestamp(0), %s)')
+            subset_str.append('iu.last_checked > COALESCE(to_timestamp(0), %s)')
             query_vals.append(min_timestamp)
         elif isinstance(min_timestamp, (int, float)):
-            timestamp_str = sql.SQL('''WHERE iu.last_checked > COALESCE(to_timestamp(0),
+            subset_str.append('''iu.last_checked > COALESCE(to_timestamp(0),
                                       to_timestamp(%s))''')
             query_vals.append(min_timestamp)
 
         if min_num_anno_per_image > 0:
             query_vals.append(min_num_anno_per_image)
 
+        # tags
+        if tags is not None:
+            if isinstance(tags, (str, UUID)):
+                tags = [tags]
+            if tags[0] == 'tag_none':
+                # select all images without tags
+                subset_str.append('''iu.image NOT IN (
+                        SELECT image_id
+                        FROM {id_tag_image})''')
+            else:
+                tags = [tag if isinstance(tag, UUID) else UUID(tag) for tag in tags]
+                if len(tags) > 0:
+                    subset_str.append('''iu.image IN (
+                            SELECT image_id
+                            FROM {id_tag_image}
+                            WHERE tag_id IN %s
+                        )''')
+                    query_vals.append(tuple(tags))
+
+        if min_num_anno_per_image > 0:
+            subset_str.append('''image IN (
+                        SELECT image FROM (
+                            SELECT image, COUNT(*) AS cnt
+                            FROM {id_anno}
+                            GROUP BY image
+                            ) AS annoCount
+                        WHERE annoCount.cnt >= %s
+                    )''')
+
+        if len(subset_str) > 0:
+            subset_str = sql.SQL('WHERE ' + ' AND '.join(subset_str)).format(
+                id_cnnstate=sql.Identifier(project, 'cnnstate'),
+                id_tag_image=sql.Identifier(project, 'tag_image'),
+                id_anno=sql.Identifier(project, 'annotation')
+            )
+        else:
+            subset_str = sql.SQL('')
+
+        # max no. images
         if max_num_images is None or max_num_images <= 0:
             limit_str = sql.SQL('')
         else:
@@ -91,57 +127,25 @@ class AIControllerWorker:
         else:
             gq_str = sql.SQL('AND isGoldenQuestion IS NOT TRUE')
 
-        if min_num_anno_per_image <= 0:
-            query_str = sql.SQL('''
-                SELECT newestAnno.image FROM (
-                    SELECT image, last_checked FROM {id_iu} AS iu
-                    JOIN (
-                        SELECT id AS iid
-                        FROM {id_img}
-                        WHERE corrupt IS NULL OR corrupt = FALSE {gqStr}
-                    ) AS imgQ
-                    ON iu.image = imgQ.iid
-                    {timestampStr}
-                    ORDER BY iu.last_checked ASC
-                    {limitStr}
-                ) AS newestAnno;
-            ''').format(
-                id_iu=sql.Identifier(project, 'image_user'),
-                id_img=sql.Identifier(project, 'image'),
-                gqStr=gq_str,
-                timestampStr=timestamp_str,
-                limitStr=limit_str)
-
-        else:
-            query_str = sql.SQL('''
-                SELECT newestAnno.image FROM (
-                    SELECT image, last_checked FROM {id_iu} AS iu
-                    JOIN (
-                        SELECT id AS iid
-                        FROM {id_img}
-                        WHERE corrupt IS NULL OR corrupt = FALSE {gqStr}
-                    ) AS imgQ
-                    ON iu.image = imgQ.iid
-                    {timestampStr}
-                    {conjunction} image IN (
-                        SELECT image FROM (
-                            SELECT image, COUNT(*) AS cnt
-                            FROM {id_anno}
-                            GROUP BY image
-                            ) AS annoCount
-                        WHERE annoCount.cnt >= %s
-                    )
-                    ORDER BY iu.last_checked ASC
-                    {limitStr}
-                ) AS newestAnno;
-            ''').format(
-                id_iu=sql.Identifier(project, 'image_user'),
-                id_img=sql.Identifier(project, 'image'),
-                id_anno=sql.Identifier(project, 'annotation'),
-                gqStr=gq_str,
-                timestampStr=timestamp_str,
-                conjunction=(sql.SQL('WHERE') if min_timestamp is None else sql.SQL('AND')),
-                limitStr=limit_str)
+        query_str = sql.SQL('''
+            SELECT newestAnno.image FROM (
+                SELECT image, last_checked FROM {id_iu} AS iu
+                JOIN (
+                    SELECT id AS iid
+                    FROM {id_img}
+                    WHERE corrupt IS NULL OR corrupt = FALSE {gqStr}
+                ) AS imgQ
+                ON iu.image = imgQ.iid
+                {subsetStr}
+                ORDER BY iu.last_checked ASC
+                {limitStr}
+            ) AS newestAnno;
+        ''').format(
+            id_iu=sql.Identifier(project, 'image_user'),
+            id_img=sql.Identifier(project, 'image'),
+            gqStr=gq_str,
+            subsetStr=subset_str,
+            limitStr=limit_str)
 
         image_ids = self.db_connector.execute(query_str, tuple(query_vals), 'all')
         image_ids = [i['image'] for i in image_ids]
@@ -163,6 +167,7 @@ class AIControllerWorker:
                              project: str,
                              epoch: int=None,
                              num_epochs: int=None,
+                             tags: Iterable=None,
                              golden_questions_only: bool=False,
                              force_unlabeled: bool=False,
                              max_num_images: int=None,
@@ -179,13 +184,12 @@ class AIControllerWorker:
                 WHERE shortname = %s;''', (project,), 1)
             max_num_images = query_result[0]['maxnumimages_inference']
 
-        query_vals = (max_num_images,)
-
         # load the IDs of the images that are being subjected to inference
-        sql_str = sql_string_builder.get_inference_query_string(project,
-                                                                force_unlabeled,
-                                                                golden_questions_only,
-                                                                max_num_images)
+        sql_str, query_vals = sql_string_builder.get_inference_query_string(project,
+                                                                            force_unlabeled,
+                                                                            tags,
+                                                                            golden_questions_only,
+                                                                            max_num_images)
         image_ids = self.db_connector.execute(sql_str, query_vals, 'all')
         image_ids = [i['image'] for i in image_ids]
 

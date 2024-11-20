@@ -378,173 +378,174 @@ class AIMiddleware:
         #TODO: not required (yet)
 
 
-    def get_training_images(self,
-                            project: str,
-                            min_timestamp: Union[datetime,str]='lastState',
-                            include_golden_questions: bool=True,
-                            min_num_anno_per_image: int=0,
-                            max_num_images: int=None,
-                            max_num_workers: int=-1) -> List[UUID]:
-        '''
-            Queries the database for the latest images to be used for model training. Returns a list
-            with image UUIDs accordingly, split into the number of available workers.
-        '''
-        # sanity checks
-        if not (isinstance(min_timestamp, datetime) or \
-            min_timestamp == 'lastState' or
-            min_timestamp == -1 or \
-            min_timestamp is None):
-            raise ValueError(
-                f'{min_timestamp} is not a recognized property for variable "minTimestamp"')
+    # def get_training_images(self,
+    #                         project: str,
+    #                         min_timestamp: Union[datetime,str]='lastState',
+    #                         tags: Iterable=None,
+    #                         include_golden_questions: bool=True,
+    #                         min_num_anno_per_image: int=0,
+    #                         max_num_images: int=None,
+    #                         max_num_workers: int=-1) -> List[UUID]:
+    #     '''
+    #         Queries the database for the latest images to be used for model training. Returns a list
+    #         with image UUIDs accordingly, split into the number of available workers.
+    #     '''
+    #     # sanity checks
+    #     if not (isinstance(min_timestamp, datetime) or \
+    #         min_timestamp == 'lastState' or
+    #         min_timestamp == -1 or \
+    #         min_timestamp is None):
+    #         raise ValueError(
+    #             f'{min_timestamp} is not a recognized property for variable "minTimestamp"')
 
-        # identify number of available workers
-        if max_num_workers != 1:
-            # only query the number of available workers if more than one is specified to save time
-            num_workers = min(max_num_workers, self._get_num_available_workers())
-        else:
-            num_workers = max_num_workers
+    #     # identify number of available workers
+    #     if max_num_workers != 1:
+    #         # only query the number of available workers if more than one is specified to save time
+    #         num_workers = min(max_num_workers, self._get_num_available_workers())
+    #     else:
+    #         num_workers = max_num_workers
 
-        # query image IDs
-        query_vals = []
+    #     # query image IDs
+    #     query_vals = []
 
-        if min_timestamp is None:
-            timestamp_str = sql.SQL('')
-        elif min_timestamp == 'lastState':
-            timestamp_str = sql.SQL('''
-            WHERE iu.last_checked > COALESCE(to_timestamp(0),
-            (SELECT MAX(timecreated) FROM {id_cnnstate}))''').format(
-                id_cnnstate=sql.Identifier(project, 'cnnstate')
-            )
-        elif isinstance(min_timestamp, datetime):
-            timestamp_str = sql.SQL('WHERE iu.last_checked > COALESCE(to_timestamp(0), %s)')
-            query_vals.append(min_timestamp)
-        elif isinstance(min_timestamp, (int, float)):
-            timestamp_str = sql.SQL('''
-                WHERE iu.last_checked > COALESCE(to_timestamp(0), to_timestamp(%s))''')
-            query_vals.append(min_timestamp)
+    #     if min_timestamp is None:
+    #         timestamp_str = sql.SQL('')
+    #     elif min_timestamp == 'lastState':
+    #         timestamp_str = sql.SQL('''
+    #         WHERE iu.last_checked > COALESCE(to_timestamp(0),
+    #         (SELECT MAX(timecreated) FROM {id_cnnstate}))''').format(
+    #             id_cnnstate=sql.Identifier(project, 'cnnstate')
+    #         )
+    #     elif isinstance(min_timestamp, datetime):
+    #         timestamp_str = sql.SQL('WHERE iu.last_checked > COALESCE(to_timestamp(0), %s)')
+    #         query_vals.append(min_timestamp)
+    #     elif isinstance(min_timestamp, (int, float)):
+    #         timestamp_str = sql.SQL('''
+    #             WHERE iu.last_checked > COALESCE(to_timestamp(0), to_timestamp(%s))''')
+    #         query_vals.append(min_timestamp)
 
-        # golden questions
-        if include_golden_questions:
-            gq_str = sql.SQL('')
-        else:
-            gq_str = sql.SQL('AND isGoldenQuestion != TRUE')
+    #     # golden questions
+    #     if include_golden_questions:
+    #         gq_str = sql.SQL('')
+    #     else:
+    #         gq_str = sql.SQL('AND isGoldenQuestion != TRUE')
 
-        if min_num_anno_per_image > 0:
-            query_vals.append(min_num_anno_per_image)
+    #     if min_num_anno_per_image > 0:
+    #         query_vals.append(min_num_anno_per_image)
 
-        if max_num_images is None or not isinstance(max_num_images, int) or max_num_images <= 0:
-            limit_str = sql.SQL('')
-        else:
-            limit_str = sql.SQL('LIMIT %s')
-            query_vals.append(max_num_images)
+    #     if max_num_images is None or not isinstance(max_num_images, int) or max_num_images <= 0:
+    #         limit_str = sql.SQL('')
+    #     else:
+    #         limit_str = sql.SQL('LIMIT %s')
+    #         query_vals.append(max_num_images)
 
-        if min_num_anno_per_image <= 0:
-            query_str = sql.SQL('''
-                SELECT newestAnno.image FROM (
-                    SELECT image, last_checked FROM {id_iu} AS iu
-                    JOIN (
-                        SELECT id AS iid
-                        FROM {id_img}
-                        WHERE (corrupt IS NULL OR corrupt = FALSE)
-                        {gqStr}
-                    ) AS imgQ
-                    ON iu.image = imgQ.iid
-                    {timestampStr}
-                    ORDER BY iu.last_checked ASC
-                    {limitStr}
-                ) AS newestAnno;
-            ''').format(
-                id_iu=sql.Identifier(project, 'image_user'),
-                id_img=sql.Identifier(project, 'image'),
-                gqStr=gq_str,
-                timestampStr=timestamp_str,
-                limitStr=limit_str)
+    #     if min_num_anno_per_image <= 0:
+    #         query_str = sql.SQL('''
+    #             SELECT newestAnno.image FROM (
+    #                 SELECT image, last_checked FROM {id_iu} AS iu
+    #                 JOIN (
+    #                     SELECT id AS iid
+    #                     FROM {id_img}
+    #                     WHERE (corrupt IS NULL OR corrupt = FALSE)
+    #                     {gqStr}
+    #                 ) AS imgQ
+    #                 ON iu.image = imgQ.iid
+    #                 {timestampStr}
+    #                 ORDER BY iu.last_checked ASC
+    #                 {limitStr}
+    #             ) AS newestAnno;
+    #         ''').format(
+    #             id_iu=sql.Identifier(project, 'image_user'),
+    #             id_img=sql.Identifier(project, 'image'),
+    #             gqStr=gq_str,
+    #             timestampStr=timestamp_str,
+    #             limitStr=limit_str)
 
-        else:
-            query_str = sql.SQL('''
-                SELECT newestAnno.image FROM (
-                    SELECT image, last_checked FROM {id_iu} AS iu
-                    JOIN (
-                        SELECT id AS iid
-                        FROM {id_img}
-                        WHERE corrupt IS NULL OR corrupt = FALSE
-                    ) AS imgQ
-                    ON iu.image = imgQ.iid
-                    {timestampStr}
-                    {conjunction} image IN (
-                        SELECT image FROM (
-                            SELECT image, COUNT(*) AS cnt
-                            FROM {id_anno}
-                            GROUP BY image
-                            ) AS annoCount
-                        WHERE annoCount.cnt >= %s
-                    )
-                    ORDER BY iu.last_checked ASC
-                    {limitStr}
-                ) AS newestAnno;
-            ''').format(
-                id_iu=sql.Identifier(project, 'image_user'),
-                id_img=sql.Identifier(project, 'image'),
-                id_anno=sql.Identifier(project, 'annotation'),
-                timestampStr=timestamp_str,
-                conjunction=(sql.SQL('WHERE') if min_timestamp is None else sql.SQL('AND')),
-                limitStr=limit_str)
+    #     else:
+    #         query_str = sql.SQL('''
+    #             SELECT newestAnno.image FROM (
+    #                 SELECT image, last_checked FROM {id_iu} AS iu
+    #                 JOIN (
+    #                     SELECT id AS iid
+    #                     FROM {id_img}
+    #                     WHERE corrupt IS NULL OR corrupt = FALSE
+    #                 ) AS imgQ
+    #                 ON iu.image = imgQ.iid
+    #                 {timestampStr}
+    #                 {conjunction} image IN (
+    #                     SELECT image FROM (
+    #                         SELECT image, COUNT(*) AS cnt
+    #                         FROM {id_anno}
+    #                         GROUP BY image
+    #                         ) AS annoCount
+    #                     WHERE annoCount.cnt >= %s
+    #                 )
+    #                 ORDER BY iu.last_checked ASC
+    #                 {limitStr}
+    #             ) AS newestAnno;
+    #         ''').format(
+    #             id_iu=sql.Identifier(project, 'image_user'),
+    #             id_img=sql.Identifier(project, 'image'),
+    #             id_anno=sql.Identifier(project, 'annotation'),
+    #             timestampStr=timestamp_str,
+    #             conjunction=(sql.SQL('WHERE') if min_timestamp is None else sql.SQL('AND')),
+    #             limitStr=limit_str)
 
-        image_ids = self.db_connector.execute(query_str, tuple(query_vals), 'all')
-        image_ids = [i['image'] for i in image_ids]
+    #     image_ids = self.db_connector.execute(query_str, tuple(query_vals), 'all')
+    #     image_ids = [i['image'] for i in image_ids]
 
-        if max_num_workers > 1:
-            # split for distribution across workers
-            # (TODO: also specify subset size for multiple jobs; randomly draw if needed)
-            image_ids = array_split(image_ids, max(1, len(image_ids) // num_workers))
-        else:
-            image_ids = [image_ids]
+    #     if max_num_workers > 1:
+    #         # split for distribution across workers
+    #         # (TODO: also specify subset size for multiple jobs; randomly draw if needed)
+    #         image_ids = array_split(image_ids, max(1, len(image_ids) // num_workers))
+    #     else:
+    #         image_ids = [image_ids]
 
-        return image_ids
+    #     return image_ids
 
 
-    def get_inference_images(self,
-                             project: str,
-                             golden_questions_only: bool=False,
-                             force_unlabeled: bool=False,
-                             max_num_images: int=None,
-                             max_num_workers: int=-1) -> List[UUID]:
-        '''
-            Queries the database for the latest images to be used for inference after model
-            training. Returns a list with image UUIDs accordingly, split into the number of
-            available workers.
-        '''
-        if max_num_images is None or max_num_images == -1:
-            query_result = self.db_connector.execute('''
-                SELECT maxNumImages_inference
-                FROM aide_admin.project
-                WHERE shortname = %s;''', (project,), 1)
-            max_num_images = query_result[0]['maxnumimages_inference']
+    # def get_inference_images(self,
+    #                          project: str,
+    #                          golden_questions_only: bool=False,
+    #                          force_unlabeled: bool=False,
+    #                          max_num_images: int=None,
+    #                          max_num_workers: int=-1) -> List[UUID]:
+    #     '''
+    #         Queries the database for the latest images to be used for inference after model
+    #         training. Returns a list with image UUIDs accordingly, split into the number of
+    #         available workers.
+    #     '''
+    #     if max_num_images is None or max_num_images == -1:
+    #         query_result = self.db_connector.execute('''
+    #             SELECT maxNumImages_inference
+    #             FROM aide_admin.project
+    #             WHERE shortname = %s;''', (project,), 1)
+    #         max_num_images = query_result[0]['maxnumimages_inference']
 
-        # load the IDs of the images that are being subjected to inference
-        sql_str = sql_string_builder.get_inference_query_string(project,
-                                                                force_unlabeled,
-                                                                golden_questions_only,
-                                                                max_num_images)
-        image_ids = self.db_connector.execute(sql_str,
-                                              (max_num_images,),
-                                              'all')
-        image_ids = [img['image'] for img in image_ids]
+    #     # load the IDs of the images that are being subjected to inference
+    #     sql_str = sql_string_builder.get_inference_query_string(project,
+    #                                                             force_unlabeled,
+    #                                                             golden_questions_only,
+    #                                                             max_num_images)
+    #     image_ids = self.db_connector.execute(sql_str,
+    #                                           (max_num_images,),
+    #                                           'all')
+    #     image_ids = [img['image'] for img in image_ids]
 
-        # split for distribution across workers
-        if max_num_workers != 1:
-            # only query the number of available workers if more than one is specified to save time
-            num_available = self._get_num_available_workers()
-            if max_num_workers == -1:
-                max_num_workers = num_available   #TODO: more than one process per worker?
-            else:
-                max_num_workers = min(max_num_workers, num_available)
+    #     # split for distribution across workers
+    #     if max_num_workers != 1:
+    #         # only query the number of available workers if more than one is specified to save time
+    #         num_available = self._get_num_available_workers()
+    #         if max_num_workers == -1:
+    #             max_num_workers = num_available   #TODO: more than one process per worker?
+    #         else:
+    #             max_num_workers = min(max_num_workers, num_available)
 
-        if max_num_workers > 1:
-            image_ids = array_split(image_ids, max(1, len(image_ids) // max_num_workers))
-        else:
-            image_ids = [image_ids]
-        return image_ids
+    #     if max_num_workers > 1:
+    #         image_ids = array_split(image_ids, max(1, len(image_ids) // max_num_workers))
+    #     else:
+    #         image_ids = [image_ids]
+    #     return image_ids
 
 
     def launch_task(self,
@@ -622,16 +623,16 @@ class AIMiddleware:
             process = self.workflow_designer.parse_workflow(project,
                                                             workflow,
                                                             False)
-        except Exception as e:
+        except Exception as exc:
             return {
                 'status': 4,
-                'message': f'Workflow could not be parsed (message: "{str(e)}")'
+                'message': f'Workflow could not be parsed (message: "{str(exc)}")'
             }
 
         task_id = self.workflow_tracker.launch_workflow(project,
-                                                       process,
-                                                       workflow,
-                                                       author)
+                                                        process,
+                                                        workflow,
+                                                        author)
 
         return {
             'status': 0,

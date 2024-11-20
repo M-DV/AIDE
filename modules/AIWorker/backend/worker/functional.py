@@ -33,22 +33,29 @@ from constants.dbFieldNames import FieldNames_annotation, FieldNames_prediction
 
 
 
-def __get_message_fun(project, cumulatedTotal=None, offset=0, epoch=None, numEpochs=None):
-    def __on_message(state, message, done=None, total=None):
+def __get_message_fun(project: str,
+                      cumulated_total: int=None,
+                      offset: int=0,
+                      epoch: int=None,
+                      num_epochs: int=None) -> callable:
+    def __on_message(state: object,
+                     message: str,
+                     done: int=None,
+                     total: int=None) -> None:
         meta = {
             'project': project,
             'epoch': epoch
         }
         if isinstance(done, (int, float)) and isinstance(total, (int, float)):
             true_total = total + offset
-            if isinstance(cumulatedTotal, (int, float)):
-                true_total = max(true_total, cumulatedTotal)
+            if isinstance(cumulated_total, (int, float)):
+                true_total = max(true_total, cumulated_total)
             meta['done'] = min(done + offset, true_total)
             meta['total'] = max(meta['done'], true_total)    #max(done, trueTotal)
 
         message_combined = ''
-        if isinstance(epoch, int) and isinstance(numEpochs, int) and numEpochs > 1:
-            message_combined += f'[Epoch {epoch}/{numEpochs}] '
+        if isinstance(epoch, int) and isinstance(num_epochs, int) and num_epochs > 1:
+            message_combined += f'[Epoch {epoch}/{num_epochs}] '
 
         if isinstance(message, str):
             message_combined += message
@@ -62,10 +69,15 @@ def __get_message_fun(project, cumulatedTotal=None, offset=0, epoch=None, numEpo
     return __on_message
 
 
-def __load_model_state(project, modelLibrary, dbConnector):
+
+def __load_model_state(project: str,
+                       model_library: str,
+                       db_connector) -> tuple:
     # load model state from database
-    queryStr = sql.SQL('''
-        SELECT query.statedict, query.id, query.marketplace_origin_id, query.labelclass_autoupdate FROM (
+    query_str = sql.SQL('''
+        SELECT query.statedict, query.id,
+               query.marketplace_origin_id, query.labelclass_autoupdate
+        FROM (
             SELECT statedict, id, timecreated, marketplace_origin_id, labelclass_autoupdate
             FROM {}
             WHERE model_library = %s
@@ -73,22 +85,26 @@ def __load_model_state(project, modelLibrary, dbConnector):
             LIMIT 1
         ) AS query;
     ''').format(sql.Identifier(project, 'cnnstate'))
-    result = dbConnector.execute(queryStr, (modelLibrary,), numReturn=1)     #TODO: issues Celery warning if no state dict found
+
+    #TODO: issues Celery warning if no state dict found
+    result = db_connector.execute(query_str,
+                                  (model_library,),
+                                  numReturn=1)
     if result is None or len(result) == 0:
         # force creation of new model
-        stateDict = None
-        stateDictID = None
-        modelOriginID = None
+        state_dict = None
+        state_dict_id = None
+        model_origin_id = None
         labelclass_autoupdate = True    # new model = no existing class map
 
     else:
         # extract
-        stateDict = result[0]['statedict']
-        stateDictID = result[0]['id']
-        modelOriginID = result[0]['marketplace_origin_id']
+        state_dict = result[0]['statedict']
+        state_dict_id = result[0]['id']
+        model_origin_id = result[0]['marketplace_origin_id']
         labelclass_autoupdate = result[0]['labelclass_autoupdate']
 
-    return stateDict, stateDictID, modelOriginID, labelclass_autoupdate
+    return state_dict, state_dict_id, model_origin_id, labelclass_autoupdate
 
 
 
@@ -199,6 +215,7 @@ def __load_metadata(project,
     return meta
 
 
+
 def __get_ai_library_names(project, db_connector):
     query_str = sql.SQL('''
         SELECT ai_model_library, ai_alcriterion_library
@@ -213,6 +230,7 @@ def __get_ai_library_names(project, db_connector):
     return model_library, alcriterion_library
 
 
+
 def _call_update_model(project, numEpochs, modelInstance, modelLibrary, dbConnector):
     '''
         Checks first if any label classes have been added since the last model update. If so, or if
@@ -220,7 +238,7 @@ def _call_update_model(project, numEpochs, modelInstance, modelLibrary, dbConnec
         modify the model to incorporate newly added label classes. Returns the updated model state
         dict.
     '''
-    update_state = __get_message_fun(project, numEpochs=numEpochs)
+    update_state = __get_message_fun(project, num_epochs=numEpochs)
 
     # abort if model does not support updating
     if not hasattr(modelInstance, 'update_model'):
@@ -309,6 +327,7 @@ def _call_train(project, imageIDs, epoch, numEpochs, subset, modelInstance, mode
                           'train' function.
         - TODO: more?
     '''
+    assert len(imageIDs) > 0, 'ERROR: no images found for training.'
 
     print(f'[{project}] Epoch {epoch}: Initiated training...')
     update_state = __get_message_fun(project, len(imageIDs), 0, epoch, numEpochs)
@@ -461,6 +480,8 @@ def _call_inference(project, imageIDs, epoch, numEpochs, modelInstance, modelLib
     '''
 
     '''
+    assert len(imageIDs) > 0, 'ERROR: no images found for inference.'
+
     print(f'[{project}] Epoch {epoch}: Initiated inference on {len(imageIDs)} images...')
     update_state = __get_message_fun(project, len(imageIDs), 0, epoch, numEpochs)
 
@@ -630,4 +651,3 @@ def _call_inference(project, imageIDs, epoch, numEpochs, modelInstance, modelLib
     update_state(state=states.SUCCESS, message='predicted on {} images'.format(len(imageIDs)))
 
     print(f'[{project}] Epoch {epoch}: Inference completed successfully.')
-    return

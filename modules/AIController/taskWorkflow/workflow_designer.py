@@ -604,9 +604,9 @@ class WorkflowDesigner:
             tags = task_description['kwargs'].get('tags', None)
             if tags is not None and len(tags) > 0:
                 tags = project_tags.intersection(frozenset(tags))
-                task_description['kwargs']['tags'] = tags
+                task_description['kwargs']['tags'] = tuple(tags)
             else:
-                task_description['kwargs']['tags'] = frozenset()
+                task_description['kwargs']['tags'] = tuple()
 
             task_description['kwargs']['epoch'] = epoch
             if task_name.lower() == 'train':

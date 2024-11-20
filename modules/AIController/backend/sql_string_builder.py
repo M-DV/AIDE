@@ -4,14 +4,17 @@
     2019-24 Benjamin Kellenberger
 '''
 
+from typing import Iterable, Tuple
+from uuid import UUID
 from psycopg2 import sql
 
 
 
 def get_inference_query_string(project: str,
                                force_unlabeled: bool=True,
+                               tags: Iterable=None,
                                golden_questions_only: bool=False,
-                               limit: int=None) -> sql.SQL:
+                               limit: int=None) -> Tuple[sql.SQL, Tuple]:
     '''
         Assembles SQL string to query the latest images from a project for model inference.
 
@@ -19,33 +22,62 @@ def get_inference_query_string(project: str,
             - "project":                str, project shortname
             - "force_unlabeled:         bool, only queries images that have not yet been checked
                                         by users if True (default) to be queried (default: 0 =
-                                        no limit)
+                                        no limit).
+            - "tags"                    iterable of str or UUID, only include images that have been
+                                        assigned to at least one of the specified tags. If special
+                                        keyword "tag_none" is found, only images that have not been
+                                        assigned to any tag will be queried.
             - "golden_questions_only":  bool, only includes images marked as "golden question"
-                                        if True (default: False)
+                                        if True (default: False).
             - "limit":                  int, maximum number of images to query (default: None =
-                                        no limit)
+                                        no limit).
         
         Returns:
             - SQL, SQL string object to perform query.
+            - query values as tuple.
     '''
+    query_vals = []
+
     if golden_questions_only:
         gq_str = sql.SQL('WHERE isGoldenQuestion IS TRUE')
     else:
         gq_str = sql.SQL('')
 
+    condition_str = []
     if force_unlabeled:
-        unlabeled_str = sql.SQL('''WHERE viewcount IS NULL
+        condition_str.append('''viewcount IS NULL
             AND (corrupt IS NULL OR corrupt = FALSE)''')
     else:
-        unlabeled_str = sql.SQL('WHERE corrupt IS NULL OR corrupt = FALSE')
+        condition_str.append('corrupt IS NULL OR corrupt = FALSE')
+
+    # tags
+    if tags is not None:
+        if isinstance(tags, (str, UUID)):
+            tags = [tags]
+        if tags[0] == 'tag_none':
+            # select all images without tags
+            condition_str.append('''image.id NOT IN (
+                    SELECT image_id
+                    FROM {id_tag_image})''')
+        else:
+            tags = [tag if isinstance(tag, UUID) else UUID(tag) for tag in tags]
+            if len(tags) > 0:
+                condition_str.append('''image.id IN (
+                        SELECT image_id
+                        FROM {id_tag_image}
+                        WHERE tag_id IN %s
+                    )''')
+                query_vals.append(tuple(tags))
+
+    condition_str = sql.SQL('WHERE ' + ' AND '.join(condition_str)).format(
+        id_tag_image=sql.Identifier(project, 'tag_image')
+    )
 
     if limit is None or limit <= 0:
         limit_str = sql.SQL('')
     else:
-        try:
-            limit_str = sql.SQL('LIMIT %s')
-        except Exception as exc:
-            raise ValueError(f'Invalid value for limit ({limit})') from exc
+        limit_str = sql.SQL('LIMIT %s')
+        query_vals.append(limit)
 
     query_str = sql.SQL('''
         SELECT query.imageID AS image FROM (
@@ -63,10 +95,10 @@ def get_inference_query_string(project: str,
         id_img=sql.Identifier(project, 'image'),
         id_iu=sql.Identifier(project, 'image_user'),
         gqString=gq_str,
-        conditionString=unlabeled_str,
+        conditionString=condition_str,
         limit=limit_str
     )
-    return query_str
+    return query_str, tuple(query_vals)
 
 
 #TODO: not used anymore
