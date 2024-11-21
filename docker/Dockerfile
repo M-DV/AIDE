@@ -2,7 +2,7 @@
 # AIDE main Dockerfile.
 #
 # 2020-24 Jaroslaw Szczegielniak, Benjamin Kellenberger
-FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+FROM nvidia/cuda:12.6.2-cudnn-devel-ubuntu24.04
 
 # Avoid warnings by switching to noninteractive
 ENV DEBIAN_FRONTEND=noninteractive
@@ -17,12 +17,14 @@ ENV DEBIAN_FRONTEND=noninteractive
 # will be updated to match your local UID/GID (when using the dockerFile property).
 # See https://aka.ms/vscode-remote/containers/non-root-user for details.
 ARG USERNAME=aide
-ARG USER_UID=1000
+# required change of UID from 1000 for Ubuntu 24.04 and above
+ARG USER_UID=1100
 ARG USER_GID=$USER_UID
 
 # Setup basic packages, environment and user
-RUN apt-get update && apt-get -y install software-properties-common python3 python-is-python3 python3-pip python3-launchpadlib
-RUN add-apt-repository -y ppa:ubuntugis/ppa \
+#TODO: switch ubuntugis ppa back to stable once 24.04 LTS (Jammy) release is out
+RUN apt-get update && apt-get -y install software-properties-common python3 python-is-python3 python3-pip python3-launchpadlib python3-venv
+RUN add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable \
     && apt-get update \
     && apt-get -y install --no-install-recommends apt-utils dialog 2>&1 \
     #
@@ -58,15 +60,20 @@ RUN add-apt-repository -y ppa:ubuntugis/ppa \
 # specify the root folder where you wish to install AIDE
 WORKDIR /home/$USERNAME/app
 
+# create Python environment
+ENV VIRTUAL_ENV=/opt/aide_env
+RUN python3 -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
 # install required libraries
-RUN python -m pip install --upgrade pip
-RUN python -m pip install torch torchvision
+RUN python3 -m pip install --upgrade pip
+RUN python3 -m pip install torch torchvision
 COPY requirements.txt docker/requirements.txt
-RUN python -m pip install git+https://github.com/facebookresearch/detectron2.git
-RUN python -m pip install -r docker/requirements.txt
+RUN python3 -m pip install --no-build-isolation git+https://github.com/facebookresearch/detectron2.git
+RUN python3 -m pip install -r docker/requirements.txt
 
 # 2024/04/27: need to upgrade OpenSSL to avoid bug about "X509_V_FLAG_NOTIFY_POLICY"
-RUN python -m pip install pyopenssl --upgrade
+RUN python3 -m pip install pyopenssl --upgrade
 
 # ============================ DB SERVER ONLY BEGINS ======================================
 # Setup PostgreSQL database

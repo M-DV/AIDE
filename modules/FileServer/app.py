@@ -6,7 +6,8 @@
 
 import os
 from io import BytesIO
-from bottle import static_file, request, abort, _file_iter_range, parse_range_header, HTTPResponse
+import bottle
+from bottle import static_file, request, abort, parse_range_header, HTTPResponse
 
 from util.cors import enable_cors
 from util import helpers
@@ -60,7 +61,7 @@ class FileServer(Module):
 
             assert GDALImageDriver.init_is_available()  #TODO
 
-            self._initBottle()
+            self._init_bottle()
         except Exception as exc:
             if verbose_start:
                 LogDecorator.print_status('fail')
@@ -70,11 +71,32 @@ class FileServer(Module):
             LogDecorator.print_status('ok')
 
 
-    def _initBottle(self):
+    @staticmethod
+    def file_iter_range(file_handle,
+                        offset: int,
+                        end: int) -> object:
+        '''
+            Handling of HTTP_RANGE responses depending on different implementations in Bottle
+            versions.
+        '''
+        #pylint: disable=protected-access, no-member
+        if hasattr(bottle, '_rangeiter'):
+            # new implementation since Bottle 0.13
+            #TODO: untested
+            return bottle._closeiter(bottle._rangeiter(file_handle, offset, end-offset),
+                                     file_handle.close)
+
+        # old implementation
+        return bottle._file_iter_range(file_handle, offset, end-offset)
+
+
+    def _init_bottle(self):
 
         ''' static routing to files '''
         @enable_cors
-        @self.app.route(os.path.join('/', self.static_address_suffix, '/<project>/files/<path:path>'))
+        @self.app.route(os.path.join('/',
+                                     self.static_address_suffix,
+                                     '/<project>/files/<path:path>'))
         def send_file(project, path):
             file_path = os.path.join(self.static_dir, project, path)
             need_conversion = not is_web_compatible(file_path)
@@ -114,7 +136,10 @@ class FileServer(Module):
                     offset, end = ranges[0]
                     headers['Content-Range'] = f'bytes {offset}-{end-1}/{clen}'
                     headers['Content-Length'] = str(end-offset)
-                    fhandle = _file_iter_range(fhandle, offset, end-offset)
+
+                    fhandle = self.file_iter_range(fhandle,
+                                                   offset,
+                                                   end)
                     return HTTPResponse(fhandle, status=206, **headers)
 
                 return HTTPResponse(bytes_arr, status=200, **headers)

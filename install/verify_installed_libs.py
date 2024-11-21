@@ -5,6 +5,8 @@
 '''
 
 from typing import Optional, List
+import os
+import sys
 import argparse
 import importlib
 
@@ -42,20 +44,25 @@ def verify_libraries(verify_optional_libs: bool=True,
         Attempts to load list of required packages one by one. Prints all libraries to the command
         line that could not be imported properly.
     '''
-    if libs_ignore is None:
-        libs_ignore = []
-    libs = LIBS_REQUIRED
-    if verify_optional_libs:
-        libs += LIBS_OPTIONAL
-    for lib in libs:
-        if lib in libs_ignore:
-            continue
-        try:
-            importlib.import_module(lib)
-        except ModuleNotFoundError as exc:
-            if raise_on_first_error:
-                raise exc
-            print(f'{lib}: {exc}')
+    # disable system output for libraries that talk too much
+    with open(os.devnull, 'w', encoding='utf-8') as f_mock:
+        sys.stdout = f_mock
+        if libs_ignore is None:
+            libs_ignore = []
+        libs = LIBS_REQUIRED
+        if verify_optional_libs:
+            libs += LIBS_OPTIONAL
+        for lib in libs:
+            if lib in libs_ignore:
+                continue
+            try:
+                importlib.import_module(lib)
+            except ModuleNotFoundError as exc:
+                if raise_on_first_error:
+                    raise exc
+                # re-enable system output
+                sys.stdout = sys.__stdout__
+                print(f'{lib}: {exc}')
 
 
 

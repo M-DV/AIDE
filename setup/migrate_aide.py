@@ -508,6 +508,7 @@ older than the one in the database ({db_version}); please update your installati
 
                     except Exception as exc:
                         errors.append(str(exc))
+                pbar_proj.close()
         else:
             warnings.append('WARNING: no project schemata found within database.')
     else:
@@ -520,7 +521,6 @@ older than the one in the database ({db_version}); please update your installati
         VALUES (%s);
     ''', (version.AIDE_VERSION, ))
 
-    pbar_proj.close()
     pbar_commands.close()
 
     return warnings, errors
