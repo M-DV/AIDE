@@ -80,14 +80,14 @@ class AIControllerWorker:
         if tags is not None:
             if isinstance(tags, (str, UUID)):
                 tags = [tags]
-            if tags[0] == 'tag_none':
-                # select all images without tags
-                subset_str.append('''iu.image NOT IN (
-                        SELECT image_id
-                        FROM {id_tag_image})''')
-            else:
-                tags = [tag if isinstance(tag, UUID) else UUID(tag) for tag in tags]
-                if len(tags) > 0:
+            if len(tags) > 0:
+                if tags[0] == 'tag_none':
+                    # select all images without tags
+                    subset_str.append('''iu.image NOT IN (
+                            SELECT image_id
+                            FROM {id_tag_image})''')
+                else:
+                    tags = [tag if isinstance(tag, UUID) else UUID(tag) for tag in tags]
                     subset_str.append('''iu.image IN (
                             SELECT image_id
                             FROM {id_tag_image}

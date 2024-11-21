@@ -54,14 +54,14 @@ def get_inference_query_string(project: str,
     if tags is not None:
         if isinstance(tags, (str, UUID)):
             tags = [tags]
-        if tags[0] == 'tag_none':
-            # select all images without tags
-            condition_str.append('''image.id NOT IN (
-                    SELECT image_id
-                    FROM {id_tag_image})''')
-        else:
-            tags = [tag if isinstance(tag, UUID) else UUID(tag) for tag in tags]
-            if len(tags) > 0:
+        if len(tags) > 0:
+            if tags[0] == 'tag_none':
+                # select all images without tags
+                condition_str.append('''image.id NOT IN (
+                        SELECT image_id
+                        FROM {id_tag_image})''')
+            else:
+                tags = [tag if isinstance(tag, UUID) else UUID(tag) for tag in tags]
                 condition_str.append('''image.id IN (
                         SELECT image_id
                         FROM {id_tag_image}

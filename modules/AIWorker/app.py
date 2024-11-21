@@ -2,7 +2,8 @@
     2019-24 Benjamin Kellenberger
 '''
 
-import inspect
+from typing import Tuple, Iterable, Union
+from uuid import UUID
 import json
 from modules.AIWorker.backend.worker import functional
 from modules.AIWorker.backend import fileserver
@@ -10,9 +11,16 @@ from util.logDecorator import LogDecorator
 from util.helpers import get_class_executable
 
 
-class AIWorker():
 
-    def __init__(self, config, db_connector, passive_mode=False, verbose_start=False):
+class AIWorker():
+    '''
+        Main AI model training/inference class.
+    '''
+    def __init__(self,
+                 config,
+                 db_connector,
+                 passive_mode=False,
+                 verbose_start=False) -> None:
         self.config = config
 
         if verbose_start:
@@ -37,216 +45,224 @@ class AIWorker():
             also hosts the file server. If it does, data are loaded directly from disk to avoid
             going through the loopback network.
         '''
-        self.fileServer = fileserver.FileServer(self.config)
+        self.file_server = fileserver.FileServer(self.config)
 
 
-    def _init_model_instance(self, project, modelLibrary, modelSettings):
+    def _init_model_instance(self,
+                             project: str,
+                             model_library: str,
+                             model_settings: str) -> object:
         # try to parse model settings
-        if modelSettings is not None and len(modelSettings):
-            if isinstance(modelSettings, str):
+        if model_settings is not None and len(model_settings):
+            if isinstance(model_settings, str):
                 try:
-                    modelSettings = json.loads(modelSettings)
+                    model_settings = json.loads(model_settings)
                 except Exception as err:
-                    print('WARNING: could not read model options. Error message: {message}.'.format(
-                        message=str(err)
-                    ))
-                    modelSettings = None
+                    print(f'WARNING: could not read model options. Error message: {err}.')
+                    model_settings = None
         else:
-            modelSettings = None
+            model_settings = None
 
         # import class object
-        modelClass = get_class_executable(modelLibrary)
-
-        # verify functions and arguments
-        requiredFunctions = {
-            '__init__' : ['project', 'config', 'dbConnector', 'fileServer', 'options'],
-            'train' : ['stateDict', 'data', 'updateStateFun'],
-            'average_model_states' : ['stateDicts', 'updateStateFun'],
-            'inference' : ['stateDict', 'data', 'updateStateFun']
-        }
-        functionNames = [func for func in dir(modelClass) if callable(getattr(modelClass, func))]
-
-        for key in requiredFunctions:
-            if not key in functionNames:
-                raise Exception('Class {} is missing required function {}.'.format(modelLibrary, key))
-
-            # check function arguments bidirectionally
-            funArgs = inspect.getargspec(getattr(modelClass, key))
-            for arg in requiredFunctions[key]:
-                if not arg in funArgs.args:
-                    raise Exception('Method {} of class {} is missing required argument {}.'.format(modelLibrary, key, arg))
-            for arg in funArgs.args:
-                if arg != 'self' and not arg in requiredFunctions[key]:
-                    raise Exception('Unsupported argument {} of method {} in class {}.'.format(arg, key, modelLibrary))
+        model_class = get_class_executable(model_library)
 
         # create AI model instance
-        return modelClass(project=project,
+        return model_class(project=project,
                             config=self.config,
                             dbConnector=self.db_connector,
-                            fileServer=self.fileServer.get_secure_instance(project),
-                            options=modelSettings)
-        
+                            fileServer=self.file_server.get_secure_instance(project),
+                            options=model_settings)
 
-    def _init_alCriterion_instance(self, project, alLibrary, alSettings):
+
+    def _init_al_criterion_instance(self,
+                                    project: str,
+                                    al_library: str,
+                                    al_settings: str) -> object:
         '''
             Creates the Active Learning (AL) criterion provider instance.
         '''
-        if alLibrary is None:
+        if al_library is None:
             # no AL criterion; AIDE tries to use model confidences by default
             return None
 
         # try to parse settings
-        if alSettings is not None and len(alSettings):
+        if al_settings is not None and len(al_settings):
             try:
-                alSettings = json.loads(alSettings)
+                al_settings = json.loads(al_settings)
             except Exception as err:
-                print('WARNING: could not read AL criterion options. Error message: {message}.'.format(
-                    message=str(err)
-                ))
-                alSettings = None
+                print(f'WARNING: could not read AL criterion options. Error message: {err}.')
+                al_settings = None
         else:
-            alSettings = None
+            al_settings = None
 
         # import class object
-        modelClass = get_class_executable(alLibrary)
-
-        # verify functions and arguments
-        requiredFunctions = {
-            '__init__' : ['project', 'config', 'dbConnector', 'fileServer', 'options'],
-            'rank' : ['data', 'updateStateFun']
-        }
-        functionNames = [func for func in dir(modelClass) if callable(getattr(modelClass, func))]
-
-        for key in requiredFunctions:
-            if not key in functionNames:
-                raise Exception('Class {} is missing required function {}.'.format(alLibrary, key))
-
-            # check function arguments bidirectionally
-            funArgs = inspect.getargspec(getattr(modelClass, key))
-            for arg in requiredFunctions[key]:
-                if not arg in funArgs.args:
-                    raise Exception('Method {} of class {} is missing required argument {}.'.format(alLibrary, key, arg))
-            for arg in funArgs.args:
-                if arg != 'self' and not arg in requiredFunctions[key]:
-                    raise Exception('Unsupported argument {} of method {} in class {}.'.format(arg, key, alLibrary))
+        model_class = get_class_executable(al_library)
 
         # create AI model instance
-        return modelClass(project=project,
+        return model_class(project=project,
                             config=self.config,
                             dbConnector=self.db_connector,
-                            fileServer=self.fileServer.get_secure_instance(project),
-                            options=alSettings)
+                            fileServer=self.file_server.get_secure_instance(project),
+                            options=al_settings)
 
 
-    def _get_model_instance(self, project, overrideModelSettings=None):
+    def _get_model_instance(self,
+                            project: str,
+                            model_settings_override=None) -> Tuple[object, object, int]:
         '''
             Returns the class instance of the model specified in the given
             project.
             TODO: cache models?
         '''
         # get model settings for project
-        queryStr = '''
+        query_str = '''
             SELECT ai_model_library, ai_model_settings, inference_chunk_size FROM aide_admin.project
             WHERE shortname = %s;
         '''
-        result = self.db_connector.execute(queryStr, (project,), 1)
-        modelLibrary = result[0]['ai_model_library']
-        modelSettings = (result[0]['ai_model_settings'] if overrideModelSettings is None else overrideModelSettings)
+        result = self.db_connector.execute(query_str,
+                                           (project,),
+                                           1)
+        model_library = result[0]['ai_model_library']
+        model_settings = (result[0]['ai_model_settings'] if model_settings_override is None \
+                          else model_settings_override)
 
         # create new model instance
-        modelInstance = self._init_model_instance(project, modelLibrary, modelSettings)
+        model_instance = self._init_model_instance(project,
+                                                   model_library,
+                                                   model_settings)
 
-        # inference chunk size
-        inferenceChunkSize = result[0]['inference_chunk_size']
-        chunkSizeLimit = self.config.get_property('AIWorker',
-                                                  'inference_batch_size_limit',
-                                                  dtype=int,
-                                                  fallback=-1)
-        if inferenceChunkSize is None:
-            inferenceChunkSize = chunkSizeLimit
-        elif chunkSizeLimit > 0:
-            inferenceChunkSize = min(inferenceChunkSize, chunkSizeLimit)
+        inference_chunk_size = result[0]['inference_chunk_size']
+        chunk_size_limit = self.config.get_property('AIWorker',
+                                                    'inference_batch_size_limit',
+                                                    dtype=int,
+                                                    fallback=-1)
+        if inference_chunk_size is None:
+            inference_chunk_size = chunk_size_limit
+        elif chunk_size_limit > 0:
+            inference_chunk_size = min(inference_chunk_size, chunk_size_limit)
 
-        return modelInstance, modelLibrary, inferenceChunkSize
+        return model_instance, model_library, inference_chunk_size
 
 
-    def _get_alCriterion_instance(self, project, overrideModelSettings=None):
+    def _get_al_criterion_instance(self,
+                                   project: str,
+                                   model_settings_override=None) -> object:
         '''
             Returns the class instance of the Active Learning model
             specified in the project.
             TODO: cache models?
         '''
         # get model settings for project
-        queryStr = '''
+        query_str = '''
             SELECT ai_alCriterion_library, ai_alCriterion_settings FROM aide_admin.project
             WHERE shortname = %s;
         '''
-        result = self.db_connector.execute(queryStr, (project,), 1)
-        modelLibrary = result[0]['ai_alcriterion_library']
-        modelSettings = (result[0]['ai_alcriterion_settings'] if overrideModelSettings is None else overrideModelSettings)
+        result = self.db_connector.execute(query_str,
+                                           (project,),
+                                           1)
+        model_library = result[0]['ai_alcriterion_library']
+        model_settings = (result[0]['ai_alcriterion_settings'] if model_settings_override is None \
+                          else model_settings_override)
 
         # create new model instance
-        modelInstance = self._init_alCriterion_instance(project, modelLibrary, modelSettings)
+        model_instance = self._init_al_criterion_instance(project,
+                                                          model_library,
+                                                          model_settings)
 
-        return modelInstance
+        return model_instance
 
 
-
-    def aide_internal_notify(self, message):
+    def aide_internal_notify(self, message: str) -> None:
         '''
             Used for AIDE administrative communication between AIController
             and AIWorker(s), e.g. for setting up queues.
         '''
-        if self.passive_mode:
-            return
         # not required (yet)
+        pass
 
 
-    
-    def call_update_model(self, numEpochs, project, aiModelSettings=None):
-
-        # get project-specific model
-        modelInstance, modelLibrary, _ = self._get_model_instance(project, aiModelSettings)
-
-        return functional._call_update_model(project, numEpochs, modelInstance, modelLibrary,
-                self.db_connector)
-
-
-    def call_train(self, data, epoch, numEpochs, project, subset, aiModelSettings=None):
+    def call_update_model(self,
+                          num_epochs: int,
+                          project: str,
+                          ai_model_settings: dict=None) -> object:
 
         # get project-specific model
-        modelInstance, modelLibrary, _ = self._get_model_instance(project, aiModelSettings)
+        model_instance, model_library, _ = self._get_model_instance(project, ai_model_settings)
 
-        return functional._call_train(project, data, epoch, numEpochs, subset, modelInstance, modelLibrary,
-                self.db_connector)
-    
+        return functional._call_update_model(project,
+                                             num_epochs,
+                                             model_instance,
+                                             model_library,
+                                             self.db_connector)
 
 
-    def call_average_model_states(self, epoch, numEpochs, project, aiModelSettings=None):
+    def call_train(self,
+                   data: dict,
+                   epoch: int,
+                   num_epochs: int,
+                   project: str,
+                   is_subset: bool,
+                   ai_model_settings: dict=None) -> object:
 
         # get project-specific model
-        modelInstance, modelLibrary, _ = self._get_model_instance(project, aiModelSettings)
+        model_instance, model_library, _ = self._get_model_instance(project, ai_model_settings)
+
+        return functional._call_train(project,
+                                      data,
+                                      epoch,
+                                      num_epochs,
+                                      is_subset,
+                                      model_instance,
+                                      model_library,
+                                      self.db_connector)
+
+
+    def call_average_model_states(self,
+                                  epoch: int,
+                                  num_epochs: int,
+                                  project: str,
+                                  ai_model_settings: dict=None) -> object:
+
+        # get project-specific model
+        model_instance, model_library, _ = self._get_model_instance(project, ai_model_settings)
         
-        return functional._call_average_model_states(project, epoch, numEpochs, modelInstance, modelLibrary,
-                self.db_connector)
+        return functional._call_average_model_states(project,
+                                                     epoch,
+                                                     num_epochs,
+                                                     model_instance,
+                                                     model_library,
+                                                     self.db_connector)
 
 
+    def call_inference(self,
+                       image_ids: Iterable[Union[str,UUID]],
+                       epoch: int,
+                       num_epochs: int,
+                       project: str,
+                       ai_model_settings: dict=None,
+                       al_criterion_settings: dict=None) -> object:
 
-    def call_inference(self, imageIDs, epoch, numEpochs, project, aiModelSettings=None, alCriterionSettings=None):
-        
         # get project-specific model and AL criterion
-        modelInstance, modelLibrary, inferenceChunkSize = self._get_model_instance(project, aiModelSettings)
-        alCriterionInstance = self._get_alCriterion_instance(project, alCriterionSettings)
+        model_instance, model_library, chunk_size = self._get_model_instance(project,
+                                                                             ai_model_settings)
+        al_criterion_instance = self._get_al_criterion_instance(project, al_criterion_settings)
 
-        return functional._call_inference(project, imageIDs, epoch, numEpochs,
-                modelInstance, modelLibrary,
-                alCriterionInstance,
-                self.db_connector,
-                inferenceChunkSize)
+        return functional._call_inference(project,
+                                          image_ids,
+                                          epoch,
+                                          num_epochs,
+                                          model_instance,
+                                          model_library,
+                                          al_criterion_instance,
+                                          self.db_connector,
+                                          chunk_size)
 
 
-
-    def verify_model_state(self, project, modelLibrary, stateDict, modelOptions):
+    def verify_model_state(self,
+                           project: str,
+                           model_library: str,
+                           state_dict: bytes,
+                           model_options: dict) -> None:
         '''
             Launches a dummy training-averaging-inference chain
             on a received model state and returns True if the chain

@@ -486,7 +486,7 @@ class GDALImageDriver(AbstractImageDriver):
         data = reader.read(indexes=bands,
                            window=window,
                            out_shape=out_shape,
-                           resampling=kwargs.get('resampling', 0),    # 0: nearest
+                           resampling=kwargs.get('resampling', cls.driver.enums.Resampling.nearest),
                            boundless=True)
         if return_metadata:
             profile, meta = reader.profile, reader.meta

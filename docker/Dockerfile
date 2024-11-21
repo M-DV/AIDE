@@ -34,9 +34,6 @@ RUN add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable \
     # TBC if all of this is required (from AIDE scripts)
     && apt-get -y install libpq-dev wget systemd \
     #
-    # # Install pylint
-    # && /opt/conda/bin/pip install pylint \
-    #
     # Libraries for OpenCV
     && apt-get -y install ffmpeg libsm6 libxext6 python3-opencv \
     #

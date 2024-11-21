@@ -14,7 +14,7 @@ services:
       dockerfile: 'docker/Dockerfile'
     image: 'aide_app'
     volumes:
-      - aide_db_data:/var/lib/postgresql/10/main
+      - aide_db_data:/var/lib/postgresql/12/main
       - aide_images:/home/aide/images
       - ..:/home/aide/app:cached
     ports:

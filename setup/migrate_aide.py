@@ -497,6 +497,7 @@ older than the one in the database ({db_version}); please update your installati
                                   position=tqdm._get_free_pos()) as pbar_commands:
                             for mod in pbar_commands:
                                 db_conn.execute(mod.format(schema=project_name), None, None)
+                            pbar_commands.close()
 
                         # pre-official 2.0: mark existing CNN states as "labelclass_autoupdate" (as
                         # this was the default behavior)
@@ -520,8 +521,6 @@ older than the one in the database ({db_version}); please update your installati
         INSERT INTO aide_admin.version (version)
         VALUES (%s);
     ''', (version.AIDE_VERSION, ))
-
-    pbar_commands.close()
 
     return warnings, errors
 
