@@ -50,7 +50,8 @@ def get_inference_query_string(project: str,
     else:
         condition_str.append('corrupt IS NULL OR corrupt = FALSE')
 
-    # tags
+    # tags      #TODO: verify command; might still be incorrect
+    tag_str = sql.SQL('')
     if tags is not None:
         if isinstance(tags, (str, UUID)):
             tags = [tags]
@@ -62,11 +63,13 @@ def get_inference_query_string(project: str,
                         FROM {id_tag_image})''')
             else:
                 tags = [tag if isinstance(tag, UUID) else UUID(tag) for tag in tags]
-                condition_str.append('''image.id IN (
+                tag_str = sql.SQL('''JOIN (
                         SELECT image_id
                         FROM {id_tag_image}
                         WHERE tag_id IN %s
-                    )''')
+                    ) AS tags
+                    ON image.id = tags.image_id             
+                    ''').format(id_tag_image=sql.Identifier(project, 'tag_image'))
                 query_vals.append(tuple(tags))
 
     condition_str = sql.SQL('WHERE ' + ' AND '.join(condition_str)).format(
@@ -87,6 +90,7 @@ def get_inference_query_string(project: str,
             ) AS image
             LEFT OUTER JOIN {id_iu}
             ON image.id = image_user.image
+            {tag_str}
             {conditionString}
             ORDER BY image_user.viewcount ASC NULLS FIRST
             {limit}
@@ -95,6 +99,7 @@ def get_inference_query_string(project: str,
         id_img=sql.Identifier(project, 'image'),
         id_iu=sql.Identifier(project, 'image_user'),
         gqString=gq_str,
+        tag_str=tag_str,
         conditionString=condition_str,
         limit=limit_str
     )

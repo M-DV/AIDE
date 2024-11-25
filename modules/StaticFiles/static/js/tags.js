@@ -319,7 +319,7 @@ class TagHandler {
 
         } else {
             for(var t=0; t<tag_ids.length; t++) {
-                this.tags[tag_ids[t]].setChecked(checked);
+                this.tags[this.tag_lut[tag_ids[t]]].setChecked(checked);
             }
         }
     }

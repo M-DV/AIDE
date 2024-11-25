@@ -409,8 +409,9 @@ class DefaultNode extends AbstractNode {
         this.markup.append(this.nodeTitleMarkup);
     }
 
-    _attach_tagHandler(container) {
+    _attach_tagHandler(container, predefinedTags) {
         if(typeof(TagHandler) !== 'undefined') {
+            let self = this;
             let tagDiv = $('<div></div>');
             container.append(tagDiv);
             tagDiv.append($('<div>Tags:</div>'));
@@ -421,7 +422,16 @@ class DefaultNode extends AbstractNode {
                                             true,
                                             true,
                                             true);
-            this.tagHandler.loadTags();
+            this.tagHandler.loadTags().then(function() {
+                if(Array.isArray(predefinedTags)) {
+                    try {
+                        self.tagHandler.setChecked(predefinedTags, true);
+                    } catch(err) {
+                        //TODO
+                        console.error(err)
+                    }
+                }
+            });
         }
     }
 
@@ -436,7 +446,7 @@ class DefaultNode extends AbstractNode {
 
 class TrainNode extends DefaultNode {
     DEFAULT_PARAMS = {
-        'min_timestamp': 'lastState',
+        'min_timestamp': null,
         'min_anno_per_image': 0,
         'include_golden_questions': false,
         'max_num_images': 0,
@@ -482,13 +492,17 @@ class TrainNode extends DefaultNode {
         //TODO 3: figure out if min. timestamp is for model or images...
 
         // minimum timestamp
-        let hasTimestamp = (typeof(this.params['min_timestamp']) === 'number');
+        let timestamp = this.params['min_timestamp'];
+        let hasTimestamp = (typeof(timestamp) === 'number');
 
         var minTmarkup = $('<div></div>');
         minTmarkup.append('<div>Images last viewed:</div>');
         this.minTgr = $('<buttonGroup></buttonGroup>');
-        this.minTgr.append($('<input type="radio" name="min-timestamp" id="'+this.id+'-minT-latest" value="lastState" '+(!hasTimestamp? 'checked="checked"' : '')+'" />' +
+        this.minTgr.append($('<input type="radio" name="min-timestamp" id="'+this.id+'-minT-latest" value="null" '+(timestamp === null? 'checked="checked"' : '')+'" />' +
                             '<label for="'+this.id+'-minT-latest">Latest</label>'));
+        this.minTgr.append($('<br />'));
+        this.minTgr.append($('<input type="radio" name="min-timestamp" id="'+this.id+'-minT-lastState" value="lastState" '+(timestamp === 'lastState'? 'checked="checked"' : '')+'" />' +
+                            '<label for="'+this.id+'-minT-lastState">New since last AI model training</label>'));
         this.minTgr.append($('<br />'));
         this.minTgr.append($('<input type="radio" name="min-timestamp" id="'+this.id+'-minT-timestamp" value="timestamp" '+(hasTimestamp? 'checked="checked"' : '')+'" />' +
                             '<label for="'+this.id+'-minT-timestamp">From date on:</label>'));
@@ -519,6 +533,9 @@ class TrainNode extends DefaultNode {
         minNumAnnoMarkup.append('<td>Minimum no. annotations per image:</td>');
         var tdNumAnno = $('<td></td>');
         this.minNumAnno = $('<input type="number" value="0" min="0" max="1024" style="width:65px" />');
+        if(typeof(this.params['min_anno_per_image']) === 'number') {
+            this.minNumAnno.val(this.params['min_anno_per_image']);
+        }
         tdNumAnno.append(this.minNumAnno);
         minNumAnnoMarkup.append(tdNumAnno);
         optionsTable.append(minNumAnnoMarkup);
@@ -528,6 +545,9 @@ class TrainNode extends DefaultNode {
         maxNumImgsMarkup.append($('<td>Number of images (0 = unlimited):</td>'));
         var tdNumImg = $('<td></td>');
         this.maxNumImgs = $('<input type="number" value="0" min="0" max="1000000000" style="width:65px" />');
+        if(typeof(this.params['max_num_images']) === 'number') {
+            this.maxNumImgs.val(this.params['max_num_images']);
+        }
         tdNumImg.append(this.maxNumImgs);
         maxNumImgsMarkup.append(tdNumImg);
         optionsTable.append(maxNumImgsMarkup);
@@ -537,6 +557,9 @@ class TrainNode extends DefaultNode {
         maxNumWorkersMarkup.append($('<td>Number of workers (0 = unlimited):</td>'));
         var tdNumWorkers = $('<td></td>');
         this.maxNumWorkers = $('<input type="number" value="0" min="0" max="1000000000" style="width:65px" />');
+        if(typeof(this.params['max_num_workers']) === 'number') {
+            this.maxNumWorkers.val(this.params['max_num_workers']);
+        }
         tdNumWorkers.append(this.maxNumWorkers);
         maxNumWorkersMarkup.append(tdNumWorkers);
         optionsTable.append(maxNumWorkersMarkup);
@@ -553,7 +576,7 @@ class TrainNode extends DefaultNode {
         }
 
         // tags
-        this._attach_tagHandler(this.propertiesMarkup);
+        this._attach_tagHandler(this.propertiesMarkup, this.params['tags']);
     }
 
     toJSON() {
@@ -563,7 +586,10 @@ class TrainNode extends DefaultNode {
             // get from date instead
             timestampSel = new Date(this.timestampSpecifier.val()).getTime() / 1000;
             // timestampSel = new Date();  //TODO
-        }
+        } else if(timestampSel === 'null') {
+            // no timestamp restriction
+            timestampSel = null;
+        } // else lastState
         this.params['min_timestamp'] = timestampSel;
         this.params['min_anno_per_image'] = this.minNumAnno.val();
         this.params['include_golden_questions'] = this.gqchck.prop('checked');
@@ -650,6 +676,9 @@ class InferenceNode extends DefaultNode {
         maxNumImgsMarkup.append($('<td>Number of images (0 = unlimited):</td>'));
         let maxNumImgsCell = $('<td></td>');
         this.maxNumImgs = $('<input type="number" value="0" min="0" max="1000000000" style="width:65px" />');
+        if(typeof(this.params['max_num_images']) === 'number') {
+            this.maxNumImgs.val(this.params['max_num_images']);
+        }
         maxNumImgsCell.append(this.maxNumImgs);
         maxNumImgsMarkup.append(maxNumImgsCell);
         optionsTable.append(maxNumImgsMarkup);
@@ -659,6 +688,9 @@ class InferenceNode extends DefaultNode {
         maxNumWorkersMarkup.append($('<td>Number of workers (0 = unlimited):</td>'));
         let maxNumWorkersCell = $('<td></td>');
         this.maxNumWorkers = $('<input type="number" value="0" min="0" max="1000000000" style="width:65px" />');
+        if(typeof(this.params['max_num_workers']) === 'number') {
+            this.maxNumWorkers.val(this.params['max_num_workers']);
+        }
         maxNumWorkersCell.append(this.maxNumWorkers);
         maxNumWorkersMarkup.append(maxNumWorkersCell);
         optionsTable.append(maxNumWorkersMarkup);
@@ -675,7 +707,7 @@ class InferenceNode extends DefaultNode {
         }
 
         // tags
-        this._attach_tagHandler(this.propertiesMarkup);
+        this._attach_tagHandler(this.propertiesMarkup, this.params['tags']);
     }
 
     toJSON() {

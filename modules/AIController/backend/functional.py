@@ -41,7 +41,7 @@ class AIControllerWorker:
                             project: str,
                             epoch: int=None,
                             num_epochs: int=None,
-                            min_timestamp: Union[datetime,str]='lastState',
+                            min_timestamp: Union[datetime,str]=None,
                             tags: Iterable=None,
                             include_golden_questions: bool=True,
                             min_num_anno_per_image: int=0,
@@ -73,9 +73,6 @@ class AIControllerWorker:
                                       to_timestamp(%s))''')
             query_vals.append(min_timestamp)
 
-        if min_num_anno_per_image > 0:
-            query_vals.append(min_num_anno_per_image)
-
         # tags
         if tags is not None:
             if isinstance(tags, (str, UUID)):
@@ -104,6 +101,7 @@ class AIControllerWorker:
                             ) AS annoCount
                         WHERE annoCount.cnt >= %s
                     )''')
+            query_vals.append(min_num_anno_per_image)
 
         if len(subset_str) > 0:
             subset_str = sql.SQL('WHERE ' + ' AND '.join(subset_str)).format(
@@ -148,6 +146,8 @@ class AIControllerWorker:
             limitStr=limit_str)
 
         image_ids = self.db_connector.execute(query_str, tuple(query_vals), 'all')
+        if image_ids is None or len(image_ids) == 0:
+            raise Exception(f'Project {project}: no training images found under given criteria.')
         image_ids = [i['image'] for i in image_ids]
 
         if num_chunks > 1:
@@ -191,6 +191,8 @@ class AIControllerWorker:
                                                                             golden_questions_only,
                                                                             max_num_images)
         image_ids = self.db_connector.execute(sql_str, query_vals, 'all')
+        if image_ids is None or len(image_ids) == 0:
+            raise Exception(f'Project {project}: no inference images found under given criteria.')
         image_ids = [i['image'] for i in image_ids]
 
         if num_chunks > 1:
