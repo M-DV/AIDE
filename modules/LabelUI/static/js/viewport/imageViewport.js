@@ -140,24 +140,25 @@ class ImageViewport {
             the borders. Does so with a delay and then repeatedly.
         */
         let tolerance = 0.01;
-        let shiftAmount = 0.005;
+        let shiftAmount = 0.005; // shift speed
         let self = this;
         let _do_shift = function() {
             var repeat = false;
             if(self.mouseButton > 0) {
                 var vp = self.getViewport();
-                if(self.mousePos[0] - vp[0] <= tolerance) {
-                    vp[0] -= shiftAmount;
+                let scale = Math.max(vp[2], vp[3]); // scale shift and tolerance with viewport size
+                if(self.mousePos[0] - vp[0] <= scale * tolerance) {
+                    vp[0] -= scale * shiftAmount;
                     repeat = true;
-                } else if((vp[0]+vp[2]) - self.mousePos[0] <= tolerance) {
-                    vp[0] += shiftAmount;
+                } else if((vp[0]+vp[2]) - self.mousePos[0] <= scale * tolerance) {
+                    vp[0] += scale * shiftAmount;
                     repeat = true;
                 }
-                if(self.mousePos[1] - vp[1] <= tolerance) {
-                    vp[1] -= shiftAmount;
+                if(self.mousePos[1] - vp[1] <= scale * tolerance) {
+                    vp[1] -= scale * shiftAmount;
                     repeat = true;
-                } else if((vp[1]+vp[3]) - self.mousePos[1] <= tolerance) {
-                    vp[1] += shiftAmount;
+                } else if((vp[1]+vp[3]) - self.mousePos[1] <= scale * tolerance) {
+                    vp[1] += scale * shiftAmount;
                     repeat = true;
                 }
                 self.setViewport(vp);
