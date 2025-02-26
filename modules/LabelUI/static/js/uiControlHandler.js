@@ -405,6 +405,7 @@ class UIControlHandler {
             let ptrc_vis = $('<tr class="prediction-range-container"></tr>');
             ptrc_vis.append($('<td>Visibility</td>'));
             let predThreshRange_vis = $('<input type="range" id="pred-thresh-vis" min="0" max="100" value="50" />');
+            let rangeTextTd_vis = $('<td>50</td>');
             predThreshRange_vis.on({
                 'input': function() {
                     let value = 1 - parseFloat($(this).val() / 100.0);
@@ -416,6 +417,7 @@ class UIControlHandler {
                     window.showPredictions_minConf = value;
 
                     self.dataHandler.setPredictionsVisible(window.showPredictions_minConf);
+                    rangeTextTd_vis.html($(this).val() + '%');
                 },
                 'change': function () {
                     let value = parseFloat($(this).val());
@@ -425,7 +427,7 @@ class UIControlHandler {
                     }
                     cookieVals[window.projectShortname] = value;
                     window.setCookie('predThreshVis', cookieVals);
-                    $('#pred-thresh-vis-val').text(value + '');
+                    rangeTextTd_vis.html($(this).val() + '%');
                 }
             });
             try {
@@ -437,13 +439,13 @@ class UIControlHandler {
             let rangeTd_vis = $('<td></td>');
             rangeTd_vis.append(predThreshRange_vis);
             ptrc_vis.append(rangeTd_vis);
-            let rangeTextTd_vis = $('<td id="pred-thresh-vis-val">50</td>');
-            rangeTextTd_vis.text(predThreshRange_vis.val() + '');
+            rangeTextTd_vis.html(predThreshRange_vis.val() + '%');
             ptrc_vis.append(rangeTextTd_vis);
             predThreshRangeContainer.append(ptrc_vis);
             let ptrc_convert = $('<tr class="prediction-range-container"></tr>');
             ptrc_convert.append($('<td>Conversion</td>'));
             let predThreshRange_convert = $('<input type="range" id="pred-thresh-convert" min="0" max="100" value="95" />');
+            let rangeTextTd_convert = $('<td>95</td>');
             predThreshRange_convert.on({
                 'input': function() {
                     let value = 1 - parseFloat($(this).val() / 100.0);
@@ -456,6 +458,7 @@ class UIControlHandler {
 
                     // re-convert predictions into annotations
                     self.dataHandler.convertPredictions();
+                    rangeTextTd_convert.html($(this).val() + '%');
                 },
                 'change': function() {
                     let value = parseFloat($(this).val());
@@ -465,7 +468,7 @@ class UIControlHandler {
                     }
                     cookieVals[window.projectShortname] = value;
                     window.setCookie('predThreshConv', cookieVals);
-                    $('#pred-thresh-convert-val').text(value + '');
+                    rangeTextTd_convert.html($(this).val() + '%');
                 }
             });
             try {
@@ -477,8 +480,7 @@ class UIControlHandler {
             let rangeTd_convert = $('<td></td>');
             rangeTd_convert.append(predThreshRange_convert);
             ptrc_convert.append(rangeTd_convert);
-            let rangeTextTd_convert = $('<td id="pred-thresh-convert-val">50</td>');
-            rangeTextTd_convert.text(predThreshRange_convert.val() + '');
+            rangeTextTd_convert.html(predThreshRange_convert.val() + '%');
             ptrc_convert.append(rangeTextTd_convert);
             predThreshRangeContainer.append(ptrc_convert);
             predThreshContainer.append(predThreshRangeContainer);
