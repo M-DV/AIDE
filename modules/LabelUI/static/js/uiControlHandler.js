@@ -425,6 +425,7 @@ class UIControlHandler {
                     }
                     cookieVals[window.projectShortname] = value;
                     window.setCookie('predThreshVis', cookieVals);
+                    $('#pred-thresh-vis-val').text(value + '');
                 }
             });
             try {
@@ -436,6 +437,9 @@ class UIControlHandler {
             let rangeTd_vis = $('<td></td>');
             rangeTd_vis.append(predThreshRange_vis);
             ptrc_vis.append(rangeTd_vis);
+            let rangeTextTd_vis = $('<td id="pred-thresh-vis-val">50</td>');
+            rangeTextTd_vis.text(predThreshRange_vis.val() + '');
+            ptrc_vis.append(rangeTextTd_vis);
             predThreshRangeContainer.append(ptrc_vis);
             let ptrc_convert = $('<tr class="prediction-range-container"></tr>');
             ptrc_convert.append($('<td>Conversion</td>'));
@@ -461,6 +465,7 @@ class UIControlHandler {
                     }
                     cookieVals[window.projectShortname] = value;
                     window.setCookie('predThreshConv', cookieVals);
+                    $('#pred-thresh-convert-val').text(value + '');
                 }
             });
             try {
@@ -472,6 +477,9 @@ class UIControlHandler {
             let rangeTd_convert = $('<td></td>');
             rangeTd_convert.append(predThreshRange_convert);
             ptrc_convert.append(rangeTd_convert);
+            let rangeTextTd_convert = $('<td id="pred-thresh-convert-val">50</td>');
+            rangeTextTd_convert.text(predThreshRange_convert.val() + '');
+            ptrc_convert.append(rangeTextTd_convert);
             predThreshRangeContainer.append(ptrc_convert);
             predThreshContainer.append(predThreshRangeContainer);
             dtControls.append(predThreshContainer);
