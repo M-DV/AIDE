@@ -1941,220 +1941,211 @@ class MiniViewport extends AbstractRenderElement {
 
 class MiniMap extends AbstractRenderElement {
     /*
-        The MiniMap, unlike the MiniViewport, actually re-draws the
-        canvas elements and also offers an interactive rectangle, showing
-        the position of the parent viewport's current extent.
+        La MiniMap affiche une vue miniature de l'image principale (le viewport parent)
+        et dessine par-dessus un rectangle indiquant la portion visible.
+        Dans cette version, le rectangle (mini‐tuile) est déplaçable en effectuant un clic droit
+        et glisser/déposer.
     */
+
     constructor(id, parentViewport, x, y, size, interactive, zIndex, disableInteractions) {
         super(id, null, zIndex, disableInteractions, null);
         this.parentViewport = parentViewport;
-
-        this.position = null;
-        if(x != null && y != null && size != null)
-            this.position = [x, y, size, size];
-
-        if(interactive)
+        // "position" correspond aux coordonnées relatives de la miniMap sur le canvas parent : [x, y, width, height]
+        this.position = (x != null && y != null && size != null) ? [x, y, size, size] : null;
+        if (interactive) {
             this._setup_interactions();
-    }
-
-    _mousedown_event(event) {
-        if(this.position == null || this.pos_abs == null) return;
-
-        // check if mousedown over mini-rectangle
-        var mousePos = this.parentViewport.getAbsoluteCoordinates(event);
-        var extent_parent = this.minimapScaleFun(this.parentViewport.getViewport(), 'canvas');
-        
-        //TODO: something's still buggy here...
-
-        if(mousePos[0] >= extent_parent[0] && mousePos[1] >= extent_parent[1] &&
-            mousePos[0] < (extent_parent[0]+extent_parent[1]) &&
-            mousePos[1] < (extent_parent[1]+extent_parent[2])) {
-
-            this.mousePos = mousePos;
-            this.mouseDown = true;
         }
     }
 
-    _mousemove_event(event) {
-        if(this.position == null || this.pos_abs == null || !this.mouseDown) return;
-
-        // determine difference to previous parent extent
-        var newMousePos = this.parentViewport.getAbsoluteCoordinates(event);
-        var diffX = (newMousePos[0] - this.mousePos[0]);
-        var diffY = (newMousePos[1] - this.mousePos[1]);
-        this.mousePos = newMousePos;
-
-        // backproject differences to full canvas size
-        var diffProj = this.minimapScaleFun([0, 0, diffX, diffY], 'canvas', true).slice(2,4);
-        var vp = this.parentViewport.getViewport();
-
-        // apply new viewport
-        vp[0] += diffProj[0];
-        vp[1] += diffProj[1];
-        this.parentViewport.setViewport(vp);
-    }
-    
-    _mouseup_event(event) {
-        this.mouseDown = false;
-    }
-
-    _mouseleave_event(event) {
-        this.mouseDown = false;
-    }
-
-    __get_callback(type) {
-        var self = this;
-        if(type === 'mousedown') {
-            return function(event) {
-                self._mousedown_event(event);
-            };
-        } else if(type ==='mousemove') {
-            return function(event) {
-                self._mousemove_event(event);
-            };
-        } else if(type ==='mouseup') {
-            return function(event) {
-                self._mouseup_event(event);
-            };
-        } else if(type ==='mouseleave') {
-            return function(event) {
-                self._mouseleave_event(event);
-            };
-        }
-    }
-
-    _setup_interactions() {
-        /*
-            Makes parent viewport move on drag of extent rectangle.
-        */
-        if(this.disableInteractions) return;
-
-        this.mouseDown = false;
-        this.parentViewport.addCallback(this.id, 'mousedown', this.__get_callback('mousedown'));
-        this.parentViewport.addCallback(this.id, 'mousemove', this.__get_callback('mousemove'));
-        this.parentViewport.addCallback(this.id, 'mouseup', this.__get_callback('mouseup'));
-        // this.parentViewport.addCallback(this.id, 'mouseleave', this.__get_callback('mouseleave'));
-    }
-
+    // Renvoie la position relative de la miniMap
     getPosition() {
         return this.position;
     }
 
+    // Met à jour la position relative de la miniMap
     setPosition(x, y, size) {
         this.position = [x, y, size, size];
     }
 
+    /**
+     * Méthode de rendu.
+     * Elle dessine le fond de la miniMap, redessine les éléments du viewport parent en miniature
+     * et dessine le rectangle indiquant la portion visible.
+     */
+    async render(ctx, scaleFun) {
+        if (!this.visible || this.position == null) return;
+        super.render(ctx, scaleFun);
 
-    minimapScaleFun(coordinates, target, backwards) {
-        /*
-            Transforms coordinates to this minimap's area.
-        */
-        var coords_out = coordinates.slice();
+        // Calcule la position absolue (en pixels) de la miniMap sur le canvas
+        this.pos_abs = scaleFun(this.position, 'canvas');
 
-        if(backwards) {
+        // Dessine un fond et une bordure pour la miniMap
+        ctx.fillStyle = window.styles.minimap.background.fillColor;
+        ctx.strokeStyle = window.styles.minimap.background.strokeColor;
+        ctx.lineWidth = window.styles.minimap.background.lineWidth;
+        ctx.setLineDash(window.styles.minimap.background.lineDash);
+        roundRect(
+            ctx,
+            this.pos_abs[0] - 2,
+            this.pos_abs[1] - 2,
+            this.pos_abs[2] + 4,
+            this.pos_abs[3] + 4,
+            5,
+            true,
+            true
+        );
 
-            // un-shift position
-            coords_out[0] -= this.pos_abs[0];
-            coords_out[1] -= this.pos_abs[1];
+        // Redessine les éléments du viewport parent dans la miniMap
+        for (let e = 0; e < this.parentViewport.renderStack.length; e++) {
+            let element = this.parentViewport.renderStack[e];
+            // On ignore certains éléments qui ne doivent pas apparaître dans la miniMap
+            if (element.hasOwnProperty('text') ||
+                element instanceof ElementGroup ||
+                element instanceof PaintbrushElement)
+                continue;
+            await element.render(ctx, this._getMinimapScaleFun.bind(this));
+        }
 
-            var canvasSize = [this.pos_abs[2], this.pos_abs[3]];
-            if(target === 'canvas') {
-                coords_out[0] /= canvasSize[0];
-                coords_out[1] /= canvasSize[1];
-                if(coords_out.length == 4) {
-                    coords_out[2] /= canvasSize[0];
-                    coords_out[3] /= canvasSize[1];
-                }
+        // Dessine le rectangle indiquant l'étendue visible du viewport parent
+        let extent_parent = this._getMinimapScaleFun(this.parentViewport.getViewport(), 'canvas');
+        ctx.fillStyle = window.styles.minimap.viewport.fillColor;
+        ctx.strokeStyle = window.styles.minimap.viewport.strokeColor;
+        ctx.lineWidth = window.styles.minimap.viewport.lineWidth;
+        ctx.setLineDash(window.styles.minimap.viewport.lineDash);
+        ctx.fillRect(extent_parent[0], extent_parent[1], extent_parent[2], extent_parent[3]);
+        ctx.strokeRect(extent_parent[0], extent_parent[1], extent_parent[2], extent_parent[3]);
 
-            } else if(target === 'validArea') {
-                coords_out[0] /= canvasSize[0];
-                coords_out[1] /= canvasSize[1];
-                if(coords_out.length == 4) {
-                    coords_out[2] /= canvasSize[0];
-                    coords_out[3] /= canvasSize[1];
+        // Dessine une bordure additionnelle pour l'esthétique
+        ctx.strokeStyle = window.styles.minimap.background.strokeColor;
+        ctx.lineWidth = window.styles.minimap.background.lineWidth;
+        ctx.setLineDash(window.styles.minimap.background.lineDash);
+        roundRect(
+            ctx,
+            this.pos_abs[0] - ctx.lineWidth / 2,
+            this.pos_abs[1] - ctx.lineWidth / 2,
+            this.pos_abs[2] + ctx.lineWidth,
+            this.pos_abs[3] + ctx.lineWidth,
+            5,
+            false,
+            true
+        );
+    }
+
+    /**
+     * Fonction de transformation pour adapter des coordonnées à l'échelle de la miniMap.
+     * Si "backwards" vaut true, on convertit depuis le repère de la miniMap vers celui du canvas.
+     */
+    _getMinimapScaleFun(coordinates, target, backwards) {
+        let coords_out = coordinates.slice();
+        if (!this.pos_abs) return coords_out;
+
+        let [mx, my, mw, mh] = this.pos_abs;
+
+        if (!backwards) {
+            // Transformation : coordonnées relatives -> coordonnées absolues dans la zone de la miniMap
+            if (target === 'canvas') {
+                coords_out[0] = mx + coords_out[0] * mw;
+                coords_out[1] = my + coords_out[1] * mh;
+                if (coords_out.length === 4) {
+                    coords_out[2] *= mw;
+                    coords_out[3] *= mh;
                 }
             }
         } else {
-            var canvasSize = [this.pos_abs[2], this.pos_abs[3]];
-            if(target === 'canvas') {
-                coords_out[0] *= canvasSize[0];
-                coords_out[1] *= canvasSize[1];
-                if(coords_out.length == 4) {
-                    coords_out[2] *= canvasSize[0];
-                    coords_out[3] *= canvasSize[1];
+            // Transformation inverse : coordonnées absolues -> coordonnées relatives
+            if (target === 'canvas') {
+                coords_out[0] = (coords_out[0] - mx) / mw;
+                coords_out[1] = (coords_out[1] - my) / mh;
+                if (coords_out.length === 4) {
+                    coords_out[2] /= mw;
+                    coords_out[3] /= mh;
                 }
-            } else if(target === 'validArea') {
-                coords_out[0] *= canvasSize[0];
-                coords_out[1] *= canvasSize[1];
-                if(coords_out.length == 4) {
-                    coords_out[2] *= canvasSize[0];
-                    coords_out[3] *= canvasSize[1];
-                }
-            }
-
-            // shift position
-            coords_out[0] += this.pos_abs[0];
-            coords_out[1] += this.pos_abs[1];
-
-            // clamp coordinates to minimap extent
-            coords_out[0] = Math.max(coords_out[0], this.pos_abs[0]);
-            coords_out[1] = Math.max(coords_out[1], this.pos_abs[1]);
-            if(coords_out.length == 4) {
-                coords_out[0] = Math.min(coords_out[0], this.pos_abs[0]+this.pos_abs[2]-coords_out[2]);
-                coords_out[1] = Math.min(coords_out[1], this.pos_abs[1]+this.pos_abs[3]-coords_out[3]);
-            } else {
-                coords_out[0] = Math.min(coords_out[0], this.pos_abs[0]+this.pos_abs[2]);
-                coords_out[1] = Math.min(coords_out[1], this.pos_abs[1]+this.pos_abs[3]);
             }
         }
         return coords_out;
     }
 
-    async render(ctx, scaleFun) {
-        if(!this.visible || this.position == null) return;
-        super.render(ctx, scaleFun);
+    // ----------------------------------------------------------------------------
+    // Gestion des interactions pour le déplacement (drag & drop) par clic droit
+    // ----------------------------------------------------------------------------
 
-        // position of minimap on parent viewport
-        this.pos_abs = scaleFun(this.position, 'canvas');
+    _setup_interactions() {
+        if (this.disableInteractions) return;
+        this.mouseDown = false;
+        // On ajoute les callbacks sur le parentViewport pour intercepter les événements
+        this.parentViewport.addCallback(this.id, 'mousedown', this.__get_callback('mousedown'));
+        this.parentViewport.addCallback(this.id, 'mousemove', this.__get_callback('mousemove'));
+        this.parentViewport.addCallback(this.id, 'mouseup', this.__get_callback('mouseup'));
+    }
 
-        // border and background
-        ctx.fillStyle = window.styles.minimap.background.fillColor;
-        ctx.strokeStyle = window.styles.minimap.background.strokeColor;
-        ctx.lineWidth = window.styles.minimap.background.lineWidth;
-        ctx.setLineDash(window.styles.minimap.background.lineDash);
-        roundRect(ctx, this.pos_abs[0] - 2, this.pos_abs[1] - 2,
-            this.pos_abs[2] + 4, this.pos_abs[3] + 4,
-            5, true, true);
-
-        // elements
-        for(var e=0; e<this.parentViewport.renderStack.length; e++) {
-
-            //TODO: dirty hack to avoid rendering HoverTextElement instances, resize handles and paintbrush
-            if(this.parentViewport.renderStack[e].hasOwnProperty('text') ||
-                this.parentViewport.renderStack[e] instanceof ElementGroup ||
-                this.parentViewport.renderStack[e] instanceof PaintbrushElement) continue;
-            await this.parentViewport.renderStack[e].render(ctx, (this.minimapScaleFun).bind(this));
+    __get_callback(type) {
+        let self = this;
+        if (type === 'mousedown') {
+            return function (event) { self._mousedown_event(event); };
+        } else if (type === 'mousemove') {
+            return function (event) { self._mousemove_event(event); };
+        } else if (type === 'mouseup') {
+            return function (event) { self._mouseup_event(event); };
         }
+    }
 
-        // current extent of parent viewport
-        var extent_parent = this.minimapScaleFun(this.parentViewport.getViewport(), 'canvas');
-        ctx.fillStyle = window.styles.minimap.viewport.fillColor;
-        ctx.strokeStyle = window.styles.minimap.viewport.strokeColor;
-        ctx.lineWidth = window.styles.minimap.viewport.lineWidth;
-        ctx.setLineDash(window.styles.minimap.viewport.lineDash);
-        ctx.fillRect(extent_parent[0], extent_parent[1],
-            extent_parent[2], extent_parent[3]);
+    /**
+     * Lors du clic droit (mousedown) sur la miniMap, on vérifie que le clic est dans le rectangle.
+     */
+    _mousedown_event(event) {
+        // Seul le clic droit (bouton 3) déclenche l'action
+        if (event.which !== 3) return;
+        event.preventDefault(); // Empêche le menu contextuel
 
+        // Récupération de la position absolue de la souris
+        let mousePos = this.parentViewport.getAbsoluteCoordinates(event);
+        if (!this.pos_abs) return;
+        let [mx, my, mw, mh] = this.pos_abs;
+        // Si le clic se situe à l'intérieur de la miniMap
+        if (mousePos[0] >= mx && mousePos[0] <= mx + mw &&
+            mousePos[1] >= my && mousePos[1] <= my + mh) {
+            this.mouseDown = true;
+            this.mousePos = mousePos;
+        }
+    }
 
-        // another outlined border for aesthetics
-        ctx.strokeStyle = window.styles.minimap.background.strokeColor;
-        ctx.lineWidth = window.styles.minimap.background.lineWidth;
-        ctx.setLineDash(window.styles.minimap.background.lineDash);
-        roundRect(ctx, this.pos_abs[0] - ctx.lineWidth/2, this.pos_abs[1] - ctx.lineWidth/2,
-            this.pos_abs[2] + ctx.lineWidth, this.pos_abs[3] + ctx.lineWidth,
-            5, false, true);
+    /**
+     * Lors du mouvement de la souris (mousemove) pendant le drag,
+     * on calcule la différence et on met à jour la position de la miniMap.
+     */
+    _mousemove_event(event) {
+        if (!this.mouseDown) return;
+
+        let newMousePos = this.parentViewport.getAbsoluteCoordinates(event);
+        // Différence de déplacement en pixels sur le canvas parent
+        let diffX = newMousePos[0] - this.mousePos[0];
+        let diffY = newMousePos[1] - this.mousePos[1];
+        // Mise à jour de la position de départ pour le prochain calcul
+        this.mousePos = newMousePos;
+
+        // Mise à jour de la position absolue de la miniMap
+        let newPosAbs = this.pos_abs.slice(); // copie de [mx, my, mw, mh]
+        newPosAbs[0] += diffX;
+        newPosAbs[1] += diffY;
+
+        // Pour mettre à jour "this.position" (les coordonnées relatives),
+        // on utilise la transformation inverse du scaleFun du parentViewport.
+        // Ici, on suppose que parentViewport.scaleFun(..., 'canvas', true) renvoie des coordonnées relatives.
+        let newRelPos = this.parentViewport.scaleFun(newPosAbs, 'canvas', true);
+        // On met à jour la position relative (on conserve la taille d'origine)
+        this.position = newRelPos;
+        // On redessine uniquement le viewport parent (qui inclut la miniMap)
+        this.parentViewport.render();
+    }
+
+    /**
+     * Lors du relâchement de la souris (mouseup), on arrête le drag.
+     */
+    _mouseup_event(event) {
+        this.mouseDown = false;
     }
 }
+
 
 
 

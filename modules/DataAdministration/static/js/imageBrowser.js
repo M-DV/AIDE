@@ -148,8 +148,13 @@ class ImageEntry {
             });
 
             this.image.on('click', function(event) {
-                self._load_image_contents();
+                if(!self.imageLoaded) {
+                    self._load_image_contents();
+                    event.stopPropagation();
+                    return;
+                }
                 self.parent._on_entry_click(event, self);
+                event.stopPropagation();
             });
         }
         return this.image;
@@ -455,15 +460,8 @@ class AbstractImageView {
         var affected = [entry];
 
         // also check (or uncheck) selected entries
-        for(var key in this.selected) {
-            this.selected[key].setChecked(checked);
-            if(checked) {
-                this.checked[key] = this.selected[key];
-            } else {
-                delete this.checked[key];
-            }
-            affected.push(this.selected[key]);
-        }
+        // (Modification: no propagation to other selected entries)
+        entry.setChecked(checked);
         if(checked) {
             this.checked[entry.id] = entry;
         } else {
@@ -575,8 +573,11 @@ class ThumbnailView extends AbstractImageView {
     }
 
     _on_entry_click(event, entry) {
+        if ($(event.target).is('input[type="checkbox"]')) {
+            return;
+        }
         var selID = entry.id;
-        var wasSelected = (selID in this.selected);
+        var wasSelected = entry.selected;
         var affected = [];
         if(event.shiftKey) {
             // determine positions
@@ -632,7 +633,9 @@ class ThumbnailView extends AbstractImageView {
             if(!wasSelected) {
                 this.selected[selID] = entry;
             } else {
-                delete this.selected[selID];
+                if(this.selected.hasOwnProperty(selID)) {
+                    delete this.selected[selID];
+                }
             }
             affected.push(entry);
         }
@@ -761,8 +764,11 @@ class ListView extends AbstractImageView {
     }
 
     _on_entry_click(event, entry) {
+        if ($(event.target).is('input[type="checkbox"]')) {
+            return;
+        }
         var selID = entry.id;
-        var wasSelected = (selID in this.selected);
+        var wasSelected = entry.selected;
         var affected = [];
         if(event.shiftKey) {
             // determine positions
@@ -818,7 +824,9 @@ class ListView extends AbstractImageView {
             if(!wasSelected) {
                 this.selected[selID] = entry;
             } else {
-                delete this.selected[selID];
+                if(this.selected.hasOwnProperty(selID)) {
+                    delete this.selected[selID];
+                }
             }
             affected.push(entry);
         }
@@ -826,7 +834,6 @@ class ListView extends AbstractImageView {
         this._fire_event('imageClick', affected);
     }
 }
-
 
 
 class ImageBrowser {
