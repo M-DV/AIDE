@@ -1950,26 +1950,66 @@ class MiniMap extends AbstractRenderElement {
         this.parentViewport = parentViewport;
 
         this.position = null;
-        if(x != null && y != null && size != null)
+        if (x != null && y != null && size != null)
             this.position = [x, y, size, size];
 
-        if(interactive)
+        this.draggable = true;
+        this.dragging = false;
+        this.dragOffset = [0, 0];
+
+        this.pos_abs = null;
+
+        if (interactive)
             this._setup_interactions();
     }
 
-    _mousedown_event(event) {
-        if(this.position == null || this.pos_abs == null) return;
+    _setup_interactions() {
+        /*
+            Makes parent viewport move on drag of extent rectangle.
+        */
+        if (this.disableInteractions) return;
 
-        // check if mousedown over mini-rectangle
+        this.mouseDown = false;
+
+        this.parentViewport.addCallback(this.id, 'mousedown', this.__get_callback('mousedown'));
+        this.parentViewport.addCallback(this.id, 'mousemove', this.__get_callback('mousemove'));
+        this.parentViewport.addCallback(this.id, 'mouseup',   this.__get_callback('mouseup'));
+        // this.parentViewport.addCallback(this.id, 'mouseleave', this.__get_callback('mouseleave'));
+
+
+        this.parentViewport.canvas[0].addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+        });
+
+        this.parentViewport.addCallback(this.id + '_drag', 'mousedown', (evt) => this._mousedown_drag(evt));
+        this.parentViewport.addCallback(this.id + '_drag', 'mousemove', (evt) => this._mousemove_drag(evt));
+        this.parentViewport.addCallback(this.id + '_drag', 'mouseup',   (evt) => this._mouseup_drag(evt));
+    }
+
+    __get_callback(type) {
+        var self = this;
+        if (type === 'mousedown') {
+            return function(event) { self._mousedown_event(event); };
+        } else if (type === 'mousemove') {
+            return function(event) { self._mousemove_event(event); };
+        } else if (type === 'mouseup') {
+            return function(event) { self._mouseup_event(event); };
+        } else if (type === 'mouseleave') {
+            return function(event) { self._mouseleave_event(event); };
+        }
+    }
+
+    _mousedown_event(event) {
+        if (this.position == null || this.pos_abs == null) return;
+
         var mousePos = this.parentViewport.getAbsoluteCoordinates(event);
         var extent_parent = this.minimapScaleFun(this.parentViewport.getViewport(), 'canvas');
-        
-        //TODO: something's still buggy here...
-
-        if(mousePos[0] >= extent_parent[0] && mousePos[1] >= extent_parent[1] &&
-            mousePos[0] < (extent_parent[0]+extent_parent[1]) &&
-            mousePos[1] < (extent_parent[1]+extent_parent[2])) {
-
+        if (
+            mousePos[0] >= extent_parent[0] &&
+            mousePos[0] <= extent_parent[0] + extent_parent[2] &&
+            mousePos[1] >= extent_parent[1] &&
+            mousePos[1] <= extent_parent[1] + extent_parent[3]
+        ) {
             this.mousePos = mousePos;
             this.mouseDown = true;
         }
@@ -1993,7 +2033,7 @@ class MiniMap extends AbstractRenderElement {
         vp[1] += diffProj[1];
         this.parentViewport.setViewport(vp);
     }
-    
+
     _mouseup_event(event) {
         this.mouseDown = false;
     }
@@ -2002,38 +2042,43 @@ class MiniMap extends AbstractRenderElement {
         this.mouseDown = false;
     }
 
-    __get_callback(type) {
-        var self = this;
-        if(type === 'mousedown') {
-            return function(event) {
-                self._mousedown_event(event);
-            };
-        } else if(type ==='mousemove') {
-            return function(event) {
-                self._mousemove_event(event);
-            };
-        } else if(type ==='mouseup') {
-            return function(event) {
-                self._mouseup_event(event);
-            };
-        } else if(type ==='mouseleave') {
-            return function(event) {
-                self._mouseleave_event(event);
-            };
+    _mousedown_drag(event) {
+        if (!this.draggable) return;
+        if (event.which !== 1) return;
+        const mousePos = this.parentViewport.getAbsoluteCoordinates(event);
+        if (
+            mousePos[0] >= this.pos_abs[0] &&
+            mousePos[0] <= this.pos_abs[0] + this.pos_abs[2] &&
+            mousePos[1] >= this.pos_abs[1] &&
+            mousePos[1] <= this.pos_abs[1] + this.pos_abs[3]
+        ) {
+            this.dragging = true;
+            this.dragOffset = [
+                mousePos[0] - this.pos_abs[0],
+                mousePos[1] - this.pos_abs[1]
+            ];
         }
     }
 
-    _setup_interactions() {
-        /*
-            Makes parent viewport move on drag of extent rectangle.
-        */
-        if(this.disableInteractions) return;
+    _mousemove_drag(event) {
+        if (!this.draggable || !this.dragging) return;
+        const mousePos = this.parentViewport.getAbsoluteCoordinates(event);
+        const newAbsX = mousePos[0] - this.dragOffset[0];
+        const newAbsY = mousePos[1] - this.dragOffset[1];
+        const canvasW = this.parentViewport.canvas.width();
+        const canvasH = this.parentViewport.canvas.height();
+        const clampedAbsX = Math.max(0, Math.min(newAbsX, canvasW - this.pos_abs[2]));
+        const clampedAbsY = Math.max(0, Math.min(newAbsY, canvasH - this.pos_abs[3]));
+        this.position[0] = clampedAbsX / canvasW;
+        this.position[1] = clampedAbsY / canvasH;
+        this.parentViewport.render();
+    }
 
-        this.mouseDown = false;
-        this.parentViewport.addCallback(this.id, 'mousedown', this.__get_callback('mousedown'));
-        this.parentViewport.addCallback(this.id, 'mousemove', this.__get_callback('mousemove'));
-        this.parentViewport.addCallback(this.id, 'mouseup', this.__get_callback('mouseup'));
-        // this.parentViewport.addCallback(this.id, 'mouseleave', this.__get_callback('mouseleave'));
+    _mouseup_drag(event) {
+        if (!this.draggable) return;
+        if (event.which === 1) {
+            this.dragging = false;
+        }
     }
 
     getPosition() {
@@ -2043,7 +2088,6 @@ class MiniMap extends AbstractRenderElement {
     setPosition(x, y, size) {
         this.position = [x, y, size, size];
     }
-
 
     minimapScaleFun(coordinates, target, backwards) {
         /*
@@ -2111,7 +2155,7 @@ class MiniMap extends AbstractRenderElement {
     }
 
     async render(ctx, scaleFun) {
-        if(!this.visible || this.position == null) return;
+        if (!this.visible || this.position == null) return;
         super.render(ctx, scaleFun);
 
         // position of minimap on parent viewport
@@ -2123,36 +2167,19 @@ class MiniMap extends AbstractRenderElement {
         ctx.lineWidth = window.styles.minimap.background.lineWidth;
         ctx.setLineDash(window.styles.minimap.background.lineDash);
         roundRect(ctx, this.pos_abs[0] - 2, this.pos_abs[1] - 2,
-            this.pos_abs[2] + 4, this.pos_abs[3] + 4,
-            5, true, true);
+                  this.pos_abs[2] + 4, this.pos_abs[3] + 4,
+                  5, true, true);
 
-        // elements
-        for(var e=0; e<this.parentViewport.renderStack.length; e++) {
-
-            //TODO: dirty hack to avoid rendering HoverTextElement instances, resize handles and paintbrush
-            if(this.parentViewport.renderStack[e].hasOwnProperty('text') ||
-                this.parentViewport.renderStack[e] instanceof ElementGroup ||
-                this.parentViewport.renderStack[e] instanceof PaintbrushElement) continue;
-            await this.parentViewport.renderStack[e].render(ctx, (this.minimapScaleFun).bind(this));
-        }
-
-        // current extent of parent viewport
-        var extent_parent = this.minimapScaleFun(this.parentViewport.getViewport(), 'canvas');
-        ctx.fillStyle = window.styles.minimap.viewport.fillColor;
-        ctx.strokeStyle = window.styles.minimap.viewport.strokeColor;
-        ctx.lineWidth = window.styles.minimap.viewport.lineWidth;
-        ctx.setLineDash(window.styles.minimap.viewport.lineDash);
-        ctx.fillRect(extent_parent[0], extent_parent[1],
-            extent_parent[2], extent_parent[3]);
-
-
-        // another outlined border for aesthetics
-        ctx.strokeStyle = window.styles.minimap.background.strokeColor;
-        ctx.lineWidth = window.styles.minimap.background.lineWidth;
-        ctx.setLineDash(window.styles.minimap.background.lineDash);
-        roundRect(ctx, this.pos_abs[0] - ctx.lineWidth/2, this.pos_abs[1] - ctx.lineWidth/2,
-            this.pos_abs[2] + ctx.lineWidth, this.pos_abs[3] + ctx.lineWidth,
-            5, false, true);
+        let offscreen = document.createElement('canvas');
+        offscreen.width = this.parentViewport.canvas[0].width;
+        offscreen.height = this.parentViewport.canvas[0].height;
+        let offCtx = offscreen.getContext('2d');
+        offCtx.drawImage(this.parentViewport.canvas[0], 0, 0);
+        ctx.drawImage(
+            offscreen,
+            0, 0, offscreen.width, offscreen.height,
+            this.pos_abs[0], this.pos_abs[1], this.pos_abs[2], this.pos_abs[3]
+        );
     }
 }
 
