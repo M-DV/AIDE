@@ -2,8 +2,7 @@
 
 [![Ubuntu build](https://github.com/bkellenb/AIDE/actions/workflows/ubuntu_build.yaml/badge.svg)](https://github.com/bkellenb/AIDE/actions/workflows/ubuntu_build.yaml) [![macOS build](https://github.com/bkellenb/AIDE/actions/workflows/macos_build.yaml/badge.svg)](https://github.com/bkellenb/AIDE/actions/workflows/macos_build.yaml) [![Docker build](https://github.com/bkellenb/AIDE/actions/workflows/build_docker-compose.yaml/badge.svg)](https://github.com/bkellenb/AIDE/actions/workflows/build_docker-compose.yaml)
 
-**This is the new official repository for AIDE, superseding the [previous
-one](https://github.com/microsoft/aerial_wildlife_detection).**
+**This is a fork made by [CDRIN](https://www.cdrin.com/en/) from the [official repository for AIDE](https://github.com/bkellenb/AIDE).**
 
 
 <img src="doc/figures/AIDE_teaser_2.png" alt="AIDE teaser" width="100%"/>
