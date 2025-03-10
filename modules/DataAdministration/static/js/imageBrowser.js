@@ -460,7 +460,6 @@ class AbstractImageView {
         var affected = [entry];
 
         // also check (or uncheck) selected entries
-        // (Modification: no propagation to other selected entries)
         entry.setChecked(checked);
         if(checked) {
             this.checked[entry.id] = entry;
