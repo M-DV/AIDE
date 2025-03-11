@@ -19,6 +19,10 @@ from util.cors import enable_cors
 from util import helpers, drivers
 from .backend.middleware import DataAdministrationMiddleware
 from ..module import Module
+from psycopg2 import sql
+from uuid import UUID
+
+
 
 
 
@@ -458,13 +462,60 @@ class DataAdministrator(Module):
                 force_remove = data.get('forceRemove', False)
                 delete_from_disk = data.get('deleteFromDisk', False)
 
-                images_deleted = self.middleware.removeImages(project,
-                                                                username,
-                                                                image_ids,
-                                                                force_remove,
-                                                                delete_from_disk)
-
-                return {'status': 0, 'images_deleted': images_deleted}
+                if not force_remove:
+                    try:
+                        query_str = sql.SQL('''
+                            SELECT COUNT(*) as count FROM {id_img} AS img
+                            WHERE img.id IN %s
+                            AND img.id IN (
+                                SELECT image FROM {id_iu}
+                                UNION ALL
+                                SELECT image FROM {id_anno}
+                                UNION ALL
+                                SELECT image FROM {id_pred}
+                            )
+                        ''').format(
+                            id_img=sql.Identifier(project, 'image'),
+                            id_iu=sql.Identifier(project, 'image_user'),
+                            id_anno=sql.Identifier(project, 'annotation'),
+                            id_pred=sql.Identifier(project, 'prediction')
+                        )
+                        
+                        image_uuids = tuple(UUID(i) for i in image_ids)
+                        result = self.db_connector.execute(
+                            query_str, 
+                            (image_uuids,), 
+                            'all'
+                        )
+                        
+                        if result is None or len(result) == 0:
+                            images_with_relations = 0
+                        else:
+                            images_with_relations = result[0]['count']
+                        
+                        if images_with_relations == len(image_ids):
+                            return {
+                                'status': 0, 
+                                'message': 'Images with annotations, views or predictions must be force deleted',
+                                'images_deleted': []
+                            }
+                        
+                        elif images_with_relations > 0:
+                            task_id = self.middleware.removeImages(project, username, image_ids, force_remove, delete_from_disk)
+                            return {
+                                'status': 0, 
+                                'message': 'Images without annotations, views or predictions deleted, images with annotations, views or predictions must be force deleted',
+                                'task_id': task_id
+                            }
+                    except Exception as e:
+                        print(f"Error checking for image relations: {str(e)}")
+                
+                task_id = self.middleware.removeImages(project, username, image_ids, force_remove, delete_from_disk)
+                return {
+                    'status': 0, 
+                    'message': 'Images successfully deleted',
+                    'task_id': task_id
+                }
 
             except Exception as e:
                 return {'status': 1, 'message': str(e)}

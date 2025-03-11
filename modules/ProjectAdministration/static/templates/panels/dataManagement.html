@@ -345,6 +345,8 @@
             });
         }
 
+        // Modification complète de la fonction executeAction dans dataManagement.html
+
         function executeAction() {
             var checked = window.imageBrowser.getChecked();
             if(checked.length === 0) return;
@@ -352,7 +354,8 @@
             var data = undefined;
             var url = undefined;
             var action = $('#action-select').val();
-            let actionText = 'Task completed successfully';
+            let actionText = 'Task completed successfully'; // Message par défaut
+            
             if(action === 'golden_question_yes') {
                 data = {};
                 for(var i=0; i<checked.length; i++) {
@@ -413,7 +416,8 @@
                     'deleteFromDisk': $('#delete-from-disk').prop('checked')
                 };
                 url = 'removeImages';
-                actionText = 'Successfully removed ' + checked.length + ' images.';
+                // IMPORTANT: Ne pas définir actionText ici pour les suppressions d'images
+                // Le message viendra du backend
             }
 
             if(data === undefined || url === undefined) return;
@@ -428,12 +432,24 @@
                     dataType: 'json',
                     success: function(response) {
                         if(['delete_images', 'set_tags'].includes(action)) {
-                            // refresh folders in parallel
                             initializeDirectoryBrowser();
                         }
 
                         return updateImageBrowser(true, false).done(function() {
-                            window.messager.addMessage(actionText, 'success');
+                            if (action === 'delete_images' && response.message) {
+                                if (response.message === 'Images with annotations, views or predictions must be force deleted') {
+                                    window.messager.addMessage(response.message, 'error', 0);
+                                } 
+                                else if (response.message === 'Images without annotations, views or predictions deleted, images with annotations, views or predictions must be force deleted') {
+                                    window.messager.addMessage('Images without annotations, views or predictions deleted', 'success');
+                                    window.messager.addMessage('Images with annotations, views or predictions must be force deleted', 'error', 0);
+                                }
+                                else {
+                                    window.messager.addMessage(response.message, 'success');
+                                }
+                            } else {
+                                window.messager.addMessage(actionText, 'success');
+                            }
                         }).fail(function() {
                             window.messager.addMessage('An unknown error occurred trying to execute action on selected images.', 'error', 0);
                         });
