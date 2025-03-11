@@ -1640,11 +1640,13 @@ class RectangleElement extends PointElement {
     _clamp_min_box_size(viewport) {
         // Make sure box is of correct size
         // TODO: does not scale independently of canvas size
-        var minWidth = window.minBoxSize_w;
-        var minHeight = window.minBoxSize_h;
-        var minSize = viewport.transformCoordinates([0, 0, minWidth, minHeight], 'validArea', true).slice(2,4);
-        this.width = Math.max(this.width, minSize[0]);
-        this.height = Math.max(this.height, minSize[1]);
+        // This cause smaller bbox resizing on their own
+        // var minWidth = window.minBoxSize_w;
+        // var minHeight = window.minBoxSize_h;
+        // var minSize = viewport.transformCoordinates([0, 0, minWidth, minHeight], 'validArea', true).slice(2,4);
+        // this.width = Math.max(this.width, minSize[0]);
+        // this.height = Math.max(this.height, minSize[1]);
+        return
     }
 
 
