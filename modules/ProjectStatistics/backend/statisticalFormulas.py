@@ -340,81 +340,95 @@ class StatisticalFormulas_model(Enum):
             WHERE iu.username = %s
         ) AS q1
         JOIN (
-			SELECT image, cnnstate, id AS aid, label, x, y, width, height
-			FROM {id_pred}
-			WHERE cnnstate IN %s
+            SELECT image, cnnstate, id AS aid, label, x, y, width, height
+            FROM {id_pred}
+            WHERE cnnstate IN %s
         ) AS q2
         ON q1.image = q2.image
     ),
-    imgStats AS (
-        SELECT image, cnnstate, COUNT(DISTINCT id2) AS num_pred, COUNT(DISTINCT id1) AS num_target
-        FROM masterQuery 
-        GROUP BY image, cnnstate
-    ),
-    tp AS (
-        SELECT cnnstate, image,
-        (CASE WHEN maxiou < %s OR label1 != label2 THEN NULL ELSE bestMatch.id1 END) AS id1,
-        aux.id2, maxiou AS iou
+    positive AS (
+        SELECT bestMatch.image, bestMatch.cnnstate, aux.id1, bestMatch.id2, aux.label1, aux.label2, bestMatch.maxiou AS iou
         FROM (
-            SELECT cnnstate, id1, MAX(iou) AS maxiou
+            SELECT image, cnnstate, id2, MAX(iou) AS maxiou
             FROM masterQuery
-            GROUP BY cnnstate, id1
+            WHERE iou >= %s
+            GROUP BY image, cnnstate, id2
         ) AS bestMatch
         JOIN (
-            SELECT image, id1, id2, label1, label2, iou
+            SELECT *
             FROM masterQuery
-            WHERE iou > 0
         ) AS aux
-        ON bestMatch.id1 = aux.id1
+        ON bestMatch.image = aux.image
+        AND bestMatch.cnnstate = aux.cnnstate
+        AND bestMatch.id2 = aux.id2
         AND maxiou = iou
+    ),
+    truePositive AS (
+        SELECT image, cnnstate, id1, id2
+        FROM positive
+        WHERE label1 = label2
+    ),
+    falsePositive AS (
+        SELECT image, cnnstate, id1, id2
+        FROM positive
+        WHERE label1 != label2 AND id2 NOT IN (SELECT id2 FROM truePositive)
+        UNION ALL (
+            SELECT image, cnnstate, NULL AS id1, id2
+            FROM masterQuery
+            WHERE id2 NOT IN (SELECT id2 FROM positive)
+            GROUP BY image, cnnstate, id2
+        )
     )
-    SELECT *
+    SELECT q1.image, q1.cnnstate, num_pred, num_target, min_iou, avg_iou, max_iou,
+        (CASE WHEN tp IS NULL THEN 0 ELSE tp END) AS tp,
+        (CASE WHEN fp IS NULL THEN 0 ELSE fp END) AS fp,
+        (CASE WHEN fn IS NULL THEN 0 ELSE fn END) AS fn
     FROM (
-        SELECT image, cnnstate, num_pred, num_target, min_iou, avg_iou, max_iou,
-            tp, GREATEST(fp, num_pred - tp) AS fp, GREATEST(fn, num_target - tp) AS fn
+        SELECT image, cnnstate, COUNT(DISTINCT id2) AS num_pred, COUNT(DISTINCT id1) AS num_target
+        FROM masterQuery
+        GROUP BY image, cnnstate
+    ) AS q1
+    LEFT OUTER JOIN (
+        SELECT image, cnnstate, MIN(iou) AS min_iou, AVG(iou) AS avg_iou, MAX(iou) AS max_iou
         FROM (
-            SELECT image, cnnstate, num_pred, num_target, min_iou, avg_iou, max_iou,
-                LEAST(tp, num_pred) AS tp, fp, fn
-            FROM imgStats
-            JOIN (
-                SELECT cnnstate AS cnnstate_, image AS image_,
-                    MIN(iou) AS min_iou, AVG(iou) AS avg_iou, MAX(iou) AS max_iou,
-                    SUM(tp) AS tp, SUM(fp) AS fp, SUM(fn) AS fn
-                FROM (
-                    SELECT cnnstate, image,
-                            iou,
-                            (CASE WHEN id1 IS NOT NULL AND id2 IS NOT NULL THEN 1 ELSE 0 END) AS tp,
-                            (CASE WHEN id2 IS NULL THEN 1 ELSE 0 END) AS fp,
-                            (CASE WHEN id1 IS NULL THEN 1 ELSE 0 END) AS fn
-                    FROM (
-                        SELECT * FROM tp
-                        UNION ALL (
-                            SELECT cnnstate, image, NULL AS id1, id2, NULL::real AS iou
-                            FROM masterQuery
-                            WHERE id1 NOT IN (
-                                SELECT id1 FROM tp
-                            )
-                            AND masterQuery.id2 IS NOT NULL
-                        )
-                        UNION ALL (
-                            SELECT cnnstate, image, id1, NULL AS id2, NULL::real AS iou
-                            FROM masterQuery
-                            WHERE id2 IS NULL
-                            AND id1 IS NOT NULL
-                        )
-                    ) AS q1
-                ) AS q2
-                GROUP BY image_, cnnstate_
-            ) AS statsQuery
-            ON imgstats.image = statsQuery.image_
-            AND imgstats.cnnstate = statsQuery.cnnstate_
-        ) AS q3
+            SELECT image, cnnstate, id2, iou
+            from masterQuery
+            WHERE iou > 0
+        )
+        GROUP BY image, cnnstate
+    ) AS q2
+    ON q1.image = q2.image AND q1.cnnstate = q2.cnnstate
+    LEFT OUTER JOIN (
+        SELECT image, cnnstate, COUNT(DISTINCT id1) AS tp
+        FROM truePositive
+        GROUP BY image, cnnstate
+    ) AS q3
+    ON q1.image = q3.image AND q1.cnnstate = q3.cnnstate
+    LEFT OUTER JOIN (
+        SELECT image, cnnstate, COUNT(DISTINCT id2) AS fp
+        FROM falsePositive
+        GROUP BY image, cnnstate
     ) AS q4
-    UNION ALL (
-        SELECT image, cnnstate, num_pred, num_target, NULL AS min_iou, NULL AS avg_iou, NULL AS max_iou, 0 AS tp, num_pred AS fp, 0 AS fn
-        FROM imgStats
-        WHERE num_target = 0
-    )'''
+    ON q1.image = q4.image AND q1.cnnstate = q4.cnnstate
+    LEFT OUTER JOIN (
+        SELECT image, cnnstate, SUM(fn)::INTEGER AS fn
+        FROM (
+            SELECT r1.image, r1.cnnstate, COUNT(r1.id2) - 1 AS fn
+            FROM positive r1
+            JOIN positive r2
+            ON r1.id1 != r2.id1 AND r1.id2 = r2.id2 AND r1.iou = r2.iou
+            GROUP BY r1.image, r1.cnnstate, r1.id2
+            UNION ALL (
+                SELECT image, cnnstate, COUNT(DISTINCT id1) AS fn
+                FROM masterQuery
+                WHERE id1 NOT IN (SELECT id1 FROM positive)
+                GROUP BY image, cnnstate
+            )
+        )
+        GROUP BY image, cnnstate
+    ) AS q5
+    ON q1.image = q5.image AND q1.cnnstate = q5.cnnstate
+    '''
 
 
     segmentationMasks = '''
