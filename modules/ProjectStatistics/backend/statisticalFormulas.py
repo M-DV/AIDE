@@ -345,6 +345,7 @@ class StatisticalFormulas_model(Enum):
             WHERE cnnstate IN %s
         ) AS q2
         ON q1.image = q2.image
+        {sql_goldenQuestion}
     ),
     positive AS (
         SELECT bestMatch.image, bestMatch.cnnstate, aux.id1, bestMatch.id2, aux.label1, aux.label2, bestMatch.maxiou AS iou
@@ -411,18 +412,15 @@ class StatisticalFormulas_model(Enum):
     ) AS q4
     ON q1.image = q4.image AND q1.cnnstate = q4.cnnstate
     LEFT OUTER JOIN (
-        SELECT image, cnnstate, SUM(fn)::INTEGER AS fn
+        SELECT image, cnnstate, COUNT(DISTINCT id1) AS fn
         FROM (
-            SELECT r1.image, r1.cnnstate, COUNT(r1.id2) - 1 AS fn
-            FROM positive r1
-            JOIN positive r2
-            ON r1.id1 != r2.id1 AND r1.id2 = r2.id2 AND r1.iou = r2.iou
-            GROUP BY r1.image, r1.cnnstate, r1.id2
+            SELECT image, cnnstate, id1
+            FROM masterQuery
+            WHERE id1 NOT IN (SELECT id1 FROM positive)
             UNION ALL (
-                SELECT image, cnnstate, COUNT(DISTINCT id1) AS fn
-                FROM masterQuery
-                WHERE id1 NOT IN (SELECT id1 FROM positive)
-                GROUP BY image, cnnstate
+                SELECT image, cnnstate, id1
+                FROM positive
+                WHERE label1 != label2
             )
         )
         GROUP BY image, cnnstate
