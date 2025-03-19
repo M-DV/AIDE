@@ -735,11 +735,19 @@ class ModelMarketplaceWorker:
                     WHERE id = %s;
                 '''
             elif source.lower() == 'project':
-                # load from project table
+                # load from project table ++ labelclasses from market origin
                 queryStr = sql.SQL('''
-                    SELECT timeCreated, model_library, stateDict
-                    FROM {id_cnnstate}
-                    WHERE id = %s;
+                    SELECT projectModel.timeCreated, projectModel.model_library, projectModel.stateDict, marketModel.labelclasses 
+                    FROM (
+                        SELECT timeCreated, model_library, stateDict, marketplace_origin_id 
+                        FROM {id_cnnstate}
+                        WHERE id = %s
+                    ) as projectModel
+                    LEFT OUTER JOIN (
+                        SELECT id, labelclasses
+                        FROM aide_admin.modelMarketplace
+                    ) as marketModel
+                    ON projectModel.marketplace_origin_id = marketModel.id
                 ''').format(
                     id_cnnstate=sql.Identifier(project, 'cnnstate')
                 )
@@ -775,12 +783,6 @@ class ModelMarketplaceWorker:
                 modelDefinition['annotation_type'] = modelMeta['annotationType']
             if 'prediction_type' not in modelDefinition:
                 modelDefinition['prediction_type'] = modelMeta['predictionType']
-            if 'labelclasses' not in modelDefinition:
-                # query from current project and just append as a list
-                queryStr = sql.SQL('SELECT name FROM {} ORDER BY name;').format(sql.Identifier(project, 'labelclass'))
-                labelClasses = self.dbConnector.execute(queryStr, (project,), 'all')
-                labelClasses = [l['name'] for l in labelClasses]
-                modelDefinition['labelclasses'] = labelClasses
             
             # model settings: grab from project if possible
             #TODO
