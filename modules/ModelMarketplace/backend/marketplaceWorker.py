@@ -585,9 +585,9 @@ class ModelMarketplaceWorker:
                 description = %s,
                 public = %s,
                 anonymous = %s,
-                tags = %s
+                tags = %s,
                 citation_info = %s,
-                license = %s,
+                license = %s
                 WHERE id = %s AND author = %s;
             ''', (modelName, modelDescription, public, anonymous, tags, citationInfo, license,
                 isShared[0]['id'], username), None)
