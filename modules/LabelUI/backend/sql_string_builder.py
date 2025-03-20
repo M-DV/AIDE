@@ -96,10 +96,8 @@ def get_fixed_images_query_str(project: str,
             {usernameString}
             UNION ALL
             SELECT id, image AS imID, 'prediction' AS cType, {predCols} FROM {id_pred} AS pred
-            WHERE cnnstate = (
+            WHERE cnnstate IN (
                 SELECT id FROM {id_cnnstate}
-                ORDER BY timeCreated DESC
-                LIMIT 1
             )
         ) AS contents ON img.image = contents.imID
         LEFT OUTER JOIN (SELECT image AS iu_image, viewcount, last_checked, username FROM {id_iu}
@@ -227,10 +225,8 @@ def get_next_batch_query_str(project: str,
             LEFT OUTER JOIN (
                 SELECT image, SUM(confidence)/COUNT(confidence) AS score, timeCreated
                 FROM {id_pred}
-                WHERE cnnstate = (
+                WHERE cnnstate IN (
                     SELECT id FROM {id_cnnstate}
-                    ORDER BY timeCreated DESC
-                    LIMIT 1
                 )
                 GROUP BY image, timeCreated
             ) AS img_score ON img.id = img_score.image
@@ -250,10 +246,8 @@ def get_next_batch_query_str(project: str,
             {usernameString}
             UNION ALL
             SELECT id, image AS imID, 'prediction' AS cType, {predCols} FROM {id_pred} AS pred
-            WHERE cnnstate = (
+            WHERE cnnstate IN (
                 SELECT id FROM {id_cnnstate}
-                ORDER BY timeCreated DESC
-                LIMIT 1
             )
         ) AS contents ON img_query.image = contents.imID
         LEFT OUTER JOIN (
