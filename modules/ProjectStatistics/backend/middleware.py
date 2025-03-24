@@ -298,10 +298,11 @@ class ProjectStatisticsMiddleware:
                 if not entity in response:
                     response[entity] = copy.deepcopy(tokens)
                 if annoType in ('points', 'boundingBoxes'):
-                    response[entity]['num_matches'] = 1
-                    if b['num_target'] > 0:
-                        response[entity]['num_matches'] += 1
-                
+                    if 'avg_count' in response[entity] and b['num_target'] > 0:
+                        response[entity]['avg_count'] += 1
+                    else :
+                        response[entity]['avg_count'] = 1
+
                 if annoType == 'segmentationMasks':
                     # decode segmentation masks
                     try:
@@ -349,13 +350,16 @@ class ProjectStatisticsMiddleware:
                             response[entity][key] += b[key]
 
         for entity in response.keys():
+            if annoType == 'boundingBoxes' :
+                response[entity]['num_matches'] = response[entity]['tp']
+
             for t in tokens_normalize:
                 if t in response[entity]:
                     if t == 'overall_accuracy':
                         response[entity][t] = float(response[entity]['correct']) / \
                             float(response[entity]['correct'] + response[entity]['incorrect'])
                     elif annoType in ('points', 'boundingBoxes'):
-                        response[entity][t] /= response[entity]['num_matches']
+                        response[entity][t] /= response[entity]['avg_count']
 
             if annoType == 'points' or annoType == 'boundingBoxes':
                 prec, rec, f1 = self._calc_geometric_stats(
