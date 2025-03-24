@@ -78,6 +78,22 @@ def assemble_server(verbose_start=True,
     # connect to database
     db_connector = Database(config, verbose_start)
 
+    # Abord any unfinished project task on startup
+    db_connector.execute('''
+        DO $$ 
+        DECLARE 
+            project TEXT;
+        BEGIN
+            FOR project IN 
+                SELECT table_schema
+                FROM information_schema.tables
+                WHERE table_name = 'workflowhistory'
+            LOOP
+                EXECUTE format('UPDATE %I.workflowhistory SET timeFinished = NOW(), succeeded = FALSE, abortedBy = ''OnStart'' WHERE timeFinished IS NULL', project);
+            END LOOP;
+        END $$;
+    ''', None, None)
+
     if check_v1_config:
         # check if config file points to unmigrated v1 project
         print('Checking database...'.ljust(status_offset), end='')
