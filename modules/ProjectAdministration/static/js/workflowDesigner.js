@@ -520,6 +520,7 @@ class TrainNode extends DefaultNode {
 
         // golden question images
         this.gqchck = $('<input type="checkbox" id="gqchck_' + this.id + '" />');
+        this.gqchck.prop('checked', this.params['include_golden_questions']);
         var chckbxMarkup = $('<div></div>');
         chckbxMarkup.append(this.gqchck);
         chckbxMarkup.append($('<label for="gqchck_' + this.id + '">Include golden questions</label>'));
