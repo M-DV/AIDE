@@ -1576,10 +1576,41 @@ class DataWorker:
             If "deleteFromDisk" is True, the image files are also
             deleted from the project directory on the file system.
 
-            Returns a list of images that were deleted.
+            Returns a dict with the total number of images requested for deletion
+            and the list of images that were actually deleted.
         '''
 
         imageList = tuple((UUID(i),) for i in imageList)
+        total_requested = len(imageList)
+
+        if not forceRemove:
+            check_str = sql.SQL('''
+                SELECT id
+                FROM {id_img}
+                WHERE id IN %s
+                AND id IN (
+                    SELECT image FROM {id_iu}
+                    WHERE image IN %s
+                    UNION ALL
+                    SELECT image FROM {id_anno}
+                    WHERE image IN %s
+                    UNION ALL
+                    SELECT image FROM {id_pred}
+                    WHERE image IN %s
+                );
+            ''').format(
+                id_img=sql.Identifier(project, 'image'),
+                id_iu=sql.Identifier(project, 'image_user'),
+                id_anno=sql.Identifier(project, 'annotation'),
+                id_pred=sql.Identifier(project, 'prediction')
+            )
+            images_with_relations = self.db_connector.execute(check_str,
+                                                        tuple([imageList] * 4),
+                                                        'all')
+            if images_with_relations is not None:
+                images_with_relations = [str(img['id']) for img in images_with_relations]
+            else:
+                images_with_relations = []
 
         query_args = []
         delete_args = []
@@ -1656,8 +1687,8 @@ class DataWorker:
 
         # retrieve images to be deleted
         imgs_del = self.db_connector.execute(query_str,
-                                             query_args,
-                                             'all')
+                                            query_args,
+                                            'all')
 
         if imgs_del is None:
             imgs_del = []
@@ -1665,13 +1696,13 @@ class DataWorker:
         if len(imgs_del):
             # delete images
             self.db_connector.execute(delete_str,
-                                      delete_args,
-                                      None)
+                                    delete_args,
+                                    None)
 
             if deleteFromDisk:
                 project_folder = os.path.join(self.config.get_property('FileServer',
-                                                                       'staticfiles_dir'),
-                                              project)
+                                                                    'staticfiles_dir'),
+                                            project)
                 if os.path.isdir(project_folder) or os.path.islink(project_folder):
                     for i in imgs_del:
                         file_path = os.path.join(project_folder, i['filename'])
@@ -1682,8 +1713,15 @@ class DataWorker:
             for idx, img_del in enumerate(imgs_del):
                 imgs_del[idx]['id'] = str(img_del['id'])
 
-        return imgs_del
-
+        result = {
+            'total_requested': total_requested,
+            'images_deleted': imgs_del
+        }
+        
+        if not forceRemove and images_with_relations:
+            result['images_with_relations'] = images_with_relations
+            
+        return result
 
     def removeOrphanedImages(self, project):
         '''
