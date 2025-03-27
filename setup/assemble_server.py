@@ -89,7 +89,7 @@ def assemble_server(verbose_start=True,
                 FROM information_schema.tables
                 WHERE table_name = 'workflowhistory'
             LOOP
-                EXECUTE format('UPDATE %I.workflowhistory SET timeFinished = NOW(), succeeded = FALSE, abortedBy = ''OnStart'' WHERE timeFinished IS NULL', project);
+                EXECUTE format('UPDATE %I.workflowhistory SET timeFinished = NOW(), succeeded = FALSE WHERE timeFinished IS NULL', project);
             END LOOP;
         END $$;
     ''', None, None)

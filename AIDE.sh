@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Launches or terminates AIDE with all the correct modules,
 # including Celery, if required.
@@ -75,8 +75,10 @@ function start {
 }
 
 function stop {
+    $python_exec -m celery -A celery_worker purge -f;
     $python_exec -m celery -A celery_worker control shutdown;
-    pkill gunicorn;
+    pkill -f "celery_worker";
+    pkill -f gunicorn;
 }
 
 function restart {
