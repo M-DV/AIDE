@@ -127,6 +127,26 @@
     #delete-options {
         margin-left: 20px;
     }
+    
+    
+    #search-container {
+        display: inline-block;
+        margin-left: 15px;
+    }
+    
+    #client-search {
+        padding: 4px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        width: 250px;
+        margin-right: 5px;
+    }
+    
+    .image-browser-view-buttons {
+        display: flex;
+        align-items: center;
+        margin-bottom: 5px;
+    }
 </style>
 <script src="/static/dataAdmin/js/imageBrowser.js?v={{ version }}"></script>
 <script src="/static/general/js/tags.js?v={{ version }}"></script>
@@ -233,6 +253,30 @@
             $(window).on('resize', function() {
                 setImageBrowserSize();
             });
+            
+            $('.image-browser-view-buttons').append(
+                '<div id="search-container">' +
+                '<input type="text" id="client-search" placeholder="Filter images by name" />' +
+                '</div>'
+            );
+            
+            $('#client-search').on('keyup', function() {
+                filterDisplayedImages();
+            });
+            
+            $('#clear-search').on('click', function() {
+                $('#client-search').val('');
+                filterDisplayedImages();
+            });
+            
+            window.imageBrowser.on('viewChange', function() {
+                setTimeout(function() {
+                    if ($('#client-search').val()) {
+                        filterDisplayedImages();
+                    }
+                }, 100);
+            });
+            
             return updateImageBrowser(true, false);
         }
 
@@ -325,6 +369,10 @@
                 if(showPopupMessage) {
                     window.messager.addMessage('Images loaded.', 'success');   
                 }
+                
+                if ($('#client-search').val()) {
+                    filterDisplayedImages();
+                }
             }
 
             return $.ajax({
@@ -413,7 +461,6 @@
                     'deleteFromDisk': $('#delete-from-disk').prop('checked')
                 };
                 url = 'removeImages';
-                actionText = 'Successfully removed ' + checked.length + ' images.';
             }
 
             if(data === undefined || url === undefined) return;
@@ -433,7 +480,18 @@
                         }
 
                         return updateImageBrowser(true, false).done(function() {
-                            window.messager.addMessage(actionText, 'success');
+                            if (action === 'delete_images' && response.message) {
+                                if (response.message === 'Images with annotations, views or predictions must be force deleted') {
+                                    window.messager.addMessage(response.message, 'error', 0);
+                                } 
+                                else if (response.message === 'Images without annotations, views or predictions deleted, images with annotations, views or predictions must be force deleted') {
+                                }
+                                else {
+                                    window.messager.addMessage(response.message, 'success');
+                                }
+                            } else {
+                                window.messager.addMessage(actionText, 'success');
+                            }
                         }).fail(function() {
                             window.messager.addMessage('An unknown error occurred trying to execute action on selected images.', 'error', 0);
                         });
@@ -466,6 +524,46 @@
             let remainder = (height - 100) / 2;
             $('.tags-container').css('height', remainder);
             $('#file-directory-browser').css('height', remainder);
+        }
+        
+        function filterDisplayedImages() {
+            const searchTerm = $('#client-search').val().toLowerCase();
+            
+            if (!searchTerm) {
+                if (window.imageBrowser.activeView === 'list') {
+                    $('.list-body tr').show();
+                } else {
+                    $('.thumbnail').show();
+                }
+                $('#no-results-message').remove();
+                return;
+            }
+            
+            let visibleCount = 0;
+            const entries = window.imageBrowser.getEntries();
+            
+            for (const key in entries) {
+                const entry = entries[key];
+                const entryData = entry.data;
+                
+                const fileUrl = entryData.url ? entryData.url.toLowerCase() : '';
+                
+                const found = fileUrl.includes(searchTerm);
+                
+                let entryElement;
+                
+                if (window.imageBrowser.activeView === 'list') {
+                    entryElement = entry.markups['list'];
+                } else {
+                    entryElement = entry.markups['thumbs'];
+                }
+                
+                if (found) {
+                } else {
+                    $(entryElement).hide();
+                }
+            }
+            
         }
 
         // get data server URI
@@ -527,6 +625,22 @@
             setImageBrowserSize();
             window.showLoadingOverlay(false);
         });
+        
+        const originalAddImages = window.imageBrowser.addImages;
+        window.imageBrowser.addImages = function(images) {
+            originalAddImages.call(this, images);
+            if ($('#client-search').val()) {
+                setTimeout(filterDisplayedImages, 100);
+            }
+        };
+        
+        const originalSetImages = window.imageBrowser.setImages;
+        window.imageBrowser.setImages = function(images) {
+            originalSetImages.call(this, images);
+            if ($('#client-search').val()) {
+                setTimeout(filterDisplayedImages, 100);
+            }
+        };
     });
 
 </script>
