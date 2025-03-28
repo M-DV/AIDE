@@ -401,6 +401,7 @@
             var url = undefined;
             var action = $('#action-select').val();
             let actionText = 'Task completed successfully';
+            
             if(action === 'golden_question_yes') {
                 data = {};
                 for(var i=0; i<checked.length; i++) {
@@ -485,6 +486,8 @@
                                     window.messager.addMessage(response.message, 'error', 0);
                                 } 
                                 else if (response.message === 'Images without annotations, views or predictions deleted, images with annotations, views or predictions must be force deleted') {
+                                    window.messager.addMessage('Images without annotations, views or predictions deleted', 'success');
+                                    window.messager.addMessage('Images with annotations, views or predictions must be force deleted', 'error', 0);
                                 }
                                 else {
                                     window.messager.addMessage(response.message, 'success');
@@ -559,6 +562,8 @@
                 }
                 
                 if (found) {
+                    $(entryElement).show();
+                    visibleCount++;
                 } else {
                     $(entryElement).hide();
                 }
