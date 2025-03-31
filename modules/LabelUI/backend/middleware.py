@@ -799,6 +799,20 @@ class DBMiddleware():
                                    num_interactions,
                                    meta))
 
+        # find out if the submited annotations originally belong to another image user (edited review)
+        is_edited_review = False
+        if len(ids) > 0:
+            query_str = sql.SQL('''
+                SELECT username FROM {id_anno} WHERE id IN %s
+            ''').format( id_anno=sql.Identifier(project, 'annotation'))
+            originalIU = self.db_connector.execute(query_str, (tuple(ids),), 1)[0]['username']
+            is_edited_review = username != originalIU
+
+        if (is_edited_review): # Convert all updates to insert as they are not the current user's annotations (make copy)
+            for i in range(len(values_update)):
+                values_update[i] = values_update[i][1:] # remove id from anno_vals
+            values_insert.extend(values_update)
+            values_update = []
 
         # delete all annotations that are not in submitted batch
         image_keys = list(UUID(key) for key in submissions['entries'])
