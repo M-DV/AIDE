@@ -390,12 +390,12 @@ class StatisticalFormulas_model(Enum):
         GROUP BY image, cnnstate
     ) AS q1
     LEFT OUTER JOIN (
-        SELECT image, cnnstate, MIN(iou) AS min_iou, AVG(iou) AS avg_iou, MAX(iou) AS max_iou
+        SELECT sq1.image, sq1.cnnstate, MIN(sq1.iou) AS min_iou, AVG(sq1.iou) AS avg_iou, MAX(sq1.iou) AS max_iou
         FROM (
             SELECT image, cnnstate, id2, iou
             from masterQuery
             WHERE iou > 0
-        )
+        ) as sq1
         GROUP BY image, cnnstate
     ) AS q2
     ON q1.image = q2.image AND q1.cnnstate = q2.cnnstate
@@ -412,7 +412,7 @@ class StatisticalFormulas_model(Enum):
     ) AS q4
     ON q1.image = q4.image AND q1.cnnstate = q4.cnnstate
     LEFT OUTER JOIN (
-        SELECT image, cnnstate, COUNT(DISTINCT id1) AS fn
+        SELECT sq1.image, sq1.cnnstate, COUNT(DISTINCT sq1.id1) AS fn
         FROM (
             SELECT image, cnnstate, id1
             FROM masterQuery
@@ -422,12 +422,11 @@ class StatisticalFormulas_model(Enum):
                 FROM positive
                 WHERE label1 != label2
             )
-        )
+        ) as sq1
         GROUP BY image, cnnstate
     ) AS q5
     ON q1.image = q5.image AND q1.cnnstate = q5.cnnstate
     '''
-
 
     segmentationMasks = '''
         SELECT q1.image AS image, q1id, q1segMask, q1width, q1height, q2id, q2.cnnstate, q2segMask, q2width, q2height FROM (
