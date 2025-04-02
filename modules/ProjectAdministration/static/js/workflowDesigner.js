@@ -11,9 +11,9 @@ const NODE_NAMES = {
 }
 
 
-$(document).ready(function() {
+$(document).ready(function () {
     // options engine in overlay (if enabled)
-    if(typeof(OptionsEngine) === 'function') {
+    if (typeof (OptionsEngine) === 'function') {
         let overlayMarkup = $('<div></div>');
         overlayMarkup.append($('<h2>Default options override for single node</h2>'));
         window.oeDiv = $('<div class="options-engine-container"></div>');
@@ -32,28 +32,28 @@ $(document).ready(function() {
 
         window.optionsEngine = new OptionsEngine(window.oeDiv);
 
-        window.showOptionsOverlay = function(currentOptions, modelDefaults, projectDefaults, onCloseCallback) {
+        window.showOptionsOverlay = function (currentOptions, modelDefaults, projectDefaults, onCloseCallback) {
             let options = currentOptions;
-            if(options === null || options === undefined) {
+            if (options === null || options === undefined) {
                 // no current options; fall back to project options
                 options = projectDefaults;
-                if(options === null || options === undefined) {
+                if (options === null || options === undefined) {
                     // no project defaults; fall back to model defaults
                     options = modelDefaults;
                 }
             }
             window.optionsEngine.setOptions(options);
-            showModelDefaults.on('click', function() {
+            showModelDefaults.on('click', function () {
                 window.optionsEngine.setOptions(modelDefaults);
             });
-            showProjectDefaults.on('click', function() {
+            showProjectDefaults.on('click', function () {
                 window.optionsEngine.setOptions(projectDefaults);
             });
-            saveButton.on('click', function() {
+            saveButton.on('click', function () {
                 window.showOverlay(null);
                 onCloseCallback(window.optionsEngine.getOptions());
             });
-            abortButton.on('click', function() {
+            abortButton.on('click', function () {
                 window.showOverlay(null);
             });
             window.showOverlay(overlayMarkup, true, false);
@@ -65,10 +65,10 @@ $(document).ready(function() {
 
 class AbstractNode {
     constructor(parent, params, nodeType) {
-        if(params === undefined || params === null) {
+        if (params === undefined || params === null) {
             params = {};
         }
-        if(params.hasOwnProperty('id')) {
+        if (params.hasOwnProperty('id')) {
             this.id = params['id'];
         } else {
             this.id = parent.newID();
@@ -78,18 +78,18 @@ class AbstractNode {
         this.nodeType = nodeType;
         this.active = false;
         this.expanded = false;        // for nodes with expandable content
-        if(typeof(params['expanded']) === 'boolean') this.expanded = params['expanded'];
+        if (typeof (params['expanded']) === 'boolean') this.expanded = params['expanded'];
         this.connectionLines = [undefined, undefined];  // incoming, outgoing
         this.repeaterLines = [undefined, undefined];    // same principle, special hooks for repeaters
     }
 
     _check_params(params, defaults) {
         this.params = params;
-        if(this.params === null || this.params === undefined) {
+        if (this.params === null || this.params === undefined) {
             this.params = defaults;
         } else {
-            for(var key in defaults) {
-                if(!this.params.hasOwnProperty(key)) {
+            for (var key in defaults) {
+                if (!this.params.hasOwnProperty(key)) {
                     this.params[key] = defaults[key];
                 }
             }
@@ -101,7 +101,7 @@ class AbstractNode {
     }
 
     _setup_markup(position) {
-        this.markup = $('<div class="node" id="'+this.id+'"></div>');
+        this.markup = $('<div class="node" id="' + this.id + '"></div>');
         this.markup.addClass('node-' + this.nodeType);
         this.setPosition(position);
     }
@@ -120,7 +120,7 @@ class AbstractNode {
 
     setActive(active) {
         this.active = active;
-        if(this.active) {
+        if (this.active) {
             this.markup.addClass('active-workflow-node');
         } else {
             this.markup.removeClass('active-workflow-node');
@@ -129,20 +129,20 @@ class AbstractNode {
 
     distanceToMarkup(point) {
         var ext = this.getExtent();
-        if(this.markupContainsPoint(point)) {
+        if (this.markupContainsPoint(point)) {
             return 0;
         } else {
             return Math.sqrt(
                 Math.pow(
                     Math.min(
                         Math.abs(ext[0] - point[0]),
-                        Math.abs(ext[0]+ext[2] - point[0])
+                        Math.abs(ext[0] + ext[2] - point[0])
                     ), 2
                 ) +
                 Math.pow(
                     Math.min(
                         Math.abs(ext[1] - point[1]),
-                        Math.abs(ext[1]+ext[3] - point[1])
+                        Math.abs(ext[1] + ext[3] - point[1])
                     ), 2
                 )
             );
@@ -151,13 +151,13 @@ class AbstractNode {
 
     markupContainsPoint(point) {
         var ext = this.getExtent();
-        return (point[0] >= ext[0] && point[0] <= (ext[0]+ext[2])) &&
-                (point[1] >= ext[1] && point[1] <= (ext[1]+ext[3]));
+        return (point[0] >= ext[0] && point[0] <= (ext[0] + ext[2])) &&
+            (point[1] >= ext[1] && point[1] <= (ext[1] + ext[3]));
     }
 
     getConnectingLine(incoming, repeater) {
         var index = (incoming ? 0 : 1);
-        if(repeater) {
+        if (repeater) {
             return this.repeaterLines[index];
         } else {
             return this.connectionLines[index];
@@ -166,34 +166,34 @@ class AbstractNode {
 
     setConnectingLine(line, incoming, repeater) {
         var index = (incoming ? 0 : 1);
-        if(repeater) {
-            if(this.repeaterLines[index] !== null && this.repeaterLines[index] !== undefined)
+        if (repeater) {
+            if (this.repeaterLines[index] !== null && this.repeaterLines[index] !== undefined)
                 this.repeaterLines[index].setConnectingNode(null, !incoming, true);
             this.repeaterLines[index] = line;
-            if(this.repeaterLines[index] !== null && this.repeaterLines[index] !== undefined)
+            if (this.repeaterLines[index] !== null && this.repeaterLines[index] !== undefined)
                 this.repeaterLines[index].setConnectingNode(this, !incoming, true);
         } else {
-            if(this.connectionLines[index] !== null && this.connectionLines[index] !== undefined)
+            if (this.connectionLines[index] !== null && this.connectionLines[index] !== undefined)
                 this.connectionLines[index].setConnectingNode(null, !incoming, false);
             this.connectionLines[index] = line;
-            if(this.connectionLines[index] !== null && this.connectionLines[index] !== undefined)
+            if (this.connectionLines[index] !== null && this.connectionLines[index] !== undefined)
                 this.connectionLines[index].setConnectingNode(this, !incoming, false);
         }
     }
 
     unhookConnectingLine(incoming, remove, repeater) {
         var index = (incoming ? 0 : 1);
-        if(repeater) {
-            if(this.repeaterLines[index] !== null && this.repeaterLines[index] !== undefined) {
+        if (repeater) {
+            if (this.repeaterLines[index] !== null && this.repeaterLines[index] !== undefined) {
                 this.repeaterLines[index].setConnectingNode(null, index);   // no index flipping; repeater nodes' flow is inverted
-                if(remove) {
+                if (remove) {
                     this.repeaterLines[index].remove();
                 }
             }
         } else {
-            if(this.connectionLines[index] !== null && this.connectionLines[index] !== undefined) {
-                this.connectionLines[index].setConnectingNode(null, (1-index));
-                if(remove) {
+            if (this.connectionLines[index] !== null && this.connectionLines[index] !== undefined) {
+                this.connectionLines[index].setConnectingNode(null, (1 - index));
+                if (remove) {
                     this.connectionLines[index].remove();
                 }
             }
@@ -215,8 +215,8 @@ class AbstractNode {
 
     setPosition(position) {
         this.position = position;
-        if(Array.isArray(position) && 
-            typeof(position[0]) === 'number' && typeof(position[1]) === 'number') {
+        if (Array.isArray(position) &&
+            typeof (position[0]) === 'number' && typeof (position[1]) === 'number') {
             this.markup.css('left', position[0]);
             this.markup.css('top', position[1]);
             this.markup.css('display', 'block');
@@ -233,27 +233,27 @@ class AbstractNode {
     }
 
     notifyPositionChange() {
-        for(var i=0; i<this.connectionLines.length; i++) {
-            if(this.connectionLines[i] !== undefined && this.connectionLines[i] !== null) {
+        for (var i = 0; i < this.connectionLines.length; i++) {
+            if (this.connectionLines[i] !== undefined && this.connectionLines[i] !== null) {
                 this.connectionLines[i].notifyPositionChange();
             }
         }
-        for(var i=0; i<this.repeaterLines.length; i++) {
-            if(this.repeaterLines[i] !== undefined && this.repeaterLines[i] !== null) {
+        for (var i = 0; i < this.repeaterLines.length; i++) {
+            if (this.repeaterLines[i] !== undefined && this.repeaterLines[i] !== null) {
                 this.repeaterLines[i].notifyPositionChange();
             }
         }
     }
 
     getPreviousElement(repeater) {
-        if(repeater) {
-            if(this.repeaterLines[0] !== undefined && this.repeaterLines[0] !== null) {
+        if (repeater) {
+            if (this.repeaterLines[0] !== undefined && this.repeaterLines[0] !== null) {
                 return this.repeaterLines[0].node_1;
             } else {
                 return undefined;
             }
         } else {
-            if(this.connectionLines[0] !== undefined && this.connectionLines[0] !== null) {
+            if (this.connectionLines[0] !== undefined && this.connectionLines[0] !== null) {
                 return this.connectionLines[0].node_1;
             } else {
                 return undefined;
@@ -262,14 +262,14 @@ class AbstractNode {
     }
 
     getNextElement(repeater) {
-        if(repeater) {
-            if(this.repeaterLines[1] !== undefined && this.repeaterLines[1] !== null) {
+        if (repeater) {
+            if (this.repeaterLines[1] !== undefined && this.repeaterLines[1] !== null) {
                 return this.repeaterLines[1].node_2;
             } else {
                 return undefined;
             }
         } else {
-            if(this.connectionLines[1] !== undefined && this.connectionLines[1] !== null) {
+            if (this.connectionLines[1] !== undefined && this.connectionLines[1] !== null) {
                 return this.connectionLines[1].node_2;
             } else {
                 return undefined;
@@ -317,7 +317,7 @@ class DummyNode extends AbstractNode {
         this.markup.setAttribute('stroke', 'black');
         this.markup.setAttribute('stroke-width', 2);
         this.markup.setAttribute('fill', 'white');
-        if(!this.params['show_handle']) {
+        if (!this.params['show_handle']) {
             this.markup.setAttribute('visibility', 'hidden');
         }
     }
@@ -332,11 +332,11 @@ class DummyNode extends AbstractNode {
 
     setPosition(position) {
         this.position = position;
-        if(Array.isArray(position) &&
-            typeof(position[0]) === 'number' && typeof(position[1]) === 'number') {
+        if (Array.isArray(position) &&
+            typeof (position[0]) === 'number' && typeof (position[1]) === 'number') {
             this.markup.setAttribute('x', this.position[0]);
             this.markup.setAttribute('y', this.position[1]);
-            if(this.params['show_handle']) {
+            if (this.params['show_handle']) {
                 this.markup.setAttribute('visibility', 'visible');
             } else {
                 this.markup.setAttribute('visibility', 'hidden');
@@ -371,13 +371,13 @@ class ConnectionNode extends AbstractNode {
 
     _setup_markup(position) {
         super._setup_markup(position);
-        if(this.params['is_start_node']) {
+        if (this.params['is_start_node']) {
             this.markup.append('<div>Start</div>');
         }
     }
 
     setConnectingLine(line, incoming, repeater) {
-        if(this.params['is_start_node'] && incoming && !repeater) {
+        if (this.params['is_start_node'] && incoming && !repeater) {
             // regular incoming lines are not allowed for starting node
             return;
         } else {
@@ -399,18 +399,18 @@ class DefaultNode extends AbstractNode {
 
         // delete node button
         var delBtn = $('<button class="btn btn-sm btn-secondary">X</button>');
-        delBtn.click(function() {
+        delBtn.click(function () {
             self._remove();
         });
         this.markup.append(delBtn);
 
         // node type name
-        this.nodeTitleMarkup = $('<span class="node-title">'+NODE_NAMES[this.nodeType]+'</span>');
+        this.nodeTitleMarkup = $('<span class="node-title">' + NODE_NAMES[this.nodeType] + '</span>');
         this.markup.append(this.nodeTitleMarkup);
     }
 
     _attach_tagHandler(container, predefinedTags) {
-        if(typeof(TagHandler) !== 'undefined') {
+        if (typeof (TagHandler) !== 'undefined') {
             let self = this;
             let tagDiv = $('<div></div>');
             container.append(tagDiv);
@@ -418,15 +418,15 @@ class DefaultNode extends AbstractNode {
             let tagContainer = $('<div></div>');
             tagDiv.append(tagContainer);
             this.tagHandler = new TagHandler(tagContainer,
-                                            false,
-                                            true,
-                                            true,
-                                            true);
-            this.tagHandler.loadTags().then(function() {
-                if(Array.isArray(predefinedTags)) {
+                false,
+                true,
+                true,
+                true);
+            this.tagHandler.loadTags().then(function () {
+                if (Array.isArray(predefinedTags)) {
                     try {
                         self.tagHandler.setChecked(predefinedTags, true);
-                    } catch(err) {
+                    } catch (err) {
                         //TODO
                         console.error(err)
                     }
@@ -436,7 +436,7 @@ class DefaultNode extends AbstractNode {
     }
 
     _get_checked_tags() {
-        if(this.tagHandler !== 'undefined') {
+        if (this.tagHandler !== 'undefined') {
             return this.tagHandler.getCheckedTags();
         }
         return undefined;
@@ -474,15 +474,15 @@ class TrainNode extends DefaultNode {
 
         this.propertiesMarkup = $('<div style="display:none"></div>');
         this.markup.append(this.propertiesMarkup);
-        this.nodeTitleMarkup.click(function() {
-            if(self.active) {
-                self.propertiesMarkup.slideToggle(400, function() {
+        this.nodeTitleMarkup.click(function () {
+            if (self.active) {
+                self.propertiesMarkup.slideToggle(400, function () {
                     self.notifyPositionChange();
                 });
                 self.expanded = self.propertiesMarkup.is(':visible');
             }
         });
-        if(this.isExpanded()) {
+        if (this.isExpanded()) {
             this.propertiesMarkup.show();
             this.notifyPositionChange();
         }
@@ -493,24 +493,24 @@ class TrainNode extends DefaultNode {
 
         // minimum timestamp
         let timestamp = this.params['min_timestamp'];
-        let hasTimestamp = (typeof(timestamp) === 'number');
+        let hasTimestamp = (typeof (timestamp) === 'number');
 
         var minTmarkup = $('<div></div>');
         minTmarkup.append('<div>Images last viewed:</div>');
         this.minTgr = $('<buttonGroup></buttonGroup>');
-        this.minTgr.append($('<input type="radio" name="min-timestamp" id="'+this.id+'-minT-latest" value="null" '+(timestamp === null? 'checked="checked"' : '')+'" />' +
-                            '<label for="'+this.id+'-minT-latest">Latest</label>'));
+        this.minTgr.append($('<input type="radio" name="min-timestamp" id="' + this.id + '-minT-latest" value="null" ' + (timestamp === null ? 'checked="checked"' : '') + '" />' +
+            '<label for="' + this.id + '-minT-latest">Latest</label>'));
         this.minTgr.append($('<br />'));
-        this.minTgr.append($('<input type="radio" name="min-timestamp" id="'+this.id+'-minT-lastState" value="lastState" '+(timestamp === 'lastState'? 'checked="checked"' : '')+'" />' +
-                            '<label for="'+this.id+'-minT-lastState">New since last AI model training</label>'));
+        this.minTgr.append($('<input type="radio" name="min-timestamp" id="' + this.id + '-minT-lastState" value="lastState" ' + (timestamp === 'lastState' ? 'checked="checked"' : '') + '" />' +
+            '<label for="' + this.id + '-minT-lastState">New since last AI model training</label>'));
         this.minTgr.append($('<br />'));
-        this.minTgr.append($('<input type="radio" name="min-timestamp" id="'+this.id+'-minT-timestamp" value="timestamp" '+(hasTimestamp? 'checked="checked"' : '')+'" />' +
-                            '<label for="'+this.id+'-minT-timestamp">From date on:</label>'));
+        this.minTgr.append($('<input type="radio" name="min-timestamp" id="' + this.id + '-minT-timestamp" value="timestamp" ' + (hasTimestamp ? 'checked="checked"' : '') + '" />' +
+            '<label for="' + this.id + '-minT-timestamp">From date on:</label>'));
         this.timestampSpecifier = $('<input type="text" />');
         this.timestampSpecifier.datetimepicker({
-            defaultDate: (hasTimestamp? new Date(this.params['min_timestamp'] * 1000) : null)
+            defaultDate: (hasTimestamp ? new Date(this.params['min_timestamp'] * 1000) : null)
         });
-        if(hasTimestamp) {
+        if (hasTimestamp) {
             //TODO: needed because of buggy date time picker plugin
             this.timestampSpecifier.val(new Date(this.params['min_timestamp'] * 1000).toString());
         }
@@ -520,6 +520,7 @@ class TrainNode extends DefaultNode {
 
         // golden question images
         this.gqchck = $('<input type="checkbox" id="gqchck_' + this.id + '" />');
+        this.gqchck.prop('checked', this.params['include_golden_questions']);
         var chckbxMarkup = $('<div></div>');
         chckbxMarkup.append(this.gqchck);
         chckbxMarkup.append($('<label for="gqchck_' + this.id + '">Include golden questions</label>'));
@@ -533,8 +534,8 @@ class TrainNode extends DefaultNode {
         minNumAnnoMarkup.append('<td>Minimum no. annotations per image:</td>');
         var tdNumAnno = $('<td></td>');
         this.minNumAnno = $('<input type="number" value="0" min="0" max="1024" style="width:65px" />');
-        if(typeof(this.params['min_anno_per_image']) === 'number') {
-            this.minNumAnno.val(this.params['min_anno_per_image']);
+        if (this.params['min_anno_per_image'] !== undefined && this.params['min_anno_per_image'] !== null) {
+            this.minNumAnno.val(parseInt(this.params['min_anno_per_image']) || 0);
         }
         tdNumAnno.append(this.minNumAnno);
         minNumAnnoMarkup.append(tdNumAnno);
@@ -545,8 +546,8 @@ class TrainNode extends DefaultNode {
         maxNumImgsMarkup.append($('<td>Number of images (0 = unlimited):</td>'));
         var tdNumImg = $('<td></td>');
         this.maxNumImgs = $('<input type="number" value="0" min="0" max="1000000000" style="width:65px" />');
-        if(typeof(this.params['max_num_images']) === 'number') {
-            this.maxNumImgs.val(this.params['max_num_images']);
+        if (this.params['max_num_images'] !== undefined && this.params['max_num_images'] !== null) {
+            this.maxNumImgs.val(parseInt(this.params['max_num_images']) || 0);
         }
         tdNumImg.append(this.maxNumImgs);
         maxNumImgsMarkup.append(tdNumImg);
@@ -557,7 +558,7 @@ class TrainNode extends DefaultNode {
         maxNumWorkersMarkup.append($('<td>Number of workers (0 = unlimited):</td>'));
         var tdNumWorkers = $('<td></td>');
         this.maxNumWorkers = $('<input type="number" value="0" min="0" max="1000000000" style="width:65px" />');
-        if(typeof(this.params['max_num_workers']) === 'number') {
+        if (typeof (this.params['max_num_workers']) === 'number') {
             this.maxNumWorkers.val(this.params['max_num_workers']);
         }
         tdNumWorkers.append(this.maxNumWorkers);
@@ -565,10 +566,10 @@ class TrainNode extends DefaultNode {
         optionsTable.append(maxNumWorkersMarkup);
 
         // model options override
-        if(typeof(window.showOptionsOverlay) === 'function' && this.aiModelMeta.hasOwnProperty('defaultOptions')) {
+        if (typeof (window.showOptionsOverlay) === 'function' && this.aiModelMeta.hasOwnProperty('defaultOptions')) {
             let showModelOptionsOverride = $('<button class="btn btn-sm btn-primary">Model Options</button>');
-            showModelOptionsOverride.on('click', function() {
-                window.showOptionsOverlay(self.aiModelOptions, self.aiModelMeta['defaultOptions'], self.aiModelMeta['projectOptions'], function(options) {
+            showModelOptionsOverride.on('click', function () {
+                window.showOptionsOverlay(self.aiModelOptions, self.aiModelMeta['defaultOptions'], self.aiModelMeta['projectOptions'], function (options) {
                     self.aiModelOptions = options;
                 });
             });
@@ -582,11 +583,11 @@ class TrainNode extends DefaultNode {
     toJSON() {
         // collect parameters first
         var timestampSel = this.minTgr.find('input:radio[name="min-timestamp"]:checked').val();
-        if(timestampSel === 'timestamp') {
+        if (timestampSel === 'timestamp') {
             // get from date instead
             timestampSel = new Date(this.timestampSpecifier.val()).getTime() / 1000;
             // timestampSel = new Date();  //TODO
-        } else if(timestampSel === 'null') {
+        } else if (timestampSel === 'null') {
             // no timestamp restriction
             timestampSel = null;
         } // else lastState
@@ -639,15 +640,15 @@ class InferenceNode extends DefaultNode {
 
         this.propertiesMarkup = $('<div style="display:none"></div>');
         this.markup.append(this.propertiesMarkup);
-        this.nodeTitleMarkup.click(function() {
-            if(self.active) {
-                self.propertiesMarkup.slideToggle(400, function() {
+        this.nodeTitleMarkup.click(function () {
+            if (self.active) {
+                self.propertiesMarkup.slideToggle(400, function () {
                     self.notifyPositionChange();
                     self.expanded = self.propertiesMarkup.is(':visible');
                 });
             }
         });
-        if(this.isExpanded()) {
+        if (this.isExpanded()) {
             this.propertiesMarkup.show();
             this.notifyPositionChange();
         }
@@ -676,8 +677,8 @@ class InferenceNode extends DefaultNode {
         maxNumImgsMarkup.append($('<td>Number of images (0 = unlimited):</td>'));
         let maxNumImgsCell = $('<td></td>');
         this.maxNumImgs = $('<input type="number" value="0" min="0" max="1000000000" style="width:65px" />');
-        if(typeof(this.params['max_num_images']) === 'number') {
-            this.maxNumImgs.val(this.params['max_num_images']);
+        if (this.params['max_num_images'] !== undefined && this.params['max_num_images'] !== null) {
+            this.maxNumImgs.val(parseInt(this.params['max_num_images']) || 0);
         }
         maxNumImgsCell.append(this.maxNumImgs);
         maxNumImgsMarkup.append(maxNumImgsCell);
@@ -688,7 +689,7 @@ class InferenceNode extends DefaultNode {
         maxNumWorkersMarkup.append($('<td>Number of workers (0 = unlimited):</td>'));
         let maxNumWorkersCell = $('<td></td>');
         this.maxNumWorkers = $('<input type="number" value="0" min="0" max="1000000000" style="width:65px" />');
-        if(typeof(this.params['max_num_workers']) === 'number') {
+        if (typeof (this.params['max_num_workers']) === 'number') {
             this.maxNumWorkers.val(this.params['max_num_workers']);
         }
         maxNumWorkersCell.append(this.maxNumWorkers);
@@ -696,10 +697,10 @@ class InferenceNode extends DefaultNode {
         optionsTable.append(maxNumWorkersMarkup);
 
         // model options override
-        if(typeof(window.showOptionsOverlay) === 'function' && this.aiModelMeta.hasOwnProperty('defaultOptions')) {
+        if (typeof (window.showOptionsOverlay) === 'function' && this.aiModelMeta.hasOwnProperty('defaultOptions')) {
             let showModelOptionsOverride = $('<button class="btn btn-sm btn-primary">Model Options</button>');
-            showModelOptionsOverride.on('click', function() {
-                window.showOptionsOverlay(self.aiModelOptions, self.aiModelMeta['defaultOptions'], self.aiModelMeta['projectOptions'], function(options) {
+            showModelOptionsOverride.on('click', function () {
+                window.showOptionsOverlay(self.aiModelOptions, self.aiModelMeta['defaultOptions'], self.aiModelMeta['projectOptions'], function (options) {
                     self.aiModelOptions = options;
                 });
             });
@@ -742,16 +743,16 @@ class RepeaterNode extends AbstractNode {
 
         // delete node
         var delBtn = $('<button class="btn btn-sm btn-secondary" style="float:left;margin-right:10px">X</button>');
-        delBtn.click(function() {
+        delBtn.click(function () {
             self._remove();
         });
         this.markup.append(delBtn);
 
         var wrapper = $('<div></div>');
         wrapper.append($('<span>Repeat </span>'));
-        this.numRepCounter = $('<input type="number" min="1" max="' + 
-                                this.params['max_num_repetitions'] +
-                                '" value="' + this.params['num_repetitions'] + '" />');
+        this.numRepCounter = $('<input type="number" min="1" max="' +
+            this.params['max_num_repetitions'] +
+            '" value="' + this.params['num_repetitions'] + '" />');
         wrapper.append(this.numRepCounter);
         wrapper.append($('<span> times</span>'));
         this.markup.append(wrapper);
@@ -764,18 +765,18 @@ class RepeaterNode extends AbstractNode {
 
     setConnectingLine(line, incoming, repeater) {
         var index = (incoming ? 0 : 1);
-        if(this.repeaterLines[index] !== null && this.repeaterLines[index] !== undefined)
+        if (this.repeaterLines[index] !== null && this.repeaterLines[index] !== undefined)
             this.repeaterLines[index].setConnectingNode(null, !incoming, true);
         this.repeaterLines[index] = line;
-        if(this.repeaterLines[index] !== null && this.repeaterLines[index] !== undefined)
+        if (this.repeaterLines[index] !== null && this.repeaterLines[index] !== undefined)
             this.repeaterLines[index].setConnectingNode(this, !incoming, true);
     }
 
     unhookConnectingLine(incoming, remove, repeater) {
         var index = (incoming ? 0 : 1);
-        if(this.repeaterLines[index] !== null && this.repeaterLines[index] !== undefined) {
-            this.repeaterLines[index].setConnectingNode(null, (1-index), true);
-            if(remove) {
+        if (this.repeaterLines[index] !== null && this.repeaterLines[index] !== undefined) {
+            this.repeaterLines[index].setConnectingNode(null, (1 - index), true);
+            if (remove) {
                 this.repeaterLines[index].remove();
             }
         }
@@ -804,12 +805,12 @@ class ConnectionLine {
         this.node_2 = node_2;
         this.is_repeater = is_repeater;
         this.repeater_outgoing = (this.node_1 instanceof RepeaterNode);
-        this.position = [0,0,0,0];
+        this.position = [0, 0, 0, 0];
         this._setup_markup();
-        if(this.node_1 !== undefined && this.node_1 !== null) {
+        if (this.node_1 !== undefined && this.node_1 !== null) {
             this.node_1.setConnectingLine(this, false, this.is_repeater);
         }
-        if(this.node_2 !== undefined && this.node_2 !== null) {
+        if (this.node_2 !== undefined && this.node_2 !== null) {
             this.node_2.setConnectingLine(this, true, this.is_repeater);
         }
     }
@@ -820,7 +821,7 @@ class ConnectionLine {
         this.markup.setAttribute('points', '0,0 0,0 0,0');
         this.markup.setAttribute('stroke', 'black');
         this.markup.setAttribute('stroke-width', 2);
-        if(this.is_repeater) {
+        if (this.is_repeater) {
             this.markup.setAttribute('stroke-dasharray', 2);
         }
         this.markup.setAttribute('marker-mid', 'url(#arrow)');
@@ -829,32 +830,32 @@ class ConnectionLine {
     }
 
     _update_line() {
-        if(this.node_1 !== undefined && this.node_1 !== null &&
+        if (this.node_1 !== undefined && this.node_1 !== null &&
             this.node_2 !== undefined && this.node_2 !== null) {
-            
+
             var extent_1 = this.node_1.getExtent();
-            var startPos = [extent_1[0] + extent_1[2]/2, extent_1[1] + extent_1[3]/2];
+            var startPos = [extent_1[0] + extent_1[2] / 2, extent_1[1] + extent_1[3] / 2];
 
             var extent_2 = this.node_2.getExtent();
-            var endPos = [extent_2[0] + extent_2[2]/2, extent_2[1] + extent_2[3]/2];
+            var endPos = [extent_2[0] + extent_2[2] / 2, extent_2[1] + extent_2[3] / 2];
 
             // shift positions if this is a repeater line
-            if(this.is_repeater) {
-                if(this.repeater_outgoing) {
-                    startPos = [startPos[0] - extent_1[2]/6, startPos[1] - extent_1[3]/6];
-                    endPos = [endPos[0] - extent_2[2]/6, endPos[1] - extent_2[3]/6];
+            if (this.is_repeater) {
+                if (this.repeater_outgoing) {
+                    startPos = [startPos[0] - extent_1[2] / 6, startPos[1] - extent_1[3] / 6];
+                    endPos = [endPos[0] - extent_2[2] / 6, endPos[1] - extent_2[3] / 6];
                 } else {
-                    startPos = [startPos[0] + extent_1[2]/6, startPos[1] + extent_1[3]/6];
-                    endPos = [endPos[0] + extent_2[2]/6, endPos[1] + extent_2[3]/6];
+                    startPos = [startPos[0] + extent_1[2] / 6, startPos[1] + extent_1[3] / 6];
+                    endPos = [endPos[0] + extent_2[2] / 6, endPos[1] + extent_2[3] / 6];
                 }
             }
             this.position = startPos.concat(endPos);
             this.markup.setAttribute('points',
                 startPos[0] + ',' + startPos[1] + ' ' +
-                (startPos[0]+endPos[0])/2 + ',' + (startPos[1]+endPos[1])/2 + ' ' +
+                (startPos[0] + endPos[0]) / 2 + ',' + (startPos[1] + endPos[1]) / 2 + ' ' +
                 endPos[0] + ',' + endPos[1]
             );
-            if(this.active) {
+            if (this.active) {
                 // this.markup.setAttribute('stroke', '#ebc246');
                 this.markup.setAttribute('stroke-width', 4);
             } else {
@@ -883,7 +884,7 @@ class ConnectionLine {
     }
 
     setConnectingNode(node, incoming) {
-        if(incoming) {
+        if (incoming) {
             this.node_1 = node;
         } else {
             this.node_2 = node;
@@ -897,9 +898,9 @@ class ConnectionLine {
 
     remove() {
         // notify all the nodes about removal
-        if(this.node_1 !== undefined && this.node_1 !== null)
+        if (this.node_1 !== undefined && this.node_1 !== null)
             this.node_1.setConnectingLine(undefined, false);
-        if(this.node_2 !== undefined && this.node_2 !== null)
+        if (this.node_2 !== undefined && this.node_2 !== null)
             this.node_2.setConnectingLine(undefined, true);
         this.markup.remove();
     }
@@ -909,24 +910,24 @@ class ConnectionLine {
         var pos_2 = [this.position[2], this.position[3]];
 
         // check if point within MBR
-        if(point[0] >= Math.min(pos_1[0], pos_2[0]) && point[0] < Math.max(pos_1[0], pos_2[0]) &&
+        if (point[0] >= Math.min(pos_1[0], pos_2[0]) && point[0] < Math.max(pos_1[0], pos_2[0]) &&
             point[1] >= Math.min(pos_1[1], pos_2[1]) && point[1] < Math.max(pos_1[1], pos_2[1])) {
 
             // distance to line
-            var a = Math.abs((point[0] * (pos_2[1]-pos_1[1])) -
-                    point[1] * (pos_2[0]-pos_1[0]) +
-                    pos_2[0]*pos_1[1] - pos_2[1]*pos_1[0]);
-            var b = Math.sqrt(Math.pow(pos_2[1]-pos_1[1], 2) +
-                    Math.pow(pos_2[0]-pos_1[0], 2));
-            return a/b;
+            var a = Math.abs((point[0] * (pos_2[1] - pos_1[1])) -
+                point[1] * (pos_2[0] - pos_1[0]) +
+                pos_2[0] * pos_1[1] - pos_2[1] * pos_1[0]);
+            var b = Math.sqrt(Math.pow(pos_2[1] - pos_1[1], 2) +
+                Math.pow(pos_2[0] - pos_1[0], 2));
+            return a / b;
 
         } else {
             // distance to endpoints
             return Math.min(
-                Math.sqrt(Math.pow(pos_1[0]-point[0], 2) +
-                        Math.pow(pos_1[1]-point[1], 2)),
-                Math.sqrt(Math.pow(pos_2[0]-point[0], 2) +
-                        Math.pow(pos_2[1]-point[1], 2))
+                Math.sqrt(Math.pow(pos_1[0] - point[0], 2) +
+                    Math.pow(pos_1[1] - point[1], 2)),
+                Math.sqrt(Math.pow(pos_2[0] - point[0], 2) +
+                    Math.pow(pos_2[1] - point[1], 2))
             );
         }
     }
@@ -950,7 +951,7 @@ class Canvas {
     }
 
     _setup_markup(domElement) {
-        if(this.type === 'dom') {
+        if (this.type === 'dom') {
             this.canvas = $('<div class="canvas"></div>')[0];
         } else {
             this.canvas = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -981,24 +982,24 @@ class Canvas {
         var id = Math.random().toString(36).substr(2, 9);
         var idTaken = true;
         do {
-            for(var i=0; i<this.elements.length; i++) {
-                if(this.elements[i].id === id) {
+            for (var i = 0; i < this.elements.length; i++) {
+                if (this.elements[i].id === id) {
                     id = Math.random().toString(36).substr(2, 9);
                     break;
                 }
             }
             idTaken = false;
-        } while(idTaken);
+        } while (idTaken);
         return id;
     }
 
     clear(startingNode) {
-        for(var i=0; i<this.elements.length; i++) {
+        for (var i = 0; i < this.elements.length; i++) {
             this.elements[i].remove();
             //$(this.elements[i].markup).remove();
         }
         this.elements = [];
-        if(startingNode !== undefined && startingNode !== null) {
+        if (startingNode !== undefined && startingNode !== null) {
             this.addElement(startingNode);
         }
     }
@@ -1009,10 +1010,10 @@ class Canvas {
     }
 
     removeElement(id) {
-        for(var i=0; i<this.elements.length; i++) {
-            if(this.elements[i].id === id) {
+        for (var i = 0; i < this.elements.length; i++) {
+            if (this.elements[i].id === id) {
                 this.elements[i].remove();
-                this.elements.splice(i,1);
+                this.elements.splice(i, 1);
             }
         }
     }
@@ -1020,14 +1021,14 @@ class Canvas {
     getClosestElement(point) {
         var closest = null;
         var distance = 1e9;
-        for(var i=this.elements.length-1; i>=0; i--) {
+        for (var i = this.elements.length - 1; i >= 0; i--) {
             var dist = this.elements[i].distanceToMarkup(point);
-            if(dist < distance) {
+            if (dist < distance) {
                 distance = dist;
                 closest = this.elements[i];
             }
         }
-        if(distance > 10) {
+        if (distance > 10) {
             closest = null;
         }
         return closest;
@@ -1043,10 +1044,10 @@ class WorkflowDesigner {
         this._setup_canvas(domElement);
         this._setup_callbacks(domElement);
 
-        this.startingNode = new ConnectionNode(this, {is_start_node:true}, [20, 20]);
+        this.startingNode = new ConnectionNode(this, { is_start_node: true }, [20, 20]);
         this.mainCanvas.addElement(this.startingNode);
 
-        if(Array.isArray(workflow) && workflow.length > 0) {
+        if (Array.isArray(workflow) && workflow.length > 0) {
             this.fromJSON(workflow);
         }
 
@@ -1067,16 +1068,16 @@ class WorkflowDesigner {
         var lastNode = this.startingNode;
         var hasNeighbor = true;
         do {
-            if(lastNode.getNextElement(false) !== undefined && lastNode.getNextElement(false) !== null) {
+            if (lastNode.getNextElement(false) !== undefined && lastNode.getNextElement(false) !== null) {
                 lastNode = lastNode.getNextElement(false);
-                if(lastNode !== undefined && lastNode !== null && lastNode.id === this.startingNode.id) {
+                if (lastNode !== undefined && lastNode !== null && lastNode.id === this.startingNode.id) {
                     // loop detected
                     return undefined;
                 }
             } else {
                 hasNeighbor = false;
             }
-        } while(hasNeighbor);
+        } while (hasNeighbor);
         return lastNode;
     }
 
@@ -1087,19 +1088,19 @@ class WorkflowDesigner {
          * test node, the test node and target node would form a loop,
          * hence true is returned. Else returns false.
          */
-        if(testNode === null || testNode === undefined || targetNode === null || targetNode === undefined) {
+        if (testNode === null || testNode === undefined || targetNode === null || targetNode === undefined) {
             return false;
         }
         var latestNode = targetNode;
         var hasNeighbor = true;
         do {
-            if(latestNode.id === testNode.id) return true;
-            if(latestNode.getNextElement() !== undefined && latestNode.getNextElement() !== null) {
+            if (latestNode.id === testNode.id) return true;
+            if (latestNode.getNextElement() !== undefined && latestNode.getNextElement() !== null) {
                 latestNode = latestNode.getNextElement();
             } else {
                 hasNeighbor = false;
             }
-        } while(hasNeighbor);
+        } while (hasNeighbor);
         return false;
     }
 
@@ -1110,18 +1111,18 @@ class WorkflowDesigner {
     }
 
     __handle_mousedown(e) {
-        if(!this.uiEnabled) return;
+        if (!this.uiEnabled) return;
         this.mousedown = true;
         this.mousePos = this.___get_coords(e);
         this.mousedownPos = this.mousePos;
 
         // if nothing is active: set starting node (for potential line drawing)
-        if(Object.keys(this.activeElements).length === 0) {
+        if (Object.keys(this.activeElements).length === 0) {
             this.mousedownElement = undefined;
             this.tempConnectionLine.setConnectingNode(null, true);
-            for(var i=this.mainCanvas.elements.length-1; i>=0; i--) {
+            for (var i = this.mainCanvas.elements.length - 1; i >= 0; i--) {
                 var elem = this.mainCanvas.elements[i];
-                if(!elem.active && elem.distanceToMarkup(this.mousePos) <= 10) {
+                if (!elem.active && elem.distanceToMarkup(this.mousePos) <= 10) {
                     // mousedown on inactive node; start drawing line
                     this.mousedownElement = elem;
                     break;
@@ -1131,17 +1132,17 @@ class WorkflowDesigner {
     }
 
     __handle_mousemove(e) {
-        if(!this.uiEnabled || !this.mousedown) return;
+        if (!this.uiEnabled || !this.mousedown) return;
         var newPos = this.___get_coords(e);
         var coordsDiff = [newPos[0] - this.mousePos[0], newPos[1] - this.mousePos[1]];
-        
+
         // start drawing line if mouse has moved enough
-        if(this.mousedownElement !== undefined) {
+        if (this.mousedownElement !== undefined) {
             var dist = Math.sqrt(
                 Math.pow(this.mousedownPos[0] - newPos[0], 2) +
                 Math.pow(this.mousedownPos[1] - newPos[1], 2)
             );
-            if(dist > 20) {
+            if (dist > 20) {
                 // start drawing line
                 this.tempEndingElement.setPosition(this.mousePos);
                 this.tempConnectionLine.setConnectingNode(this.tempEndingElement, false);
@@ -1153,43 +1154,43 @@ class WorkflowDesigner {
         // this.tempEndingElement.setPosition(newPos);
 
         // move active elements
-        for(var key in this.activeElements) {
+        for (var key in this.activeElements) {
             this.activeElements[key].move(coordsDiff);
         }
         this.mousePos = newPos;
     }
 
     __handle_mouseup(e) {
-        if(!this.uiEnabled) return;
+        if (!this.uiEnabled) return;
         this.mousedown = false;
         this.mousePos = this.___get_coords(e);
         this.mousedownPos = [undefined, undefined];
 
         // check if temporary line being drawn
-        if(this.tempConnectionLine.getConnectingNode(true) !== null &&
+        if (this.tempConnectionLine.getConnectingNode(true) !== null &&
             this.mousedownElement !== undefined && this.mousedownElement !== null) {
             // connect to new node if mouseup
-            for(var i=this.mainCanvas.elements.length-1; i>=0; i--) {
+            for (var i = this.mainCanvas.elements.length - 1; i >= 0; i--) {
                 var elem = this.mainCanvas.elements[i];
-                if(!elem.active && elem.distanceToMarkup(this.mousePos) <= 10) {
-                    if(!(elem instanceof RepeaterNode)) {
+                if (!elem.active && elem.distanceToMarkup(this.mousePos) <= 10) {
+                    if (!(elem instanceof RepeaterNode)) {
                         // check if the connection would form a loop
                         var formsLoop = this._forms_loop(this.mousedownElement, elem);
-                        if(formsLoop) {
+                        if (formsLoop) {
                             // add repeater instead (unless starting node)
-                            if((elem.id !== this.mousedownElement.id) || !(elem instanceof ConnectionNode)) {
+                            if ((elem.id !== this.mousedownElement.id) || !(elem instanceof ConnectionNode)) {
 
                                 // position: calculate from connecting positions
                                 let pos_a = this.mousedownElement.getExtent();
-                                if(this.mousedownElement === elem) {
+                                if (this.mousedownElement === elem) {
                                     // self-repetition; offset repeater node
-                                    var newPos = [pos_a[0], Math.max(0, pos_a[1] - pos_a[3]/2 - 20)];
+                                    var newPos = [pos_a[0], Math.max(0, pos_a[1] - pos_a[3] / 2 - 20)];
 
                                 } else {
                                     let pos_b = elem.getExtent();
                                     var newPos = [  //TODO: not the best solution...
-                                        Math.max(0, ((pos_a[0]+pos_a[2]/2) + (pos_b[0]+pos_b[2]/2)) / 2 - 100),
-                                        Math.max(0, ((pos_a[1]+pos_a[3]/2) + (pos_b[1]+pos_b[3]/2)) / 2 - 12)
+                                        Math.max(0, ((pos_a[0] + pos_a[2] / 2) + (pos_b[0] + pos_b[2] / 2)) / 2 - 100),
+                                        Math.max(0, ((pos_a[1] + pos_a[3] / 2) + (pos_b[1] + pos_b[3] / 2)) / 2 - 12)
                                     ];
                                 }
                                 var repeater = new RepeaterNode(this, {}, newPos);
@@ -1212,24 +1213,24 @@ class WorkflowDesigner {
             }
         } else {
             // check for active nodes
-            if(!e.shiftKey && !e.metaKey) {
+            if (!e.shiftKey && !e.metaKey) {
                 // set everything inactive
-                for(var i=0; i<this.mainCanvas.elements.length; i++) {
+                for (var i = 0; i < this.mainCanvas.elements.length; i++) {
                     this.mainCanvas.elements[i].setActive(false);
                 }
-                for(var i=0; i<this.bottomCanvas.elements.length; i++) {
+                for (var i = 0; i < this.bottomCanvas.elements.length; i++) {
                     this.bottomCanvas.elements[i].setActive(false);
                 }
                 this.activeElements = {};
             }
             var activeMain = this.mainCanvas.getClosestElement(this.mousePos);
-            if(activeMain !== null) {
+            if (activeMain !== null) {
                 activeMain.setActive(true);
                 this.activeElements[activeMain.id] = activeMain;
             } else {
                 // no main element; check lines
                 var activeLine = this.bottomCanvas.getClosestElement(this.mousePos);
-                if(activeLine !== null) {
+                if (activeLine !== null) {
                     activeLine.setActive(true);
                     this.activeElements[activeLine.id] = activeLine;
                 }
@@ -1241,7 +1242,7 @@ class WorkflowDesigner {
     }
 
     __handle_mouseleave(e) {
-        if(!this.uiEnabled) return;
+        if (!this.uiEnabled) return;
         this.mousedown = false;
         this.mousedownPos = [undefined, undefined];
         this.mousedownElement = undefined;
@@ -1250,7 +1251,7 @@ class WorkflowDesigner {
     }
 
     __handle_keyup(e) {
-        if(!this.uiEnabled) return;
+        if (!this.uiEnabled) return;
         //TODO: this also deletes node when only a field is highlighted... need to stop propagation
         // if(e.keyCode === 8 || e.keyCode === 46) {
         //     // backspace or delete; remove active elements
@@ -1269,26 +1270,26 @@ class WorkflowDesigner {
         this.mousedownPos = [undefined, undefined];
         this.mousedownElement = undefined;
         this.activeElements = {};
-        this.tempEndingElement = new DummyNode(this, {show_handle:false}, this.mousePos);
+        this.tempEndingElement = new DummyNode(this, { show_handle: false }, this.mousePos);
         this.tempConnectionLine = new ConnectionLine(this.newID(), this, null, this.tempEndingElement, false);
         this.bottomCanvas.addElement(this.tempConnectionLine);
 
         var self = this;
         $(domElement).on({
-            'mousedown': function(e) {
+            'mousedown': function (e) {
                 self.__handle_mousedown(e);
             },
-            'mousemove': function(e) {
+            'mousemove': function (e) {
                 self.__handle_mousemove(e);
             },
-            'mouseup': function(e) {
+            'mouseup': function (e) {
                 self.__handle_mouseup(e);
             },
-            'mouseleave': function(e) {
+            'mouseleave': function (e) {
                 self.__handle_mouseleave(e);
             }
         });
-        $(domElement).parent().on('keyup', function(e) {
+        $(domElement).parent().on('keyup', function (e) {
             self.__handle_keyup(e);
         })
     }
@@ -1301,18 +1302,18 @@ class WorkflowDesigner {
         // clear current nodes first
         this.clear(this.startingNode);
 
-        if(typeof(workflow) === 'string') {
+        if (typeof (workflow) === 'string') {
             workflow = JSON.parse(workflow);
         }
 
         // add nodes
-        for(var i=0; i<workflow['tasks'].length; i++) {
+        for (var i = 0; i < workflow['tasks'].length; i++) {
             this.addNode(workflow['tasks'][i]);
         }
 
         // add repeaters
-        if(workflow.hasOwnProperty('repeaters')) {
-            for(var key in workflow['repeaters']) {
+        if (workflow.hasOwnProperty('repeaters')) {
+            for (var key in workflow['repeaters']) {
                 var repeaterSpec = workflow['repeaters'][key];
                 this.addNode(repeaterSpec);
             }
@@ -1320,11 +1321,11 @@ class WorkflowDesigner {
     }
 
     addNode(params) {
-        if(!this.uiEnabled) return; //TODO: allow non-UI action
-        if(typeof(params) === 'string') {
+        if (!this.uiEnabled) return; //TODO: allow non-UI action
+        if (typeof (params) === 'string') {
             var type = params;
             var nodeParams = {};
-        } else if(params.hasOwnProperty('type')) {
+        } else if (params.hasOwnProperty('type')) {
             var type = params['type'];
             var nodeParams = params;
         } else {
@@ -1333,30 +1334,30 @@ class WorkflowDesigner {
 
         // add id if not present
         let idSet = false;
-        if(!(nodeParams.hasOwnProperty('id'))) {
+        if (!(nodeParams.hasOwnProperty('id'))) {
             nodeParams['id'] = this.newID();
             idSet = true;
         }
 
         // get position
         var latestNode = this._get_last_node();
-        if(nodeParams.hasOwnProperty('extent') && Array.isArray(nodeParams['extent'])) {
+        if (nodeParams.hasOwnProperty('extent') && Array.isArray(nodeParams['extent'])) {
             var position = nodeParams['extent'];
             var positionSpecified = true;
         } else {
-            var position = latestNode.getExtent(); 
-            position = [position[0]+position[2]+50, position[1]+position[3]+50]; // shift from previous element
+            var position = latestNode.getExtent();
+            position = [position[0] + position[2] + 50, position[1] + position[3] + 50]; // shift from previous element
             var positionSpecified = false;
         }
-        if(type === 'train') {
+        if (type === 'train') {
             var node = new TrainNode(this, nodeParams, position, this.aiModelMeta);
-        } else if(type === 'inference') {
+        } else if (type === 'inference') {
             var node = new InferenceNode(this, nodeParams, position, this.aiModelMeta, this.alCriterionMeta);
-        } else if(type === 'repeater') {
+        } else if (type === 'repeater') {
             var node = new RepeaterNode(this, nodeParams, position);
-        } else if(type === 'connector') {
-            if(typeof(nodeParams) === 'object') {
-                if((nodeParams['is_start_node'] || (typeof(nodeParams['kwargs']) === 'object' && nodeParams['kwargs']['is_start_node']))
+        } else if (type === 'connector') {
+            if (typeof (nodeParams) === 'object') {
+                if ((nodeParams['is_start_node'] || (typeof (nodeParams['kwargs']) === 'object' && nodeParams['kwargs']['is_start_node']))
                     && !idSet) {
                     // starting node; only update ID but skip otherwise
                     this.startingNode.id = nodeParams['id'];
@@ -1369,36 +1370,36 @@ class WorkflowDesigner {
         this.mainCanvas.addElement(node);
 
         // connect by line to the latest node
-        if(!(node instanceof RepeaterNode)) {
+        if (!(node instanceof RepeaterNode)) {
             var line = new ConnectionLine(this.newID(), this, latestNode, node, false);
             this.bottomCanvas.addElement(line);
         } else {
             // check if repeater node has connections
             var startNodeID = nodeParams['start_node'];
             var endNodeID = nodeParams['end_node'];
-            if(typeof(startNodeID) === 'string' && typeof(endNodeID) === 'string') {
+            if (typeof (startNodeID) === 'string' && typeof (endNodeID) === 'string') {
                 var startNode = undefined;
                 var endNode = undefined;
-                for(var n=0; n<this.mainCanvas.elements.length; n++) {
+                for (var n = 0; n < this.mainCanvas.elements.length; n++) {
                     var node = this.mainCanvas.elements[n];
-                    if(node.id === startNodeID) {
+                    if (node.id === startNodeID) {
                         startNode = node;
                     }
-                    if(node.id === endNodeID) {
+                    if (node.id === endNodeID) {
                         endNode = node;
                     }
                 }
-                if(startNode !== undefined && endNode !== undefined) {
+                if (startNode !== undefined && endNode !== undefined) {
                     this.bottomCanvas.addElement(new ConnectionLine(this.newID(), this, startNode, node, true));
                     this.bottomCanvas.addElement(new ConnectionLine(this.newID(), this, node, endNode, true));
 
                     // also update position of repeater node (unless explicitly specified)
-                    if(!positionSpecified) {
+                    if (!positionSpecified) {
                         var pos_a = startNode.getExtent();
                         var pos_b = endNode.getExtent();
                         position = [  //TODO: not the best solution...
-                            Math.max(0, ((pos_a[0]+pos_a[2]/2) + (pos_b[0]+pos_b[2]/2)) / 2 + 150),
-                            Math.max(0, ((pos_a[1]+pos_a[3]/2) + (pos_b[1]+pos_b[3]/2)) / 2 - 80)
+                            Math.max(0, ((pos_a[0] + pos_a[2] / 2) + (pos_b[0] + pos_b[2] / 2)) / 2 + 150),
+                            Math.max(0, ((pos_a[1] + pos_a[3] / 2) + (pos_b[1] + pos_b[3] / 2)) / 2 - 80)
                         ];
                         node.setPosition(position);
                     }
@@ -1410,41 +1411,41 @@ class WorkflowDesigner {
     }
 
     removeNode(nodeID) {
-        if(!this.uiEnabled) return; //TODO: allow non-UI action
+        if (!this.uiEnabled) return; //TODO: allow non-UI action
 
         // find node
         var nodeIndex = -1;
-        for(var i=0; i<this.mainCanvas.elements.length; i++) {
-            if(this.mainCanvas.elements[i].id === nodeID) {
+        for (var i = 0; i < this.mainCanvas.elements.length; i++) {
+            if (this.mainCanvas.elements[i].id === nodeID) {
                 nodeIndex = i;
                 break;
             }
         }
-        if(nodeIndex === -1) return;
+        if (nodeIndex === -1) return;
         var node = this.mainCanvas.elements[nodeIndex];
-        if(node.id === this.startingNode.id) return;
+        if (node.id === this.startingNode.id) return;
         var isRepeater = (node instanceof RepeaterNode);
 
         var prevNode = node.getPreviousElement(isRepeater);
         var nextNode = node.getNextElement(isRepeater);
-        if(prevNode !== undefined && prevNode !== null) {
+        if (prevNode !== undefined && prevNode !== null) {
             // tail piece; unhook previous line
             prevNode.unhookConnectingLine(false, true, isRepeater);
         }
-        if(nextNode !== undefined && nextNode !== null) {
+        if (nextNode !== undefined && nextNode !== null) {
             // starting piece; unhook next line
             nextNode.unhookConnectingLine(true, true, isRepeater);
         }
 
         // reconnect (if it is not a repeater)
-        if(!isRepeater) {
-            if(prevNode !== undefined && prevNode !== null && nextNode !== undefined && nextNode !== null) {
+        if (!isRepeater) {
+            if (prevNode !== undefined && prevNode !== null && nextNode !== undefined && nextNode !== null) {
                 // reconnect previous and next nodes
                 var line = new ConnectionLine(this.newID(), this, prevNode, nextNode, false);
                 this.bottomCanvas.addElement(line);
                 nextNode.setConnectingLine(line, true, false);
 
-            } else if(nextNode !== undefined && nextNode !== null && (prevNode === undefined || prevNode === null)) {
+            } else if (nextNode !== undefined && nextNode !== null && (prevNode === undefined || prevNode === null)) {
                 // reconnect next to latest node in chain
                 var lastNode = this._get_last_node();
                 var line = new ConnectionLine(this.newID(), this, lastNode, nextNode, false);
@@ -1458,9 +1459,9 @@ class WorkflowDesigner {
     }
 
     removeSelectedNodes() {
-        if(!this.uiEnabled) return; //TODO: allow non-UI action
-        for(var key in this.activeElements) {
-            if(key === this.startingNode.id) continue;
+        if (!this.uiEnabled) return; //TODO: allow non-UI action
+        for (var key in this.activeElements) {
+            if (key === this.startingNode.id) continue;
             this.removeNode(key);
             this.mainCanvas.removeElement(key);
             this.bottomCanvas.removeElement(key);
@@ -1468,7 +1469,7 @@ class WorkflowDesigner {
     }
 
     clear() {
-        if(!this.uiEnabled) return; //TODO: allow non-UI action
+        if (!this.uiEnabled) return; //TODO: allow non-UI action
         this.mainCanvas.clear(this.startingNode);
         this.bottomCanvas.clear(this.tempConnectionLine);
     }
@@ -1479,29 +1480,29 @@ class WorkflowDesigner {
         var currentNode = this.startingNode;
         let numNodes = 0;
         do {
-            if(currentNode !== undefined && currentNode !== null) {
+            if (currentNode !== undefined && currentNode !== null) {
                 nodeSpec.push(currentNode.toJSON());
                 numNodes++;
             } else {
                 break;
             }
             currentNode = currentNode.getNextElement(false);
-        } while(currentNode !== undefined && currentNode !== null);
+        } while (currentNode !== undefined && currentNode !== null);
 
         // add repeater nodes
         var repeaterSpec = {};
-        for(var n=0; n<this.mainCanvas.elements.length; n++) {
+        for (var n = 0; n < this.mainCanvas.elements.length; n++) {
             var node = this.mainCanvas.elements[n];
-            if(node instanceof RepeaterNode) {
+            if (node instanceof RepeaterNode) {
                 var spec = node.toJSON();
-                if(spec !== undefined && spec !== null) {
+                if (spec !== undefined && spec !== null) {
                     repeaterSpec[node.id] = spec;
                 }
             }
         }
 
         // check if there is any node (besides the start node); return nothing if not
-        if(numNodes <= 1) return {}
+        if (numNodes <= 1) return {}
 
         // return
         return {

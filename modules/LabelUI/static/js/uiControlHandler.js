@@ -906,11 +906,15 @@ class UIControlHandler {
             var onChange = function() {
                 if($('#imorder-review').prop('checked')) {
                     $('#review-controls').slideDown();
+                    $('#previous-button').attr('disabled','disabled');
+                    $('[id^="next-button-"]').attr('disabled','disabled');
                     initSliderRange().done(function() {
                         nextBatchCallback();
                     });
                 } else {
                     $('#review-controls').slideUp();
+                    $('#previous-button').removeAttr('disabled');
+                    $('[id^="next-button-"]').removeAttr('disabled');
                     nextBatchCallback();
                 }
             }
