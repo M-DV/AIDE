@@ -98,6 +98,7 @@ RETURNS real AS $iou$
 		SELECT (
 			CASE WHEN aright < bleft OR bright < aleft OR
 				atop < bbottom OR btop < abottom THEN 0.0
+            CASE WHEN unionplus = inters THEN 1.0
 			ELSE GREATEST(inters / (unionplus - inters), 0.0)
 			END
 		) INTO iou
