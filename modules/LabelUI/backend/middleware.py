@@ -397,6 +397,7 @@ class DBMiddleware():
                         project: str,
                         username: str,
                         image_ids: Iterable[Union[UUID,str]],
+                        pref_cnn: str='latest',
                         hide_golden_question_info=True) -> dict:
         '''
             Returns entries from the database based on the list of data entry identifiers specified.
@@ -404,14 +405,6 @@ class DBMiddleware():
 
         if len(image_ids) == 0:
             return { 'entries': {} }
-
-        # query
-        proj_immutables = self.get_project_immutables(project)
-        is_demo_mode = common.check_demo_mode(project, self.db_connector)
-        query_str = sql_string_builder.get_fixed_images_query_str(project,
-                                                                  proj_immutables['annotationType'],
-                                                                  proj_immutables['predictionType'],
-                                                                  is_demo_mode)
 
         # verify provided UUIDs
         uuids = []
@@ -432,11 +425,38 @@ class DBMiddleware():
                 'imgs_malformed': imgs_malformed
             }
 
+        # handle user epoch preference
+        cnn_stats = self.get_batch_cnn_stats(project, uuids)
+        if pref_cnn == 'latest': pass
+        elif pref_cnn == 'maxPredictions':
+            max_value = 0
+            pref_cnn = 'latest'
+            for row in cnn_stats[::-1]:
+                if row['pred_count'] > max_value:
+                    pref_cnn = row['cnnstate']
+        else :
+            try:
+                pref_cnn = UUID(pref_cnn)
+            except Exception:
+                pref_cnn = 'latest'
+
+        # query
+        proj_immutables = self.get_project_immutables(project)
+        is_demo_mode = common.check_demo_mode(project, self.db_connector)
+        query_str = sql_string_builder.get_fixed_images_query_str(project,
+                                                                  proj_immutables['annotationType'],
+                                                                  proj_immutables['predictionType'],
+                                                                  pref_cnn,
+                                                                  is_demo_mode)
+
         # parse results
+        query_vals = [uuids]
         if is_demo_mode:
-            query_vals = (uuids,)
+            if pref_cnn != 'latest' : query_vals.append(pref_cnn)
         else:
-            query_vals = (uuids, username, username,)
+            query_vals.append(username)
+            if pref_cnn != 'latest' : query_vals.append(pref_cnn)
+            query_vals.append(username)
 
         anno_result = self.db_connector.execute(query_str,
                                                 query_vals,
@@ -460,24 +480,35 @@ class DBMiddleware():
         }
         if len(imgs_malformed) > 0:
             response['imgs_malformed'] = imgs_malformed
+        if len(cnn_stats) > 0:
+            response['cnn_stats'] = cnn_stats
 
         return response
 
+
+    def get_batch_cnn_stats(self,
+                        project: str,
+                        image_ids: Iterable[Union[UUID,str]])-> dict:
+
+        query_str = sql_string_builder.get_batch_states_query_str(project)
+        return self.db_connector.execute(query_str, (image_ids, ), 'all')
 
     def get_batch_auto(self,
                        project: str,
                        username: str,
                        order: str='unlabeled',
                        subset: str='default',
+                       pref_cnn: str='latest',
                        limit: int=None,
                        hide_golden_question_info: bool=True) -> dict:
         '''
             TODO: description
         '''
-        # query
+
+        #get new batch
         proj_immutables = self.get_project_immutables(project)
         is_demo_mode = common.check_demo_mode(project, self.db_connector)
-        query_str = sql_string_builder.get_next_batch_query_str(project,
+        query_str = sql_string_builder.get_new_batch_query_str(project,
                                                                 proj_immutables['annotationType'],
                                                                 proj_immutables['predictionType'],
                                                                 order,
@@ -495,21 +526,19 @@ class DBMiddleware():
         if is_demo_mode:
             query_vals = (limit,)
 
-        anno_result = self.db_connector.execute(query_str,
+        query_result = self.db_connector.execute(query_str,
                                                 query_vals,
                                                 'all')
-        try:
-            response = self._assemble_annotations(project,
-                                                  anno_result,
-                                                  hide_golden_question_info)
 
-            # mark images as requested (TODO: place into finally clause?)
-            self._set_images_requested(project, response)
-        except Exception as e:
-            print(e)
-            return { 'entries': {}}
+        #extract image ids from new batch
+        new_batch_ids = [row['image'] for row in query_result]
+        entries = self.get_batch_fixed(project,
+                                username,
+                                new_batch_ids,
+                                pref_cnn,
+                                hide_golden_question_info)
 
-        return { 'entries': response }
+        return entries
 
 
     def get_batch_time_range(self,
@@ -627,6 +656,7 @@ class DBMiddleware():
                                      username: str,
                                      current_image_id: Union[str, UUID],
                                      cardinal_direction: str,
+                                     pref_cnn: str='latest',
                                      hide_golden_question_info: bool=True) -> dict:
         '''
             Returns the next image in given cardinal direction, based on the current one. Only works
@@ -658,10 +688,10 @@ class DBMiddleware():
                                                    (next_uuid,),
                                                    4)
             next_uuids = dict([row['cd'], str(row['id'])] for row in next_uuids)
-
             entries = self.get_batch_fixed(project,
                                            username,
                                            (next_uuid,),
+                                           pref_cnn,
                                            hide_golden_question_info)
         entries['cd'] = next_uuids
         return entries

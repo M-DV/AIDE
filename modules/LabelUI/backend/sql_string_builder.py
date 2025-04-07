@@ -70,11 +70,24 @@ def get_colnames(annotation_type: str,
 def get_fixed_images_query_str(project: str,
                                annotation_type: str,
                                prediction_type: str,
+                               pref_cnn: str,
                                demo_mode: bool=False) -> sql.SQL:
     '''
         Assembles an SQL string to get metadata for a fixed set of images.
     '''
     fields_anno, fields_pred, fields_union = _assemble_colnames(annotation_type, prediction_type)
+
+    cnn_sql = sql.SQL('''
+        WHERE cnnstate = (
+            SELECT id FROM {id_cnnstate}
+            ORDER BY timeCreated DESC
+            LIMIT 1
+        )'''
+    ).format(id_cnnstate=sql.Identifier(project, 'cnnstate'))
+    if pref_cnn == 'latest':
+        pass
+    elif isinstance(pref_cnn, uuid.UUID):
+        cnn_sql = sql.SQL('''WHERE cnnstate = %s''')
 
     username_str_iu = 'WHERE username = %s'
     username_str = username_str_iu + ' OR shared = TRUE'
@@ -96,11 +109,7 @@ def get_fixed_images_query_str(project: str,
             {usernameString}
             UNION ALL
             SELECT id, image AS imID, 'prediction' AS cType, {predCols} FROM {id_pred} AS pred
-            WHERE cnnstate = (
-                SELECT id FROM {id_cnnstate}
-                ORDER BY timeCreated DESC
-                LIMIT 1
-            )
+            {id_cnn_sql}
         ) AS contents ON img.image = contents.imID
         LEFT OUTER JOIN (SELECT image AS iu_image, viewcount, last_checked, username FROM {id_iu}
         {usernameString_iu}) AS iu ON img.image = iu.iu_image
@@ -112,7 +121,7 @@ def get_fixed_images_query_str(project: str,
         id_img=sql.Identifier(project, 'image'),
         id_anno=sql.Identifier(project, 'annotation'),
         id_pred=sql.Identifier(project, 'prediction'),
-        id_cnnstate=sql.Identifier(project, 'cnnstate'),
+        id_cnn_sql=cnn_sql,
         id_iu=sql.Identifier(project, 'image_user'),
         id_bookmark=sql.Identifier(project, 'bookmark'),
         allCols=sql.SQL(', ').join(fields_union),
@@ -125,13 +134,34 @@ def get_fixed_images_query_str(project: str,
     return query_str
 
 
+def get_batch_states_query_str(project: str) -> sql.SQL:
+    query_str = sql.SQL('''
+        SELECT allcnn.id as cnnstate, NULL AS image, (CASE WHEN cnnStats.pred_count IS NOT NULL THEN cnnStats.pred_count ELSE 0 END) AS pred_count
+        FROM (
+            SELECT id FROM {id_cnnstate}
+            ORDER BY timeCreated DESC
+        ) AS allcnn
+        LEFT OUTER JOIN (
+            SELECT cnnstate, count(*) as pred_count
+            FROM {id_pred}
+            WHERE image IN %s
+            GROUP BY cnnstate
+        ) as cnnStats
+        ON allcnn.id = cnnStats.cnnstate
+    ''').format(
+        id_cnnstate=sql.Identifier(project, 'cnnstate'),
+        id_pred=sql.Identifier(project, 'prediction')
+    )
 
-def get_next_batch_query_str(project: str,
-                             annotation_type: str,
-                             prediction_type: str,
-                             order: str='unlabeled',
-                             subset: str='default',
-                             demo_mode: bool=False) -> sql.SQL:
+    return query_str
+
+
+def get_new_batch_query_str(project: str,
+                            annotation_type: str,
+                            prediction_type: str,
+                            order: str='unlabeled',
+                            subset: str='default',
+                            demo_mode: bool=False) -> sql.SQL:
     '''
         Assembles a DB query string according to the AL and viewcount ranking criterion.
         Inputs:
@@ -205,63 +235,68 @@ def get_next_batch_query_str(project: str,
         )
 
     query_str = sql.SQL('''
-        SELECT id, image, cType, viewcount, EXTRACT(epoch FROM last_checked) as last_checked,
-            filename, w_x, w_y, w_width, w_height, isGoldenQuestion,
-        COALESCE(bookmark, false) AS isBookmarked, {allCols} FROM (
-        SELECT * FROM (
-            SELECT id AS image, filename,
-                x AS w_x, y AS w_y, width AS w_width, height AS w_height, 0 AS viewcount,
-                0 AS annoCount, NULL AS last_checked, 1E9 AS score, NULL AS timeCreated,
-                isGoldenQuestion
-            FROM {id_img} AS img
-            WHERE isGoldenQuestion = TRUE
-            {gq_user}
-            UNION ALL
-            SELECT id AS image, filename,
-                x AS w_x, y AS w_y, width AS w_width, height AS w_height,
-                viewcount, annoCount, last_checked, score, timeCreated,
-                isGoldenQuestion FROM {id_img} AS img
+        WITH q1 AS (
+            SELECT id, image, cType, viewcount, EXTRACT(epoch FROM last_checked) as last_checked,
+                filename, w_x, w_y, w_width, w_height, isGoldenQuestion,
+            COALESCE(bookmark, false) AS isBookmarked, {allCols} FROM (
+            SELECT * FROM (
+                SELECT id AS image, filename,
+                    x AS w_x, y AS w_y, width AS w_width, height AS w_height, 0 AS viewcount,
+                    0 AS annoCount, NULL AS last_checked, 1E9 AS score, NULL AS timeCreated,
+                    isGoldenQuestion
+                FROM {id_img} AS img
+                WHERE isGoldenQuestion = TRUE
+                {gq_user}
+                UNION ALL
+                SELECT id AS image, filename,
+                    x AS w_x, y AS w_y, width AS w_width, height AS w_height,
+                    viewcount, annoCount, last_checked, score, timeCreated,
+                    isGoldenQuestion FROM {id_img} AS img
+                LEFT OUTER JOIN (
+                    SELECT * FROM {id_iu}
+                ) AS iu ON img.id = iu.image
+                LEFT OUTER JOIN (
+                    SELECT image, SUM(confidence)/COUNT(confidence) AS score, timeCreated
+                    FROM {id_pred}
+                    WHERE cnnstate = (
+                        SELECT id FROM {id_cnnstate}
+                        ORDER BY timeCreated DESC
+                        LIMIT 1
+                    )
+                    GROUP BY image, timeCreated
+                ) AS img_score ON img.id = img_score.image
+                LEFT OUTER JOIN (
+                    SELECT image, COUNT(*) AS annoCount
+                    FROM {id_anno}
+                    {usernameString}
+                    GROUP BY image
+                ) AS anno_score ON img.id = anno_score.image
+                {subset}
+            ) AS imgQ
+            {order_a}
+            LIMIT %s
+            ) AS img_query
             LEFT OUTER JOIN (
-                SELECT * FROM {id_iu}
-            ) AS iu ON img.id = iu.image
-            LEFT OUTER JOIN (
-                SELECT image, SUM(confidence)/COUNT(confidence) AS score, timeCreated
-                FROM {id_pred}
+                SELECT id, image AS imID, 'annotation' AS cType, {annoCols} FROM {id_anno} AS anno
+                {usernameString}
+                UNION ALL
+                SELECT id, image AS imID, 'prediction' AS cType, {predCols} FROM {id_pred} AS pred
                 WHERE cnnstate = (
                     SELECT id FROM {id_cnnstate}
                     ORDER BY timeCreated DESC
                     LIMIT 1
                 )
-                GROUP BY image, timeCreated
-            ) AS img_score ON img.id = img_score.image
+            ) AS contents ON img_query.image = contents.imID
             LEFT OUTER JOIN (
-                SELECT image, COUNT(*) AS annoCount
-                FROM {id_anno}
-                {usernameString}
-                GROUP BY image
-            ) AS anno_score ON img.id = anno_score.image
-            {subset}
-        ) AS imgQ
-        {order_a}
-        LIMIT %s
-        ) AS img_query
-        LEFT OUTER JOIN (
-            SELECT id, image AS imID, 'annotation' AS cType, {annoCols} FROM {id_anno} AS anno
-            {usernameString}
-            UNION ALL
-            SELECT id, image AS imID, 'prediction' AS cType, {predCols} FROM {id_pred} AS pred
-            WHERE cnnstate = (
-                SELECT id FROM {id_cnnstate}
-                ORDER BY timeCreated DESC
-                LIMIT 1
-            )
-        ) AS contents ON img_query.image = contents.imID
-        LEFT OUTER JOIN (
-            SELECT image AS bmImg, true AS bookmark
-            FROM {id_bookmark}
-        ) AS bm ON img_query.image = bm.bmImg
-        {subset_b}
-        {order_b};
+                SELECT image AS bmImg, true AS bookmark
+                FROM {id_bookmark}
+            ) AS bm ON img_query.image = bm.bmImg
+            {subset_b}
+            {order_b}
+        )
+        SELECT DISTINCT(image)
+        FROM q1
+        WHERE image IS NOT NULL;
     ''').format(
         id_img=sql.Identifier(project, 'image'),
         id_anno=sql.Identifier(project, 'annotation'),
@@ -281,7 +316,6 @@ def get_next_batch_query_str(project: str,
     )
 
     return query_str
-
 
 
 def get_next_tile_cardinal_direction_query_str(project: str) -> sql.SQL:

@@ -147,9 +147,11 @@ class LabelUI(Module):
 
             username = html.escape(request.get_cookie('username', ''))
             data_ids = request.json['imageIDs']
+            pref_cnn = request.json['prefCNN']
             json = self.middleware.get_batch_fixed(project,
                                                    username,
                                                    data_ids,
+                                                   pref_cnn,
                                                    hide_golden_question_info)
             return json
 
@@ -173,10 +175,13 @@ class LabelUI(Module):
                 subset = int(request.query['subset'])
             except Exception:
                 subset = 'default'
+
+            pref_cnn = request.query.get('prefcnn', 'latest')
             batch = self.middleware.get_batch_auto(project=project,
                                                    username=username,
                                                    order=order,
                                                    subset=subset,
+                                                   pref_cnn=pref_cnn,
                                                    limit=limit,
                                                    hide_golden_question_info=hide_golden_questions)
 
@@ -286,12 +291,13 @@ class LabelUI(Module):
 
             current_image_id = request.query.get('ci', None)
             cardinal_direction = request.query.get('cd', None)
-
+            pref_cnn = request.query.get('prefcnn', 'latest')
             # query and return
             batch = self.middleware.get_image_cardinal_direction(project,
                                                                  username,
                                                                  current_image_id,
                                                                  cardinal_direction,
+                                                                 pref_cnn,
                                                                  hide_golden_question_info)
             return batch
 

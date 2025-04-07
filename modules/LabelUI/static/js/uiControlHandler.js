@@ -483,7 +483,11 @@ class UIControlHandler {
             rangeTextTd_convert.html(predThreshRange_convert.val() + '%');
             ptrc_convert.append(rangeTextTd_convert);
             predThreshRangeContainer.append(ptrc_convert);
+            let cnnSelectionDropdown = $('<select id="prefered-cnn" style="width:215px"></select>');
+            cnnSelectionDropdown.append($('<option value="latest">latest : #1</option>'));
             predThreshContainer.append(predThreshRangeContainer);
+            predThreshContainer.append($('<div style="margin: 5px 5px 5px 10px;">Epoch</div>'));
+            predThreshContainer.append(cnnSelectionDropdown);
             dtControls.append(predThreshContainer);
         }
 
@@ -908,6 +912,8 @@ class UIControlHandler {
                     $('#review-controls').slideDown();
                     $('#previous-button').attr('disabled','disabled');
                     $('[id^="next-button-"]').attr('disabled','disabled');
+                    $('#prefered-cnn').attr('disabled','disabled');
+                    $('#prefered-cnn').val('latest');
                     initSliderRange().done(function() {
                         nextBatchCallback();
                     });
@@ -915,13 +921,19 @@ class UIControlHandler {
                     $('#review-controls').slideUp();
                     $('#previous-button').removeAttr('disabled');
                     $('[id^="next-button-"]').removeAttr('disabled');
+                    $('#prefered-cnn').removeAttr('disabled');
                     nextBatchCallback();
                 }
             }
+            var changeEpochCallback = function() {
+                self.dataHandler.reloadCurrentBatch();
+            }
+
             $('#imorder-auto').change(onChange);
             $('#imorder-review').change(onChange);
             $('#review-skip-empty').change(onChange);
             $('#review-golden-questions-only').change(onChange);
+            $('#prefered-cnn').change(changeEpochCallback);
 
             $('#review-timerange').on({
                 'input': function() {

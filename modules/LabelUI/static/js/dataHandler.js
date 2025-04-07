@@ -377,7 +377,7 @@ class DataHandler {
     _loadNextBatch(cardinalDirection) {
         var self = this;
 
-        var url = 'getLatestImages?order=unlabeled&subset=default&limit=' + this.numImagesPerBatch;
+        var url = 'getLatestImages?order=unlabeled&subset=default&limit=' + this.numImagesPerBatch + '&prefcnn=' + $('#prefered-cnn').val();
 
         if(typeof(cardinalDirection) === 'string') {
             // get next image in cardinal direction of current tile instead of regular next batch
@@ -385,7 +385,7 @@ class DataHandler {
                 return;
             }
             let currentImageID = this.dataEntries[0].entryID;
-            url = `getImageCardinalDirection?cd=${cardinalDirection}&ci=${currentImageID}`;
+            url = `getImageCardinalDirection?cd=${cardinalDirection}&ci=${currentImageID}&prefcnn=${$('#prefered-cnn').val()}`;
         }
 
         return $.ajax({
@@ -414,6 +414,25 @@ class DataHandler {
                         }
                     }
                 }
+                if (data.hasOwnProperty('cnn_stats')){
+                    let dropdown = $('#prefered-cnn');
+                    let lastValue = dropdown.val();
+                    let maxEpochIndex = 0;
+                    let maxEpochValue = data['cnn_stats'][0]['pred_count'];
+                    dropdown.children().remove();
+                    dropdown.append(`<option value="latest">latest : #1 - ${data['cnn_stats'][0]['pred_count']} predictions</option>`);
+                    dropdown.append('<option id="max-prediction-option" value="maxPredictions">Max</option>');
+                    for (let i = 1; i < data['cnn_stats'].length; i++) {
+                        let epoch = data['cnn_stats'][i];
+                        dropdown.append(`<option value="${epoch['cnnstate']}">#${i + 1} - ${epoch['pred_count']} predictions</option>`);
+                        if (epoch['pred_count'] > maxEpochValue){ maxEpochIndex = i; maxEpochValue = epoch['pred_count']; }
+                    }
+                    $('#max-prediction-option').html(`Max : #${maxEpochIndex + 1} - ${maxEpochValue} predictions`);
+                    var lastValueExists = $('#prefered-cnn option[value="' + lastValue + '"]').length > 0;
+                    if (lastValueExists){ dropdown.val(lastValue); }
+                    else {dropdown.val("latest");}
+                }
+
                 self.parentDiv.empty();
                 self.dataEntries = [];
 
@@ -685,6 +704,15 @@ class DataHandler {
         });
     }
 
+    reloadCurrentBatch(){
+        var entries = [];
+        for(var e=0; e<this.dataEntries.length; e++) {
+            entries.push(this.dataEntries[e].entryID);
+        }
+        this._submitAnnotations();
+        this._loadFixedBatch(entries, true);
+    }
+
     _loadFixedBatch(batch, applyModelPredictions) {
         let self = this;
 
@@ -693,11 +721,30 @@ class DataHandler {
             url: 'getImages',
             contentType: "application/json; charset=utf-8",
             dataType: 'json',
-            data: JSON.stringify({'imageIDs':batch}),
+            data: JSON.stringify({'imageIDs':batch, 'prefCNN':$('#prefered-cnn').val()}),
             type: 'POST',
             success: function(data) {
                 let imgIDs = '';    // for updating URL in case of errors
                 let errors = '';
+
+                if (data.hasOwnProperty('cnn_stats')){
+                    let dropdown = $('#prefered-cnn');
+                    let lastValue = dropdown.val();
+                    let maxEpochIndex = 0;
+                    let maxEpochValue = data['cnn_stats'][0]['pred_count'];
+                    dropdown.children().remove();
+                    dropdown.append(`<option value="latest">latest : #1 - ${data['cnn_stats'][0]['pred_count']} predictions</option>`);
+                    dropdown.append('<option id="max-prediction-option" value="maxPredictions">Max</option>');
+                    for (let i = 1; i < data['cnn_stats'].length; i++) {
+                        let epoch = data['cnn_stats'][i];
+                        dropdown.append(`<option value="${epoch['cnnstate']}">#${i + 1} - ${epoch['pred_count']} predictions</option>`);
+                        if (epoch['pred_count'] > maxEpochValue){ maxEpochIndex = i; maxEpochValue = epoch['pred_count']; }
+                    }
+                    $('#max-prediction-option').html(`Max : #${maxEpochIndex + 1} - ${maxEpochValue} predictions`);
+                    var lastValueExists = $('#prefered-cnn option[value="' + lastValue + '"]').length > 0;
+                    if (lastValueExists){ dropdown.val(lastValue); }
+                    else {dropdown.val("latest");}
+                }
 
                 // clear current entries
                 self.parentDiv.empty();
