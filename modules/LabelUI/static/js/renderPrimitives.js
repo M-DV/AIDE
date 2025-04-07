@@ -1981,7 +1981,7 @@ class MiniMap extends AbstractRenderElement {
 
         this.parentViewport.canvas[0].addEventListener('contextmenu', (e) => {
             e.preventDefault();
-        });
+        });        
 
         this.parentViewport.addCallback(this.id + '_drag', 'mousedown', (evt) => this._mousedown_drag(evt));
         this.parentViewport.addCallback(this.id + '_drag', 'mousemove', (evt) => this._mousemove_drag(evt));
@@ -2046,7 +2046,7 @@ class MiniMap extends AbstractRenderElement {
 
     _mousedown_drag(event) {
         if (!this.draggable) return;
-        if (event.which !== 1) return;
+        if (event.which !== 3) return;
         const mousePos = this.parentViewport.getAbsoluteCoordinates(event);
         if (
             mousePos[0] >= this.pos_abs[0] &&
@@ -2061,6 +2061,7 @@ class MiniMap extends AbstractRenderElement {
             ];
         }
     }
+    
 
     _mousemove_drag(event) {
         if (!this.draggable || !this.dragging) return;
@@ -2078,7 +2079,7 @@ class MiniMap extends AbstractRenderElement {
 
     _mouseup_drag(event) {
         if (!this.draggable) return;
-        if (event.which === 1) {
+        if (event.which === 3) {
             this.dragging = false;
         }
     }
@@ -2184,6 +2185,7 @@ class MiniMap extends AbstractRenderElement {
         );
     }
 }
+
 
 
 
