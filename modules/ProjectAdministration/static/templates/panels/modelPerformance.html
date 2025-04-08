@@ -620,11 +620,7 @@
         // reset headers
         $('#ai-models-table thead tr').children().slice(6).remove();
         for (let header in columns) {
-            if (!$('#ai-models-table thead th').filter(function() {
-                return $(this).html() === header;
-            }).length) {
-                $('#ai-models-table thead tr').append($('<th>'+header+'</th>'));
-            }
+            $('#ai-models-table thead tr').append($('<th>'+header+'</th>'));
         }
 
         // reset row elements to match headers
