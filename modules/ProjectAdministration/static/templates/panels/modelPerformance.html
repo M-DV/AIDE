@@ -17,7 +17,6 @@
                             <th>Model</th>
                             <th>Ranking model</th>
                             <th>No. predictions</th>
-                            <th>No. matches</th>
                         </tr>
                     </thead>
                     <tbody id="cnn-states-tbody"></tbody>
@@ -48,8 +47,8 @@
                 <label for="check-golden-question-only">Limit to golden questions only</label>
             </div>
             <div style="margin-top:5px;margin-bottom:5px;"></div>
-                <input type="checkbox" id="show-advanced-tooltips" value="advancedTooltips"/>
-                <label for="show-advanced-tooltips">Show advanced tooltips</label>
+                <input type="checkbox" id="show-advanced" value="advanced"/>
+                <label for="show-advanced">Show advanced</label>
             </div>
         </div>
 
@@ -235,7 +234,7 @@
 
         // clear current data
         $.each($('#cnn-states-tbody').children(), function() {
-            $(this).children().last().html('0');
+            $(this).children().slice(6).html('');
         });
         detailedStatsChart = undefined;
 
@@ -285,8 +284,33 @@
                     // get number of model in table for labels & match count update
                     let modelMarkup = $('#'+model).parent().parent();
                     let modelNumber = $(modelMarkup.children()[1]).html();
-                    let matchCell = $(modelMarkup.children().last());
-                    matchCell.html(data['result']['per_entity'][model]['num_matches']);
+
+                    // populate table columns from query data
+                    $(modelMarkup).children().slice(6).each(function(index, element) {
+                        switch ($(element).attr('class')){
+                            case 'num-matches':
+                                $(element).html(data['result']['per_entity'][model]['num_matches']);
+                                break;
+                            case 'precision':
+                                $(element).html(roundNumber(data['result']['per_entity'][model]['prec']*100, 100));
+                                break;
+                            case 'recall':
+                                $(element).html(roundNumber(data['result']['per_entity'][model]['rec']*100, 100));
+                                break;
+                            case 'true-positive':
+                                $(element).html(data['result']['per_entity'][model]['tp']);
+                                break;
+                            case 'false-positive':
+                                $(element).html(data['result']['per_entity'][model]['fp']);
+                                break;
+                            case 'false-negative':
+                                $(element).html(data['result']['per_entity'][model]['fn']);
+                                break;
+                            default:
+                                break;
+                        }
+                    });
+
                     modelNames.push(modelNumber);
                     for(var s in data['result']['per_entity'][model]) {
                         if(!series.hasOwnProperty(s)) {
@@ -397,7 +421,7 @@
                                     label: function(tooltipItem, data) {
                                         var entry = data.datasets[0].data[tooltipItem.index];
                                         var epoch = data.labels[tooltipItem.index];
-                                        if ($('#show-advanced-tooltips').prop('checked'))
+                                        if ($('#show-advanced').prop('checked'))
                                             return `#${epoch}: (Precision: ${roundNumber(tooltipItem.yLabel*100, 100)}%, Recall: ${roundNumber(tooltipItem.xLabel*100, 100)}%, Tp: ${entry.tp}, Fp: ${entry.fp}, Fn: ${entry.fn})`;
                                         else
                                             return `#${epoch}: (Precision: ${roundNumber(tooltipItem.yLabel*100, 100)}%, Recall: ${roundNumber(tooltipItem.xLabel*100, 100)}%)`;
@@ -576,6 +600,42 @@
         });
     }
 
+    // Create columns that are populated upon query
+    function UpdateTableColumns(){
+        let columns = {
+            //'Header': 'class',
+            'No. matches': 'num-matches'
+        };
+        if (window.isBoundingBoxes && $('#show-advanced').prop('checked')){
+            columns = {
+                //'Header': 'class',
+                'Precision': 'precision',
+                'Recall': 'recall',
+                'True Positive': 'true-positive',
+                'False Positive': 'false-positive',
+                'False Negative': 'false-negative'
+            };
+        }
+
+        // reset headers
+        $('#ai-models-table thead tr').children().slice(6).remove();
+        for (let header in columns) {
+            if (!$('#ai-models-table thead th').filter(function() {
+                return $(this).html() === header;
+            }).length) {
+                $('#ai-models-table thead tr').append($('<th>'+header+'</th>'));
+            }
+        }
+
+        // reset row elements to match headers
+        $('#ai-models-table tr').slice(1).each(function(index, element) {
+            $(element).children().slice(6).remove();
+            for (let header in columns) {
+                $(element).append($('<td class="'+columns[header]+'"></td>'))
+            }
+        });
+    }
+
     function listModelStates() {
         let modelStateTable = $('#cnn-states-tbody');
         return $.ajax({
@@ -594,9 +654,10 @@
                         markup.append($('<td>'+data[i]['model_library']['name']+'</td>'));
                         markup.append($('<td>'+data[i]['al_criterion_library']['name']+'</td>'));
                         markup.append($('<td>'+data[i]['num_pred']+'</td>'));
-                        markup.append($('<td class="num-matches"></td>'));  // populated upon query
                         modelStateTable.append(markup);
                     }
+                    window.isBoundingBoxes = data[0]['model_library']['predictionType'] == "boundingBoxes";
+                    UpdateTableColumns(); // Create columns that are populated upon query
                 }
             },
             error: function(xhr, status, error) {
@@ -720,6 +781,10 @@
                 '140px',
                 '140px',
                 '130px',
+                '130px',
+                '130px',
+                '130px',
+                '130px',
                 '130px'
             ],
             true,
@@ -772,6 +837,11 @@
                 } else {
                     container.slideDown();
                 }
+            });
+
+            $('#show-advanced').on('click', function() {
+                UpdateTableColumns();
+                return calculateModelStats();
             });
 
             $('#calc-stats').click(calculateModelStats);
