@@ -47,6 +47,10 @@
                 <input type="checkbox" id="check-golden-question-only" value="goldenQuestionsOnly" />
                 <label for="check-golden-question-only">Limit to golden questions only</label>
             </div>
+            <div style="margin-top:5px;margin-bottom:5px;"></div>
+                <input type="checkbox" id="show-advanced-tooltips" value="advancedTooltips"/>
+                <label for="show-advanced-tooltips">Show advanced tooltips</label>
+            </div>
         </div>
 
         <button id="calc-stats" class="btn btn-sm btn-primary">Update</button>
@@ -357,7 +361,10 @@
                     for(var i=0; i<series['prec'].length; i++) {
                         chartData.push({
                             x: series['rec'][i],
-                            y: series['prec'][i]
+                            y: series['prec'][i],
+                            tp: series['tp'][i],
+                            fp: series['fp'][i],
+                            fn: series['fn'][i]
                         });
                         pointRadii.push(series['num_pred'][i]);
                         maxRadius = Math.max(maxRadius, series['num_pred'][i]);
@@ -388,8 +395,12 @@
                             tooltips: {
                                 callbacks: {
                                     label: function(tooltipItem, data) {
-                                        var label = data.labels[tooltipItem.index];
-                                        return label + ': (Precision: ' + roundNumber(tooltipItem.yLabel*100, 100) + '%, Recall: ' + roundNumber(tooltipItem.xLabel*100, 100) + '%)';
+                                        var entry = data.datasets[0].data[tooltipItem.index];
+                                        var epoch = data.labels[tooltipItem.index];
+                                        if ($('#show-advanced-tooltips').prop('checked'))
+                                            return `#${epoch}: (Precision: ${roundNumber(tooltipItem.yLabel*100, 100)}%, Recall: ${roundNumber(tooltipItem.xLabel*100, 100)}%, Tp: ${entry.tp}, Fp: ${entry.fp}, Fn: ${entry.fn})`;
+                                        else
+                                            return `#${epoch}: (Precision: ${roundNumber(tooltipItem.yLabel*100, 100)}%, Recall: ${roundNumber(tooltipItem.xLabel*100, 100)}%)`;
                                     }
                                 }
                             },
@@ -578,7 +589,7 @@
                         // construct model state markup
                         var markup = $('<tr></tr>');
                         markup.append($('<td><input type="checkbox" id="'+data[i]['id']+'" checked /></td>'));
-                        markup.append($('<td>' + (data.length-i) + '</td>'));
+                        markup.append($('<td>' + (i+1) + '</td>'));
                         markup.append($('<td>'+new Date(data[i]['time_created'] * 1000).toLocaleString()+'</td>'));
                         markup.append($('<td>'+data[i]['model_library']['name']+'</td>'));
                         markup.append($('<td>'+data[i]['al_criterion_library']['name']+'</td>'));
