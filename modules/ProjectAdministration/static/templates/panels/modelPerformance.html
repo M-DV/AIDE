@@ -624,7 +624,7 @@
         }
 
         // reset row elements to match headers
-        $('#ai-models-table tr').slice(1).each(function(index, element) {
+        $('#ai-models-table tbody tr').each(function(index, element) {
             $(element).children().slice(6).remove();
             for (let header in columns) {
                 $(element).append($('<td class="'+columns[header]+'"></td>'))
