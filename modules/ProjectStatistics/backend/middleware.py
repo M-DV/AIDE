@@ -202,10 +202,12 @@ class ProjectStatisticsMiddleware:
 
         # compose args list and complete query
         queryArgs = [entity_target, tuple(entities_eval)]
-        if annoType == 'points' or annoType == 'boundingBoxes':
+        if annoType == annoType == 'boundingBoxes':
+            queryArgs = [entity_target, entities_eval, threshold]
+
+        if annoType == 'points':
             queryArgs.append(threshold)
-            if annoType == 'points':
-                queryArgs.append(threshold)
+            queryArgs.append(threshold)
 
         if goldenQuestionsOnly:
             sql_goldenQuestion = sql.SQL('''JOIN (

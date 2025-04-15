@@ -330,21 +330,23 @@ class StatisticalFormulas_model(Enum):
 
 
     boundingBoxes = '''WITH masterQuery AS (
-        SELECT q1.image, q2.cnnstate, q1.aid AS id1, q2.aid AS id2, q1.label AS label1, q2.label AS label2,
+        SELECT q1.image, q2.cnnstate, q1.aid AS id1, q3.aid AS id2, q1.label AS label1, q3.label AS label2,
             intersection_over_union(q1.x, q1.y, q1.width, q1.height,
-                                    q2.x, q2.y, q2.width, q2.height) AS iou
+                                    q3.x, q3.y, q3.width, q3.height) AS iou
         FROM (
             SELECT iu.image, iu.username, anno.id AS aid, label, x, y, width, height FROM {id_iu} AS iu
             LEFT OUTER JOIN {id_anno} AS anno
             ON iu.image = anno.image AND iu.username = anno.username
             WHERE iu.username = %s
         ) AS q1
-        JOIN (
+        LEFT OUTER JOIN (
+            SELECT unnest(%s::uuid[]) AS cnnstate
+        ) AS q2 ON TRUE
+        LEFT OUTER JOIN (
             SELECT image, cnnstate, id AS aid, label, x, y, width, height
             FROM {id_pred}
-            WHERE cnnstate IN %s
-        ) AS q2
-        ON q1.image = q2.image
+        ) AS q3
+        ON q1.image = q3.image AND q2.cnnstate = q3.cnnstate
         {sql_goldenQuestion}
     ),
     positive AS (
@@ -383,7 +385,7 @@ class StatisticalFormulas_model(Enum):
     SELECT q1.image, q1.cnnstate, num_pred, num_target, min_iou, avg_iou, max_iou,
         (CASE WHEN tp IS NULL THEN 0 ELSE tp END) AS tp,
         (CASE WHEN fp IS NULL THEN 0 ELSE fp END) AS fp,
-        (CASE WHEN fn IS NULL THEN 0 ELSE fn END) AS fn
+        (num_target - (CASE WHEN tp IS NULL THEN 0 ELSE tp END)) AS fn
     FROM (
         SELECT image, cnnstate, COUNT(DISTINCT id2) AS num_pred, COUNT(DISTINCT id1) AS num_target
         FROM masterQuery
@@ -411,21 +413,6 @@ class StatisticalFormulas_model(Enum):
         GROUP BY image, cnnstate
     ) AS q4
     ON q1.image = q4.image AND q1.cnnstate = q4.cnnstate
-    LEFT OUTER JOIN (
-        SELECT sq1.image, sq1.cnnstate, COUNT(DISTINCT sq1.id1) AS fn
-        FROM (
-            SELECT image, cnnstate, id1
-            FROM masterQuery
-            WHERE id1 NOT IN (SELECT id1 FROM positive)
-            UNION ALL (
-                SELECT image, cnnstate, id1
-                FROM positive
-                WHERE label1 != label2
-            )
-        ) as sq1
-        GROUP BY image, cnnstate
-    ) AS q5
-    ON q1.image = q5.image AND q1.cnnstate = q5.cnnstate
     '''
 
     segmentationMasks = '''
