@@ -86,6 +86,36 @@ window.msToTime = function(duration) {
     }
 }
 
+window.scaleFun = function (coordinates, target, backwards) {
+    let canvasWidth = window.viewport.canvas.width();
+    let canvasHeight = window.viewport.canvas.height();
+
+    if (coordinates.length > 0 && coordinates[0] > 1) {
+        return coordinates;
+    }
+
+    let transformed = [];
+
+    if (target === 'canvas') {
+        for (let i = 0; i < coordinates.length; i += 2) {
+            transformed.push(coordinates[i] * canvasWidth);
+            transformed.push(coordinates[i + 1] * canvasHeight);
+        }
+    } else if (target === 'validArea') {
+        let validArea = window.viewport.getValidArea();
+        let offsetX = validArea[0] * canvasWidth;
+        let offsetY = validArea[1] * canvasHeight;
+        let areaWidth = validArea[2] * canvasWidth;
+        let areaHeight = validArea[3] * canvasHeight;
+        for (let i = 0; i < coordinates.length; i += 2) {
+            transformed.push(offsetX + coordinates[i] * areaWidth);
+            transformed.push(offsetY + coordinates[i + 1] * areaHeight);
+        }
+    } else {
+        transformed = coordinates;
+    }
+    return transformed;
+};
 
 /* color functions */
 
