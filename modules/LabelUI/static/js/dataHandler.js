@@ -643,6 +643,8 @@ class DataHandler {
             return $.Deferred().promise();
         }
 
+        this.freezeActionState();
+
         var self = this;
         var entries = this._entriesToJSON(true, false);
         return $.ajax({
