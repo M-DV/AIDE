@@ -202,7 +202,7 @@ class ProjectStatisticsMiddleware:
 
         # compose args list and complete query
         queryArgs = [entity_target, tuple(entities_eval)]
-        if annoType == annoType == 'boundingBoxes':
+        if annoType == 'boundingBoxes':
             queryArgs = [entity_target, entities_eval, threshold]
 
         if annoType == 'points':
